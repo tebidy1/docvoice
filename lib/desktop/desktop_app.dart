@@ -7,6 +7,7 @@ import '../services/connectivity_server.dart';
 import '../services/audio_recorder_service.dart';
 import '../services/inbox_service.dart';
 import '../services/gemini_service.dart';
+import '../services/auth_service.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 
@@ -18,6 +19,7 @@ import 'package:screen_retriever/screen_retriever.dart';
 
 import '../utils/window_manager_helper.dart';
 import '../widgets/user_profile_header.dart';
+import '../screens/admin_dashboard_screen.dart';
 
 class DesktopApp extends StatefulWidget {
   const DesktopApp({super.key});
@@ -31,6 +33,7 @@ class _DesktopAppState extends State<DesktopApp> {
 
   final AudioRecorderService _recorder = AudioRecorderService();
   final InboxService _inboxService = InboxService();
+  final AuthService _authService = AuthService();
   late final GeminiService _geminiService;
   
   String _status = "Initializing...";
@@ -39,6 +42,7 @@ class _DesktopAppState extends State<DesktopApp> {
   bool _isMinimizeHovered = false;
   bool _isMaximizeHovered = false;
   bool _isCloseHovered = false;
+  bool _isAdmin = false;
 
   @override
   void initState() {
@@ -46,12 +50,26 @@ class _DesktopAppState extends State<DesktopApp> {
     _geminiService = GeminiService(apiKey: dotenv.env['GEMINI_API_KEY'] ?? "");
     _startServer();
     _listInputDevices();
+    _checkAdminStatus();
     
     // Position window after first frame and set appropriate size
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _setInitialWindowSize();
       await _positionWindowToRightCenter();
     });
+  }
+
+  Future<void> _checkAdminStatus() async {
+    try {
+      final user = await _authService.getCurrentUser();
+      if (user != null && (user['role'] == 'admin' || user['role'] == 'Admin')) {
+        setState(() {
+          _isAdmin = true;
+        });
+      }
+    } catch (e) {
+      print('Error checking admin status: $e');
+    }
   }
 
   Future<void> _setInitialWindowSize() async {
@@ -653,6 +671,21 @@ class _DesktopAppState extends State<DesktopApp> {
                         );
                       },
                     ),
+                    
+                    // Admin Dashboard Button (only for admins)
+                    if (_isAdmin)
+                      IconButton(
+                        icon: const Icon(Icons.admin_panel_settings, color: Colors.purple),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const AdminDashboardScreen(),
+                            ),
+                          );
+                        },
+                        tooltip: 'Admin Dashboard',
+                      ),
                     
                     // Menu Button
                     IconButton(

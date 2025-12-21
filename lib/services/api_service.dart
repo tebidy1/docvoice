@@ -13,7 +13,7 @@ class ApiService {
   final int _timeout = int.tryParse(dotenv.env['API_TIMEOUT'] ?? '30000') ?? 30000;
 
   Future<void> init() async {
-    _baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://localhost:8000/api';
+    _baseUrl = dotenv.env['API_BASE_URL'] ?? 'https://docvoice.gumra-ai.com/api';
     await _loadToken();
   }
 

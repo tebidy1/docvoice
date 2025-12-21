@@ -7,8 +7,10 @@ import 'desktop/desktop_app.dart';
 import 'mobile/mobile_app.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
+import 'screens/admin_dashboard_screen.dart';
 import 'services/auth_service.dart';
 import 'widgets/auth_guard.dart';
+import 'widgets/admin_guard.dart';
 
 // Conditional import for Platform
 import 'dart:io' if (dart.library.html) 'dart:html' as platform;
@@ -181,6 +183,22 @@ class _ScribeFlowAppState extends State<ScribeFlowApp> {
         if (settings.name == '/register') {
           return MaterialPageRoute(
             builder: (context) => const RegisterScreen(),
+          );
+        }
+        
+        // Admin Dashboard route - protected, requires admin role
+        if (settings.name == '/admin') {
+          return MaterialPageRoute(
+            builder: (context) => AdminGuard(
+              child: const AdminDashboardScreen(),
+            ),
+          );
+        }
+        
+        // Login route - public
+        if (settings.name == '/login') {
+          return MaterialPageRoute(
+            builder: (context) => const LoginScreen(),
           );
         }
         
