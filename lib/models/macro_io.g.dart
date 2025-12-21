@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'macro.dart';
+part of 'macro_io.dart';
 
 // **************************************************************************
 // IsarCollectionGenerator

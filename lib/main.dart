@@ -1,62 +1,106 @@
 import 'package:flutter/material.dart';
-import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:window_manager/window_manager.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'desktop/desktop_app.dart';
 import 'mobile/mobile_app.dart';
+import 'screens/login_screen.dart';
+import 'screens/register_screen.dart';
+import 'services/auth_service.dart';
+import 'widgets/auth_guard.dart';
+
+// Conditional import for Platform
+import 'dart:io' if (dart.library.html) 'dart:html' as platform;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
 
-  if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
-    await windowManager.ensureInitialized();
-    
-    // Get screen size for auto-positioning
-    WindowOptions windowOptions = const WindowOptions(
-      size: Size(300, 60), // Small Pill Mode as default
-      center: false,
-      backgroundColor: Colors.transparent,
-      skipTaskbar: false,
-      titleBarStyle: TitleBarStyle.hidden,
-      alwaysOnTop: true,
-    );
-    
-    windowManager.waitUntilReadyToShow(windowOptions, () async {
-      await windowManager.show();
-      await windowManager.focus();
+  // Only set up window manager on desktop platforms
+  if (!kIsWeb) {
+    try {
+      await windowManager.ensureInitialized();
       
-      // Auto-position to right
-      // Note: We can't get screen size easily here without context or extra packages in main()
-      // But we can try to use windowManager.getPrimaryDisplay() if available, 
-      // or just rely on the app's first frame to dock itself.
-      // However, the user asked to do it here. 
-      // Let's try to get the display info.
-      try {
-         // This might fail if getPrimaryDisplay is not available as seen before.
-         // But wait, the previous error was "The method 'getPrimaryDisplay' isn't defined".
-         // So we CANNOT use it here.
-         // We will rely on a fixed offset for now, or better, 
-         // let the DesktopApp's initState handle the precise docking.
-         // But to satisfy "Default Size", we set 400x800 above.
-      } catch (e) {
-        print("Error getting display: $e");
-      }
-    });
+      // Get screen size for auto-positioning
+      WindowOptions windowOptions = const WindowOptions(
+        size: Size(500, 172), // Default size - matches main container (500x100 + 40 padding + 32 header)
+        center: true, // Center the window on first launch
+        backgroundColor: Color(0xFF0F172A), // Slate 900 - matches theme scaffoldBackgroundColor
+        skipTaskbar: false,
+        titleBarStyle: TitleBarStyle.hidden,
+        alwaysOnTop: false, // Allow window to be behind other applications
+      );
+      
+      windowManager.waitUntilReadyToShow(windowOptions, () async {
+        await windowManager.show();
+        await windowManager.focus();
+        
+        // Auto-position to right
+        // Note: We can't get screen size easily here without context or extra packages in main()
+        // But we can try to use windowManager.getPrimaryDisplay() if available, 
+        // or just rely on the app's first frame to dock itself.
+        // However, the user asked to do it here. 
+        // Let's try to get the display info.
+        try {
+           // This might fail if getPrimaryDisplay is not available as seen before.
+           // But wait, the previous error was "The method 'getPrimaryDisplay' isn't defined".
+           // So we CANNOT use it here.
+           // We will rely on a fixed offset for now, or better, 
+           // let the DesktopApp's initState handle the precise docking.
+           // But to satisfy "Default Size", we set 400x800 above.
+        } catch (e) {
+          print("Error getting display: $e");
+        }
+      });
+    } catch (e) {
+      print("Error initializing window manager: $e");
+    }
   }
 
   runApp(const ScribeFlowApp());
 }
 
-class ScribeFlowApp extends StatelessWidget {
+class ScribeFlowApp extends StatefulWidget {
   const ScribeFlowApp({super.key});
+
+  @override
+  State<ScribeFlowApp> createState() => _ScribeFlowAppState();
+}
+
+class _ScribeFlowAppState extends State<ScribeFlowApp> {
+  final AuthService _authService = AuthService();
+  bool _isAuthenticated = false;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAuth();
+  }
+
+  Future<void> _checkAuth() async {
+    try {
+      final authenticated = await _authService.isAuthenticated();
+      setState(() {
+        _isAuthenticated = authenticated;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('Auth check error: $e');
+      setState(() {
+        _isAuthenticated = false;
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     // Simple Platform Check
-    // In a real app, we might want more robust checking or separate entry points.
-    final isDesktop = Platform.isWindows || Platform.isMacOS || Platform.isLinux;
+    // On web, always show mobile app
+    // On desktop, show desktop app
+    final isDesktop = !kIsWeb;
 
     return MaterialApp(
       title: 'ScribeFlow',
@@ -72,14 +116,6 @@ class ScribeFlowApp extends StatelessWidget {
           secondary: Color(0xFF10B981),  // Emerald Green (Success)
           surface: Color(0xFF1E293B),    // Slate 800 (Cards)
           onSurface: Color(0xFFF1F5F9),  // Slate 100 (Text)
-        ),
-
-        // Card Theme
-        cardTheme: CardTheme(
-          color: const Color(0xFF1E293B),
-          elevation: 0, // Flat design
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          margin: const EdgeInsets.only(bottom: 12),
         ),
 
         // Button Theme
@@ -108,7 +144,68 @@ class ScribeFlowApp extends StatelessWidget {
         
         useMaterial3: true,
       ),
-      home: isDesktop ? const DesktopApp() : const MobileApp(),
+      onGenerateRoute: (settings) {
+        // Root route - check authentication
+        if (settings.name == '/' || settings.name == null) {
+          return MaterialPageRoute(
+            builder: (context) => FutureBuilder<bool>(
+              future: _authService.isAuthenticated(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Scaffold(
+                    body: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                final isAuth = snapshot.data ?? false;
+                if (isAuth) {
+                  return AuthGuard(
+                    child: isDesktop ? const DesktopApp() : const MobileApp(),
+                  );
+                }
+                return const LoginScreen();
+              },
+            ),
+          );
+        }
+        
+        // Home route - protected, requires authentication
+        if (settings.name == '/home') {
+          return MaterialPageRoute(
+            builder: (context) => AuthGuard(
+              child: isDesktop ? const DesktopApp() : const MobileApp(),
+            ),
+          );
+        }
+        
+        // Register route - public
+        if (settings.name == '/register') {
+          return MaterialPageRoute(
+            builder: (context) => const RegisterScreen(),
+          );
+        }
+        
+        // Default: redirect to root
+        return MaterialPageRoute(
+          builder: (context) => FutureBuilder<bool>(
+            future: _authService.isAuthenticated(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Scaffold(
+                  body: Center(child: CircularProgressIndicator()),
+                );
+              }
+              final isAuth = snapshot.data ?? false;
+              if (isAuth) {
+                return AuthGuard(
+                  child: isDesktop ? const DesktopApp() : const MobileApp(),
+                );
+              }
+              return const LoginScreen();
+            },
+          ),
+        );
+      },
+      initialRoute: '/',
     );
   }
 }

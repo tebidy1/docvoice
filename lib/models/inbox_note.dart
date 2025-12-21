@@ -1,27 +1,7 @@
-import 'package:isar/isar.dart';
+/// Platform-specific inbox note model
+/// Exports the correct implementation based on the platform
 
-part 'inbox_note.g.dart';
-
-@Collection()
-class InboxNote {
-  Id id = Isar.autoIncrement;
-
-  late String rawText;
-
-  String? patientName;
-
-  String? summary;
-
-  @Enumerated(EnumType.name)
-  late InboxStatus status;
-
-  DateTime? createdAt;
-
-  int? suggestedMacroId;
-}
-
-enum InboxStatus {
-  pending,
-  processed,
-  archived
-}
+// Export IO implementation with Isar on non-web platforms
+// Export simple class on web
+export 'inbox_note_io.dart'
+    if (dart.library.html) 'inbox_note_web.dart';

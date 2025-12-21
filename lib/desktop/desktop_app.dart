@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 import 'dart:async';
-import 'package:qr_flutter/qr_flutter.dart';
+
 import '../services/connectivity_server.dart';
-import '../services/keyboard_service.dart';
+
 import '../services/audio_recorder_service.dart';
 import '../services/inbox_service.dart';
 import '../services/gemini_service.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
-import '../utils/wav_utils.dart';
+
 import 'qr_pairing_dialog.dart';
 import 'macro_manager_dialog.dart';
 import 'inbox_manager_dialog.dart';
@@ -17,6 +17,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:screen_retriever/screen_retriever.dart';
 
 import '../utils/window_manager_helper.dart';
+import '../widgets/user_profile_header.dart';
 
 class DesktopApp extends StatefulWidget {
   const DesktopApp({super.key});
@@ -27,7 +28,7 @@ class DesktopApp extends StatefulWidget {
 
 class _DesktopAppState extends State<DesktopApp> {
   final ConnectivityServer _server = ConnectivityServer();
-  final KeyboardService _keyboard = KeyboardService();
+
   final AudioRecorderService _recorder = AudioRecorderService();
   final InboxService _inboxService = InboxService();
   late final GeminiService _geminiService;
@@ -35,6 +36,9 @@ class _DesktopAppState extends State<DesktopApp> {
   String _status = "Initializing...";
   String _ipAddress = "Loading...";
   bool _isRecording = false;
+  bool _isMinimizeHovered = false;
+  bool _isMaximizeHovered = false;
+  bool _isCloseHovered = false;
 
   @override
   void initState() {
@@ -43,10 +47,20 @@ class _DesktopAppState extends State<DesktopApp> {
     _startServer();
     _listInputDevices();
     
-    // Position window after first frame
+    // Position window after first frame and set appropriate size
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _setInitialWindowSize();
       await _positionWindowToRightCenter();
     });
+  }
+
+  Future<void> _setInitialWindowSize() async {
+    try {
+      // Set window size to match the main container (500x100 + padding 40 + header 32 = 500x172)
+      await windowManager.setSize(const Size(500, 172));
+    } catch (e) {
+      print("Error setting initial window size: $e");
+    }
   }
 
   Future<void> _positionWindowToRightCenter() async {
@@ -70,10 +84,23 @@ class _DesktopAppState extends State<DesktopApp> {
     }
   }
 
-  Future<void> _dockWindow() async {
-    if (mounted) {
-      await WindowManagerHelper.dockToRight(context);
+
+
+  Future<void> _minimizeWindow() async {
+    await windowManager.minimize();
+  }
+
+  Future<void> _maximizeWindow() async {
+    final isMaximized = await windowManager.isMaximized();
+    if (isMaximized) {
+      await windowManager.restore();
+    } else {
+      await windowManager.maximize();
     }
+  }
+
+  Future<void> _closeWindow() async {
+    await windowManager.close();
   }
 
   Future<void> _listInputDevices() async {
@@ -113,28 +140,74 @@ class _DesktopAppState extends State<DesktopApp> {
       
       print("Received transcription: '$text'");
       
-      // Analyze with Gemini
-      final analysis = await _geminiService.analyzeNote(text);
-      
-      // Save to Inbox
-      await _inboxService.addNote(
-        text,
-        patientName: analysis['patientName'],
-        summary: analysis['summary'],
-      );
-      
-      print("Added to Smart Inbox: ${analysis['patientName']}");
-      
-      // Show confirmation
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("📥 Saved: ${analysis['patientName']}"),
-            duration: const Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Colors.green,
-          ),
-        );
+      try {
+        // Analyze with Gemini
+        final analysis = await _geminiService.analyzeNote(text);
+        
+        // Save to Inbox
+        try {
+          await _inboxService.addNote(
+            text,
+            patientName: analysis['patientName'],
+            summary: analysis['summary'],
+          );
+          
+          print("Added to Smart Inbox: ${analysis['patientName']}");
+          
+          // Show confirmation
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text("📥 Saved: ${analysis['patientName']}"),
+                duration: const Duration(seconds: 2),
+                behavior: SnackBarBehavior.floating,
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } catch (e) {
+          print('Error adding note to inbox: $e');
+          // Show error notification
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text("⚠️ Failed to save note: ${e.toString().contains('timeout') ? 'Connection timeout' : 'Network error'}"),
+                duration: const Duration(seconds: 3),
+                behavior: SnackBarBehavior.floating,
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        print('Error analyzing note: $e');
+        // Try to save without analysis if analysis fails
+        try {
+          await _inboxService.addNote(text);
+          print("Added to Smart Inbox (without analysis)");
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text("📥 Saved (analysis unavailable)"),
+                duration: Duration(seconds: 2),
+                behavior: SnackBarBehavior.floating,
+                backgroundColor: Colors.blue,
+              ),
+            );
+          }
+        } catch (saveError) {
+          print('Error saving note without analysis: $saveError');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text("❌ Failed to save: ${saveError.toString().contains('timeout') ? 'Connection timeout' : 'Network error'}"),
+                duration: const Duration(seconds: 3),
+                behavior: SnackBarBehavior.floating,
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
       }
     });
   }
@@ -262,38 +335,185 @@ class _DesktopAppState extends State<DesktopApp> {
     super.dispose();
   }
 
+  @override
   Widget build(BuildContext context) {
     final isConnected = _status.contains("Client Connected");
     
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          // Main floating bar
-          Center(
-            child: GestureDetector(
-              onPanStart: (details) {
-                windowManager.startDragging();
-              },
-              child: Container(
-                width: 300,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: const Color(0xDD1E1E1E),
-                  borderRadius: BorderRadius.circular(30),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
+    return GestureDetector(
+      onPanStart: (details) {
+        windowManager.startDragging();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF0F172A), // Slate 900 - matches theme
+        body: Stack(
+          children: [
+            // Window Control Bar (Top)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: GestureDetector(
+                onPanStart: (details) {
+                  windowManager.startDragging();
+                },
+                child: Container(
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E293B).withOpacity(0.8),
+                    border: Border(
+                      bottom: BorderSide(
+                        color: Colors.white.withOpacity(0.1),
+                        width: 1,
+                      ),
                     ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    // Drag Handle
-                    const Icon(Icons.drag_indicator, color: Colors.grey, size: 20),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Left side - App title or drag area
+                      Expanded(
+                        child: GestureDetector(
+                          onPanStart: (details) {
+                            windowManager.startDragging();
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: Row(
+                            children: [
+                              const Icon(
+                                Icons.drag_indicator,
+                                color: Colors.grey,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'ScribeFlow',
+                                style: TextStyle(
+                                  color: Colors.grey[400],
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                          ),
+                        ),
+                      ),
+                      // Center - User Profile (only show when window is expanded)
+                      if (MediaQuery.of(context).size.width >= 500)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () {}, // Prevent window dragging when clicking on profile
+                            child: const UserProfileHeader(),
+                          ),
+                        ),
+                      // Right side - Window controls
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                        // Minimize button
+                        MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          onEnter: (_) => setState(() => _isMinimizeHovered = true),
+                          onExit: (_) => setState(() => _isMinimizeHovered = false),
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: _minimizeWindow,
+                            child: Container(
+                              width: 46,
+                              height: 32,
+                              color: _isMinimizeHovered
+                                  ? Colors.white.withOpacity(0.1)
+                                  : Colors.transparent,
+                              child: Icon(
+                                Icons.remove,
+                                color: Colors.grey[400],
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Maximize/Restore button
+                        MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          onEnter: (_) => setState(() => _isMaximizeHovered = true),
+                          onExit: (_) => setState(() => _isMaximizeHovered = false),
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: _maximizeWindow,
+                            child: Container(
+                              width: 46,
+                              height: 32,
+                              color: _isMaximizeHovered
+                                  ? Colors.white.withOpacity(0.1)
+                                  : Colors.transparent,
+                              child: Icon(
+                                Icons.crop_square,
+                                color: Colors.grey[400],
+                                size: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Close button
+                        MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          onEnter: (_) => setState(() => _isCloseHovered = true),
+                          onExit: (_) => setState(() => _isCloseHovered = false),
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: _closeWindow,
+                            child: Container(
+                              width: 46,
+                              height: 32,
+                              color: _isCloseHovered
+                                  ? Colors.red.withOpacity(0.2)
+                                  : Colors.transparent,
+                              child: Icon(
+                                Icons.close,
+                                color: _isCloseHovered
+                                    ? Colors.red[300]
+                                    : Colors.grey[400],
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                        ),
+                        ],
+                      ),
+                    ],
+                  ),
+              ),
+            ),
+          ),
+            // Main floating bar
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 40), // Add space from top bar
+                child: GestureDetector(
+                  onPanStart: (details) {
+                    windowManager.startDragging();
+                  },
+                  child: Container(
+                    width: 500,
+                    height: 100,
+                    decoration: BoxDecoration(
+                    color: const Color(0xDD1E1E1E),
+                    borderRadius: BorderRadius.circular(30),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.3),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                    // Drag Handle (removed - now in top bar)
                     
                     // Status Dot
                     Tooltip(
@@ -442,11 +662,13 @@ class _DesktopAppState extends State<DesktopApp> {
                       },
                     ),
                   ],
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+      ),
       ),
     );
   }

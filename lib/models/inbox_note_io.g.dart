@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'inbox_note.dart';
+part of 'inbox_note_io.dart';
 
 // **************************************************************************
 // IsarCollectionGenerator

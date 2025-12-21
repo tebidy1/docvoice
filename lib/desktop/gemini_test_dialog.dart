@@ -184,15 +184,15 @@ class _GeminiTestDialogState extends State<GeminiTestDialog> {
             TextField(
               controller: _inputController,
               maxLines: 3,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Colors.black87),
               decoration: InputDecoration(
                 hintText: 'Enter medical text to test...',
-                hintStyle: const TextStyle(color: Colors.white30),
+                hintStyle: TextStyle(color: Colors.grey[600]),
                 filled: true,
-                fillColor: Colors.white.withOpacity(0.05),
+                fillColor: Colors.white,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+                  borderSide: BorderSide(color: Colors.grey),
                 ),
               ),
             ),
@@ -206,15 +206,15 @@ class _GeminiTestDialogState extends State<GeminiTestDialog> {
                 Expanded(
                   child: TextField(
                     controller: _questionController,
-                    style: const TextStyle(color: Colors.white),
+                    style: const TextStyle(color: Colors.black87),
                     decoration: InputDecoration(
                       hintText: 'e.g., What is the patient temperature?',
-                      hintStyle: const TextStyle(color: Colors.white30),
+                      hintStyle: TextStyle(color: Colors.grey[600]),
                       filled: true,
-                      fillColor: Colors.white.withOpacity(0.05),
+                      fillColor: Colors.white,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+                        borderSide: BorderSide(color: Colors.grey),
                       ),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
                     ),

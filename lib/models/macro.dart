@@ -1,27 +1,7 @@
-import 'package:isar/isar.dart';
+/// Platform-specific macro model
+/// Exports the correct implementation based on the platform
 
-part 'macro.g.dart';
-
-@collection
-class Macro {
-  Id id = Isar.autoIncrement;
-
-  @Index(type: IndexType.value)
-  late String trigger; // The phrase to say, e.g., "Normal Cardio"
-
-  late String content; // The text to insert
-
-  bool isFavorite = false;
-
-  int usageCount = 0;
-
-  DateTime? lastUsed;
-
-  DateTime createdAt = DateTime.now();
-
-  bool isAiMacro = false;
-
-  String? aiInstruction; // Custom instruction for Gemini
-  
-  String category = 'General'; // Category: Cardiology, Pediatrics, etc.
-}
+// Export IO implementation with Isar on non-web platforms
+// Export simple class on web
+export 'macro_io.dart'
+    if (dart.library.html) 'macro_web.dart';

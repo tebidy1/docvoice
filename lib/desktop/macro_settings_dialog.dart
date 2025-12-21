@@ -223,13 +223,13 @@ class _MacroSettingsDialogState extends State<MacroSettingsDialog> {
                     const SizedBox(height: 5),
                     TextField(
                       controller: _promptController,
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(color: Colors.black87),
                       maxLines: 3,
                       decoration: InputDecoration(
                         hintText: "Instructions for the AI...",
-                        hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+                        hintStyle: TextStyle(color: Colors.grey[600]),
                         filled: true,
-                        fillColor: Colors.white.withOpacity(0.05),
+                        fillColor: Colors.white,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide.none,

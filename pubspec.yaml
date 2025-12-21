@@ -26,7 +26,7 @@ dependencies:
   # AI & Logic
   google_generative_ai: ^0.4.4
   
-  # Local Database
+  # Local Database - Enabled for Windows/Desktop (Isar doesn't support web)
   isar: ^3.1.0+1
   isar_flutter_libs: ^3.1.0+1
   path_provider: ^2.1.2
@@ -35,7 +35,9 @@ dependencies:
   uuid: ^4.3.3
   permission_handler: ^11.3.0
   flutter_dotenv: ^5.1.0
-  win32: ^5.0.0
+  
+  # Windows-specific
+  win32: ^5.5.0
   ffi: ^2.1.0
   
   # QR Pairing
@@ -48,6 +50,9 @@ dependencies:
   shared_preferences: ^2.2.2
   intl: ^0.19.0
   screen_retriever: ^0.1.9
+  
+  # Web compatibility
+  web: ^1.0.0
 
 dev_dependencies:
   flutter_test:

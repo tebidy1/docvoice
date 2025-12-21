@@ -6,6 +6,7 @@ import '../services/keyboard_service.dart';
 import '../models/macro.dart';
 import 'dart:async';
 import 'macro_settings_dialog.dart';
+import '../widgets/user_profile_header.dart';
 
 class MacroManagerDialog extends StatefulWidget {
   const MacroManagerDialog({super.key});
@@ -117,12 +118,13 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
 
     await showDialog(
       context: context,
+      barrierColor: Colors.black.withOpacity(0.5), // Semi-transparent dark overlay
       builder: (context) {
         bool isSaving = false;
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-            backgroundColor: const Color(0xFF2A2A2A),
+            backgroundColor: const Color(0xFF1E293B), // Slate 800 - darker, more visible
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
             title: Text(
               macro == null ? "➕ New Macro" : "✏️ Edit Macro", 
@@ -134,16 +136,22 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
                 children: [
                   TextField(
                     controller: triggerController,
-                    style: const TextStyle(color: Colors.white),
+                    style: const TextStyle(
+                      color: Colors.black87,
+                      fontSize: 14,
+                    ),
+                    cursorColor: Colors.amber,
                     decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.white,
                       labelText: "Trigger Phrase (e.g. 'Normal Cardio')",
-                      labelStyle: const TextStyle(color: Colors.grey),
+                      labelStyle: TextStyle(color: Colors.grey[600]),
                       enabledBorder: OutlineInputBorder(
                         borderSide: const BorderSide(color: Colors.grey),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       focusedBorder: OutlineInputBorder(
-                        borderSide: const BorderSide(color: Colors.amber),
+                        borderSide: const BorderSide(color: Colors.amber, width: 2),
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
@@ -153,29 +161,46 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
                   // Category Dropdown
                   DropdownButtonFormField<String>(
                     value: selectedCategory,
-                    dropdownColor: const Color(0xFF2A2A2A),
-                    style: const TextStyle(color: Colors.white),
+                    dropdownColor: const Color(0xFF1E293B),
+                    style: const TextStyle(
+                      color: Colors.black87,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    selectedItemBuilder: (BuildContext context) {
+                      return const [
+                        Text('🗂️ General', style: TextStyle(color: Colors.black87, fontSize: 14)),
+                        Text('❤️ Cardiology', style: TextStyle(color: Colors.black87, fontSize: 14)),
+                        Text('🫁 Pulmonology', style: TextStyle(color: Colors.black87, fontSize: 14)),
+                        Text('👶 Pediatrics', style: TextStyle(color: Colors.black87, fontSize: 14)),
+                        Text('💊 Prescriptions', style: TextStyle(color: Colors.black87, fontSize: 14)),
+                        Text('🧠 Neurology', style: TextStyle(color: Colors.black87, fontSize: 14)),
+                        Text('🍽️ Gastroenterology', style: TextStyle(color: Colors.black87, fontSize: 14)),
+                      ];
+                    },
                     decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.white,
                       labelText: "Category",
-                      labelStyle: const TextStyle(color: Colors.grey),
+                      labelStyle: TextStyle(color: Colors.grey[600]),
                       prefixIcon: const Icon(Icons.category, color: Colors.blue),
                       enabledBorder: OutlineInputBorder(
                         borderSide: const BorderSide(color: Colors.grey),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       focusedBorder: OutlineInputBorder(
-                        borderSide: const BorderSide(color: Colors.blue),
+                        borderSide: const BorderSide(color: Colors.blue, width: 2),
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
                     items: const [
-                      DropdownMenuItem(value: 'General', child: Text('🗂️ General')),
-                      DropdownMenuItem(value: 'Cardiology', child: Text('❤️ Cardiology')),
-                      DropdownMenuItem(value: 'Pulmonology', child: Text('🫁 Pulmonology')),
-                      DropdownMenuItem(value: 'Pediatrics', child: Text('👶 Pediatrics')),
-                      DropdownMenuItem(value: 'Prescriptions', child: Text('💊 Prescriptions')),
-                      DropdownMenuItem(value: 'Neurology', child: Text('🧠 Neurology')),
-                      DropdownMenuItem(value: 'Gastroenterology', child: Text('🍽️ Gastroenterology')),
+                      DropdownMenuItem(value: 'General', child: Text('🗂️ General', style: TextStyle(color: Colors.white))),
+                      DropdownMenuItem(value: 'Cardiology', child: Text('❤️ Cardiology', style: TextStyle(color: Colors.white))),
+                      DropdownMenuItem(value: 'Pulmonology', child: Text('🫁 Pulmonology', style: TextStyle(color: Colors.white))),
+                      DropdownMenuItem(value: 'Pediatrics', child: Text('👶 Pediatrics', style: TextStyle(color: Colors.white))),
+                      DropdownMenuItem(value: 'Prescriptions', child: Text('💊 Prescriptions', style: TextStyle(color: Colors.white))),
+                      DropdownMenuItem(value: 'Neurology', child: Text('🧠 Neurology', style: TextStyle(color: Colors.white))),
+                      DropdownMenuItem(value: 'Gastroenterology', child: Text('🍽️ Gastroenterology', style: TextStyle(color: Colors.white))),
                     ],
                     onChanged: (value) {
                       setState(() => selectedCategory = value!);
@@ -185,17 +210,23 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
                   
                   TextField(
                     controller: contentController,
-                    style: const TextStyle(color: Colors.white),
+                    style: const TextStyle(
+                      color: Colors.black87,
+                      fontSize: 14,
+                    ),
+                    cursorColor: Colors.amber,
                     maxLines: 5,
                     decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.white,
                       labelText: "Content to Insert",
-                      labelStyle: const TextStyle(color: Colors.grey),
+                      labelStyle: TextStyle(color: Colors.grey[600]),
                       enabledBorder: OutlineInputBorder(
                         borderSide: const BorderSide(color: Colors.grey),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       focusedBorder: OutlineInputBorder(
-                        borderSide: const BorderSide(color: Colors.amber),
+                        borderSide: const BorderSide(color: Colors.amber, width: 2),
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
@@ -217,12 +248,18 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
                     const SizedBox(height: 10),
                     TextField(
                       controller: aiInstructionController,
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(
+                        color: Colors.black87,
+                        fontSize: 14,
+                      ),
+                      cursorColor: Colors.purpleAccent,
                       maxLines: 2,
                       decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.white,
                         labelText: "AI Instruction (Optional)",
                         hintText: "e.g. Summarize symptoms and keep medical terms",
-                        hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+                        hintStyle: TextStyle(color: Colors.grey[600]),
                         labelStyle: const TextStyle(color: Colors.purpleAccent),
                         enabledBorder: OutlineInputBorder(
                           borderSide: const BorderSide(color: Colors.purpleAccent),
@@ -330,7 +367,7 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
           width: 900,
           height: 650,
           decoration: BoxDecoration(
-            color: theme.scaffoldBackgroundColor, // Slate 900
+            color: const Color(0xFF0F172A), // Slate 900 - Opaque
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: colorScheme.surface, width: 1),
             boxShadow: [
@@ -395,6 +432,8 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
                       ),
                       onPressed: () => _addOrEditMacro(),
                     ),
+                    const SizedBox(width: 10),
+                    const UserProfileHeader(),
                     const SizedBox(width: 10),
                     IconButton(
                       icon: Icon(Icons.settings_outlined, color: Colors.grey[400]),

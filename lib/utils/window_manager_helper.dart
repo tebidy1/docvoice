@@ -28,8 +28,8 @@ class WindowManagerHelper {
     try {
       final primaryDisplay = await screenRetriever.getPrimaryDisplay();
       final screenSize = primaryDisplay.size;
-      const pillWidth = 300.0;
-      const pillHeight = 60.0;
+      const pillWidth = 500.0;
+      const pillHeight = 172.0; // 100 (main bar) + 40 (padding) + 32 (header)
       
       // Shrink to pill size
       await windowManager.setSize(const Size(pillWidth, pillHeight));
