@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
+import '../widgets/window_controls.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -102,17 +103,26 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Theme.of(context).colorScheme.surface,
-              Theme.of(context).scaffoldBackgroundColor,
-            ],
+      body: Column(
+        children: [
+          // Window Controls
+          Container(
+            alignment: Alignment.centerRight,
+            child: const WindowControls(),
           ),
-        ),
+          // Main Content
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Theme.of(context).colorScheme.surface,
+                    Theme.of(context).scaffoldBackgroundColor,
+                  ],
+                ),
+              ),
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
@@ -309,6 +319,9 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ),
+            ),
+          ),
+        ],
       ),
     );
   }
