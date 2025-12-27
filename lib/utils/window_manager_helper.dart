@@ -28,11 +28,15 @@ class WindowManagerHelper {
     try {
       final primaryDisplay = await screenRetriever.getPrimaryDisplay();
       final screenSize = primaryDisplay.size;
-      const pillWidth = 500.0;
-      const pillHeight = 172.0; // 100 (main bar) + 40 (padding) + 32 (header)
+      const pillWidth = 350.0; // Native Utility Width
+      const pillHeight = 56.0; // Native Utility Height
       
       // Shrink to pill size
-      await windowManager.setSize(const Size(pillWidth, pillHeight));
+      try {
+        await windowManager.setResizable(true); // Temporarily allow resize
+        await windowManager.setSize(const Size(pillWidth, pillHeight));
+        await windowManager.setResizable(false); // Lock it back
+      } catch (e) { print(e); }
       
       // Position at right-center
       final x = screenSize.width - pillWidth - 10;

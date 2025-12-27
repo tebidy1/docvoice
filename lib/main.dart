@@ -11,6 +11,8 @@ import 'screens/admin_dashboard_screen.dart';
 import 'services/auth_service.dart';
 import 'widgets/auth_guard.dart';
 import 'widgets/admin_guard.dart';
+import 'services/theme_service.dart';
+import 'models/app_theme.dart';
 
 // Conditional import for Platform
 import 'dart:io' if (dart.library.html) 'dart:html' as platform;
@@ -26,15 +28,18 @@ void main() async {
       
       // Get screen size for auto-positioning
       WindowOptions windowOptions = const WindowOptions(
-        size: Size(500, 172), // Default size - matches main container (500x100 + 40 padding + 32 header)
+        size: Size(280, 56), // Native Utility size (Tight Fit)
+
         center: true, // Center the window on first launch
-        backgroundColor: Color(0xFF0F172A), // Slate 900 - matches theme scaffoldBackgroundColor
+        backgroundColor: Colors.transparent, // Transparent for frameless mode
         skipTaskbar: false,
         titleBarStyle: TitleBarStyle.hidden,
         alwaysOnTop: false, // Allow window to be behind other applications
       );
       
       windowManager.waitUntilReadyToShow(windowOptions, () async {
+        await windowManager.setBackgroundColor(Colors.transparent);
+        await windowManager.setResizable(false); // Lock size for capsule
         await windowManager.show();
         await windowManager.focus();
         
@@ -104,48 +109,52 @@ class _ScribeFlowAppState extends State<ScribeFlowApp> {
     // On desktop, show desktop app
     final isDesktop = !kIsWeb;
 
-    return MaterialApp(
-      title: 'ScribeFlow',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0F172A), // Slate 900
-        fontFamily: 'Inter',
-        
-        // App Colors
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFF38BDF8),    // Sky Blue
-          secondary: Color(0xFF10B981),  // Emerald Green (Success)
-          surface: Color(0xFF1E293B),    // Slate 800 (Cards)
-          onSurface: Color(0xFFF1F5F9),  // Slate 100 (Text)
-        ),
+    return ValueListenableBuilder<AppTheme>(
+      valueListenable: ThemeService(),
+      builder: (context, currentTheme, child) {
+        return MaterialApp(
+          title: 'ScribeFlow',
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData(
+            brightness: currentTheme.isDark ? Brightness.dark : Brightness.light,
+            scaffoldBackgroundColor: currentTheme.backgroundColor,
+            fontFamily: 'Inter',
+            
+            // App Colors
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: currentTheme.micIdleIcon,
+              brightness: currentTheme.isDark ? Brightness.dark : Brightness.light,
+              surface: currentTheme.micIdleBackground,
+              onSurface: currentTheme.iconColor,
+              primary: currentTheme.micIdleIcon,
+            ),
 
-        // Button Theme
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF10B981), // Emerald Green
-            foregroundColor: Colors.white,
-            elevation: 2,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+            // Button Theme
+            elevatedButtonTheme: ElevatedButtonThemeData(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: currentTheme.micIdleIcon, // Use theme primary
+                foregroundColor: Colors.white,
+                elevation: 2,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+              ),
+            ),
+            
+            // Input Decoration (Editor)
+            inputDecorationTheme: InputDecorationTheme(
+              filled: true,
+              fillColor: currentTheme.isDark ? currentTheme.micIdleBackground : Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.all(16),
+              hintStyle: TextStyle(color: currentTheme.iconColor.withOpacity(0.5)),
+            ),
+            
+            useMaterial3: true,
           ),
-        ),
-        
-        // Input Decoration (Editor)
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: Colors.white, // White paper feel
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-          contentPadding: const EdgeInsets.all(16),
-          hintStyle: TextStyle(color: Colors.grey[400]),
-        ),
-        
-        useMaterial3: true,
-      ),
       onGenerateRoute: (settings) {
         // Root route - check authentication
         if (settings.name == '/' || settings.name == null) {
@@ -224,6 +233,8 @@ class _ScribeFlowAppState extends State<ScribeFlowApp> {
         );
       },
       initialRoute: '/',
+        );
+      },
     );
   }
 }

@@ -14,12 +14,15 @@ import 'package:path_provider/path_provider.dart';
 import 'qr_pairing_dialog.dart';
 import 'macro_manager_dialog.dart';
 import 'inbox_manager_dialog.dart';
+import '../screens/settings_dialog.dart'; // Import Settings Dialog
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:screen_retriever/screen_retriever.dart';
 
 import '../utils/window_manager_helper.dart';
 import '../widgets/user_profile_header.dart';
 import '../screens/admin_dashboard_screen.dart';
+import '../services/theme_service.dart';
+import '../models/app_theme.dart';
 
 class DesktopApp extends StatefulWidget {
   const DesktopApp({super.key});
@@ -74,8 +77,8 @@ class _DesktopAppState extends State<DesktopApp> {
 
   Future<void> _setInitialWindowSize() async {
     try {
-      // Set window size to match the main container (500x100 + padding 40 + header 32 = 500x172)
-      await windowManager.setSize(const Size(500, 172));
+      // Set window size to match the capsule content (tight fit)
+      await windowManager.setSize(const Size(280, 56));
     } catch (e) {
       print("Error setting initial window size: $e");
     }
@@ -357,351 +360,231 @@ class _DesktopAppState extends State<DesktopApp> {
   Widget build(BuildContext context) {
     final isConnected = _status.contains("Client Connected");
     
-    return GestureDetector(
-      onPanStart: (details) {
-        windowManager.startDragging();
-      },
-      child: Scaffold(
-        backgroundColor: const Color(0xFF0F172A), // Slate 900 - matches theme
-        body: Stack(
-          children: [
-            // Window Control Bar (Top)
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: GestureDetector(
-                onPanStart: (details) {
-                  windowManager.startDragging();
-                },
-                child: Container(
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B).withOpacity(0.8),
-                    border: Border(
-                      bottom: BorderSide(
-                        color: Colors.white.withOpacity(0.1),
-                        width: 1,
-                      ),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // Left side - App title or drag area
-                      Expanded(
-                        child: GestureDetector(
-                          onPanStart: (details) {
-                            windowManager.startDragging();
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: Row(
-                            children: [
-                              const Icon(
-                                Icons.drag_indicator,
-                                color: Colors.grey,
-                                size: 16,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'ScribeFlow',
-                                style: TextStyle(
-                                  color: Colors.grey[400],
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                          ),
-                        ),
-                      ),
-                      // Center - User Profile (only show when window is expanded)
-                      if (MediaQuery.of(context).size.width >= 500)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: () {}, // Prevent window dragging when clicking on profile
-                            child: const UserProfileHeader(),
-                          ),
-                        ),
-                      // Right side - Window controls
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                        // Minimize button
-                        MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          onEnter: (_) => setState(() => _isMinimizeHovered = true),
-                          onExit: (_) => setState(() => _isMinimizeHovered = false),
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: _minimizeWindow,
-                            child: Container(
-                              width: 46,
-                              height: 32,
-                              color: _isMinimizeHovered
-                                  ? Colors.white.withOpacity(0.1)
-                                  : Colors.transparent,
-                              child: Icon(
-                                Icons.remove,
-                                color: Colors.grey[400],
-                                size: 18,
-                              ),
-                            ),
-                          ),
-                        ),
-                        // Maximize/Restore button
-                        MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          onEnter: (_) => setState(() => _isMaximizeHovered = true),
-                          onExit: (_) => setState(() => _isMaximizeHovered = false),
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: _maximizeWindow,
-                            child: Container(
-                              width: 46,
-                              height: 32,
-                              color: _isMaximizeHovered
-                                  ? Colors.white.withOpacity(0.1)
-                                  : Colors.transparent,
-                              child: Icon(
-                                Icons.crop_square,
-                                color: Colors.grey[400],
-                                size: 16,
-                              ),
-                            ),
-                          ),
-                        ),
-                        // Close button
-                        MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          onEnter: (_) => setState(() => _isCloseHovered = true),
-                          onExit: (_) => setState(() => _isCloseHovered = false),
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: _closeWindow,
-                            child: Container(
-                              width: 46,
-                              height: 32,
-                              color: _isCloseHovered
-                                  ? Colors.red.withOpacity(0.2)
-                                  : Colors.transparent,
-                              child: Icon(
-                                Icons.close,
-                                color: _isCloseHovered
-                                    ? Colors.red[300]
-                                    : Colors.grey[400],
-                                size: 18,
-                              ),
-                            ),
-                          ),
-                        ),
-                        ],
-                      ),
-                    ],
-                  ),
-              ),
-            ),
-          ),
-            // Main floating bar
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 40), // Add space from top bar
-                child: GestureDetector(
-                  onPanStart: (details) {
-                    windowManager.startDragging();
-                  },
-                  child: Container(
-                    width: 500,
-                    height: 100,
-                    decoration: BoxDecoration(
-                    color: const Color(0xDD1E1E1E),
-                    borderRadius: BorderRadius.circular(30),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.3),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                    // Drag Handle (removed - now in top bar)
-                    
-                    // Status Dot
-                    Tooltip(
-                      message: "$_status\nIP: $_ipAddress\nTap to Pair",
-                      child: GestureDetector(
-                        onTap: () {
-                          showDialog(
-                            context: context,
-                            builder: (context) => QrPairingDialog(
-                              ipAddress: _ipAddress,
-                              port: 8080,
-                            ),
-                          );
-                        },
+    return ValueListenableBuilder<AppTheme>(
+      valueListenable: ThemeService(),
+      builder: (context, theme, child) {
+        return GestureDetector(
+          onPanStart: (details) {
+            windowManager.startDragging();
+          },
+          child: Scaffold(
+            backgroundColor: Colors.transparent, // Transparent for frameless mode
+            body: Stack(
+              children: [
+                // Top bar removed for capsule mode
+                // Main floating bar
+                Center(
+                  child: Padding(
+                    padding: EdgeInsets.zero, // No padding needed
+                    child: GestureDetector(
+                      onPanStart: (details) {
+                        windowManager.startDragging();
+                      },
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(theme.borderRadius), // From Theme
                         child: Container(
-                          width: 10,
-                          height: 10,
-                          decoration: BoxDecoration(
-                            color: isConnected ? Colors.green : Colors.red,
-                            shape: BoxShape.circle,
-                          ),
+                        padding: const EdgeInsets.symmetric(horizontal: 4), // Spec: Dense padding
+                        height: 56, // Spec: 56px
+                        decoration: BoxDecoration(
+                          color: theme.backgroundColor, // From Theme
+                          borderRadius: BorderRadius.circular(theme.borderRadius),
+                          border: Border.all(color: theme.borderColor, width: 1), // From Theme
+                          boxShadow: theme.shadows, // From Theme
                         ),
-                      ),
-                    ),
-                    
-                    // Mic Button with Visualizer
-                    Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        if (_isRecording)
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 50),
-                            width: 40 + (_currentVolume * 40),
-                            height: 40 + (_currentVolume * 40),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.redAccent.withOpacity(0.3),
-                            ),
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                         // 1. Close Button (Far Left / End)
+                         _buildIconButton(
+                           icon: Icons.close,
+                           onTap: _closeWindow,
+                           tooltip: "Close",
+                           color: theme.iconColor,
+                           theme: theme,
+                         ),
+                         
+                         const SizedBox(width: 4), // Spec: 4px gap
+
+                         // 0. Admin/Settings Button (Before Last)
+                         _buildIconButton(
+                           icon: Icons.settings,
+                           onTap: () async {
+                             await showDialog(
+                               context: context,
+                               barrierDismissible: true,
+                               barrierColor: Colors.transparent, // Or semi-transparent if centered
+                               builder: (context) => const SettingsDialog(),
+                             );
+                           },
+                           tooltip: "Settings",
+                           color: theme.iconColor,
+                           theme: theme,
+                         ),
+                         
+                         const SizedBox(width: 4), // Spec: 4px gap
                         
-                        Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: _toggleRecording,
-                            borderRadius: BorderRadius.circular(20),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: _isRecording ? Colors.red : Colors.white10,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: _isRecording ? Colors.redAccent : Colors.white24, 
-                                  width: 2
-                                ),
-                                boxShadow: _isRecording 
-                                  ? [BoxShadow(color: Colors.redAccent.withOpacity(0.5), blurRadius: 10)] 
-                                  : [],
-                              ),
-                              child: Icon(
-                                _isRecording ? Icons.stop : Icons.mic, 
-                                color: Colors.white, 
-                                size: 20
-                              ),
-                            ),
-                          ),
-                        ),
+                         // 2. Lightning Icon (Macros)
+                         _buildIconButton(
+                           icon: Icons.flash_on,
+                           onTap: () async {
+                              await showDialog(
+                                context: context,
+                                barrierDismissible: true,
+                                barrierColor: Colors.transparent,
+                                builder: (context) => const MacroManagerDialog(),
+                              );
+                           },
+                           tooltip: "Macros",
+                           color: theme.iconColor,
+                           theme: theme,
+                         ),
+
+                         const SizedBox(width: 4), // Spec: 4px gap
+                         
+                         // 3. Messages Icon (Inbox)
+                         StreamBuilder<List>(
+                            stream: _inboxService.watchPendingNotes(),
+                            builder: (context, snapshot) {
+                              final count = snapshot.data?.length ?? 0;
+                              return Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  _buildIconButton(
+                                     icon: Icons.chat_bubble_outline, 
+                                     onTap: () async {
+                                        await WindowManagerHelper.expandToSidebar(context);
+                                        await showDialog(
+                                          context: context,
+                                          barrierDismissible: true,
+                                          barrierColor: Colors.transparent,
+                                          builder: (context) => const InboxManagerDialog(),
+                                        );
+                                        await WindowManagerHelper.collapseToPill(context);
+                                     },
+                                     tooltip: "Inbox",
+                                     color: theme.iconColor,
+                                     theme: theme,
+                                  ),
+                                  if (count > 0)
+                                    Positioned(
+                                      right: 0,
+                                      top: 0,
+                                      child: Container(
+                                        width: 10,
+                                        height: 10,
+                                        decoration: const BoxDecoration(
+                                          color: Colors.orange,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              );
+                            },
+                         ),
+
+                         const SizedBox(width: 4), // Spec: 4px gap
+
+                         // Divider
+                         Container(
+                           width: 1,
+                           height: 20, // Spec: 20px
+                           color: theme.dividerColor, // From Theme
+                         ),
+                         
+                         const SizedBox(width: 4), // Spec: 4px gap
+
+                         // 4. Microphone Button (Hero - Rounded Square)
+                         MouseRegion(
+                           cursor: SystemMouseCursors.click,
+                           child: GestureDetector(
+                             onTap: _toggleRecording,
+                             child: AnimatedContainer(
+                               duration: const Duration(milliseconds: 200),
+                               width: 40,
+                               height: 40,
+                               decoration: BoxDecoration(
+                                 color: _isRecording ? theme.micRecordingBackground : theme.micIdleBackground, // From Theme
+                                 borderRadius: BorderRadius.circular(4), // Spec: 4px radius
+                                 border: Border.all(
+                                   color: _isRecording ? theme.micRecordingBorder : theme.micIdleBorder, // From Theme
+                                   width: 1
+                                 ),
+                               ),
+                               child: Icon(
+                                 _isRecording ? Icons.stop : Icons.mic,
+                                 color: _isRecording ? theme.micRecordingIcon : theme.micIdleIcon, // From Theme
+                                 size: 20,
+                               ),
+                             ),
+                           ),
+                         ),
+
+                         const SizedBox(width: 4), // Spec: 4px gap
+
+
+
+                         // 5. Drag Handle (Far Right - Grid Pattern)
+                         MouseRegion(
+                           cursor: SystemMouseCursors.grab,
+                           child: GestureDetector(
+                             onPanStart: (details) {
+                               windowManager.startDragging();
+                             },
+                             child: Container(
+                               width: 32, 
+                               height: 40,
+                               color: Colors.transparent,
+                               alignment: Alignment.center,
+                               child: Icon(
+                                 Icons.grid_view, // Grid dots look
+                                 color: theme.dragHandleColor, // From Theme
+                                 size: 18,
+                               ),
+                             ),
+                           ),
+                         ),
                       ],
                     ),
-                    
-                    // Macro Button
-                    IconButton(
-                      icon: const Icon(Icons.flash_on, color: Colors.amber),
-                      onPressed: () async {
-                        await showDialog(
-                          context: context,
-                          barrierDismissible: true,
-                          barrierColor: Colors.transparent,
-                          builder: (context) => const MacroManagerDialog(),
-                        );
-                      },
-                    ),
-                    
-                    // Inbox Button
-                    StreamBuilder<List>(
-                      stream: _inboxService.watchPendingNotes(),
-                      builder: (context, snapshot) {
-                        final count = snapshot.data?.length ?? 0;
-                        return Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.inbox, color: Colors.blue),
-                              onPressed: () async {
-                                // Expand window to sidebar mode first
-                                await WindowManagerHelper.expandToSidebar(context);
-                                
-                                // Show inbox dialog
-                                await showDialog(
-                                  context: context,
-                                  barrierDismissible: true,
-                                  barrierColor: Colors.transparent,
-                                  builder: (context) => const InboxManagerDialog(),
-                                );
-                                
-                                // Collapse back to pill mode after closing
-                                await WindowManagerHelper.collapseToPill(context);
-                              },
-                            ),
-                            if (count > 0)
-                              Positioned(
-                                right: 6,
-                                top: 6,
-                                child: Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: const BoxDecoration(
-                                    color: Colors.orange,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  constraints: const BoxConstraints(
-                                    minWidth: 16,
-                                    minHeight: 16,
-                                  ),
-                                  child: Text(
-                                    '$count',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        );
-                      },
-                    ),
-                    
-                    // Admin Dashboard Button (only for admins)
-                    if (_isAdmin)
-                      IconButton(
-                        icon: const Icon(Icons.admin_panel_settings, color: Colors.purple),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const AdminDashboardScreen(),
-                            ),
-                          );
-                        },
-                        tooltip: 'Admin Dashboard',
-                      ),
-                    
-                    // Menu Button
-                    IconButton(
-                      icon: const Icon(Icons.menu, color: Colors.grey),
-                      onPressed: () {
-                        // Open Settings
-                      },
-                    ),
-                  ],
-                    ),
+                  ),
+                  ),
                   ),
                 ),
               ),
-            ),
           ],
+        ),
       ),
+    );
+    }
+  );
+  }
+
+  Widget _buildIconButton({
+    required IconData icon,
+    required VoidCallback onTap,
+    required String tooltip,
+    required Color color,
+    required AppTheme theme,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(4), // Spec: 4px radius
+          hoverColor: theme.hoverColor, // From Theme
+          child: Container(
+            width: 40, // Spec: 40x40
+            height: 40,
+            alignment: Alignment.center,
+            child: Icon(
+              icon,
+              size: 20,
+              color: color, // Using passed color (which is likely theme.iconColor)
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -7,7 +7,7 @@ class GroqService {
   
   GroqService({required this.apiKey});
 
-  Future<String> transcribe(Uint8List audioBytes) async {
+  Future<String> transcribe(Uint8List audioBytes, {String filename = 'recording.wav'}) async {
     if (apiKey.isEmpty || apiKey.contains("your_groq_api_key")) {
       return "Error: Groq API Key not set.";
     }
@@ -43,7 +43,7 @@ class GroqService {
         http.MultipartFile.fromBytes(
           'file',
           audioBytes,
-          filename: 'recording.wav',
+          filename: filename,
         ),
       );
 

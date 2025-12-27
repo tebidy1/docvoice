@@ -1,5 +1,6 @@
 import '../models/macro.dart';
 import 'api_service.dart';
+import 'dart:convert' as dart_convert;
 
 class MacroService {
   static final MacroService _instance = MacroService._internal();
@@ -234,6 +235,21 @@ class MacroService {
     } catch (e) {
       print('Error incrementing usage: $e');
       // Don't throw - this is a non-critical operation
+    }
+  }
+
+  Future<String> getMacrosAsJson() async {
+    try {
+      final macros = await getAllMacros();
+      final List<Map<String, dynamic>> jsonList = macros.map((m) => {
+        'id': m.id,
+        'trigger': m.trigger,
+        'content': m.content,
+        'category': m.category,
+      }).toList();
+      return dart_convert.jsonEncode(jsonList);
+    } catch (e) {
+      return "[]";
     }
   }
 

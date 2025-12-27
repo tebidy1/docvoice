@@ -4,6 +4,8 @@ import '../services/macro_service.dart';
 import 'package:window_manager/window_manager.dart';
 import '../services/keyboard_service.dart';
 import '../models/macro.dart';
+import '../models/app_theme.dart';
+import '../services/theme_service.dart';
 import 'dart:async';
 import 'macro_settings_dialog.dart';
 import '../widgets/user_profile_header.dart';
@@ -357,34 +359,31 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    return ValueListenableBuilder<AppTheme>(
+      valueListenable: ThemeService(),
+      builder: (context, currentTheme, child) {
+        final theme = Theme.of(context);
+        final colorScheme = theme.colorScheme;
 
-    return Center(
-      child: Material(
-        color: Colors.transparent,
-        child: Container(
-          width: 900,
-          height: 650,
-          decoration: BoxDecoration(
-            color: const Color(0xFF0F172A), // Slate 900 - Opaque
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: colorScheme.surface, width: 1),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.3),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
+        return Center(
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              width: 900,
+              height: 650,
+              decoration: BoxDecoration(
+                color: currentTheme.backgroundColor,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: currentTheme.dividerColor, width: 1),
+                boxShadow: currentTheme.shadows,
               ),
-            ],
-          ),
-          child: Column(
-            children: [
-              // Header
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: theme.scaffoldBackgroundColor,
+              child: Column(
+                children: [
+                  // Header
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: currentTheme.backgroundColor,
                   borderRadius: const BorderRadius.only(
                     topLeft: Radius.circular(16),
                     topRight: Radius.circular(16),
@@ -459,10 +458,10 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
                 child: Row(
                   children: [
                     // Left Sidebar - Categories
-                    _buildCategoriesSidebar(theme),
+                    _buildCategoriesSidebar(currentTheme),
                     
                     // Right Panel - Macros
-                    Expanded(child: _buildMacrosPanel(theme)),
+                    Expanded(child: _buildMacrosPanel(currentTheme)),
                   ],
                 ),
               ),
@@ -471,15 +470,17 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
         ),
       ),
     );
+      },
+    );
   }
 
-  Widget _buildCategoriesSidebar(ThemeData theme) {
+  Widget _buildCategoriesSidebar(AppTheme theme) {
     return Container(
       width: 240,
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withOpacity(0.5), // Slightly lighter Slate
+        color: theme.micIdleBackground.withOpacity(0.5), // Sidebar background matches idle mic bg
         border: Border(
-          right: BorderSide(color: theme.colorScheme.surface),
+          right: BorderSide(color: theme.dividerColor),
         ),
       ),
       child: Column(
@@ -489,12 +490,12 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
             padding: const EdgeInsets.all(20),
             child: Row(
               children: [
-                Icon(Icons.folder_outlined, color: theme.colorScheme.primary, size: 18),
+                Icon(Icons.folder_outlined, color: theme.iconColor.withOpacity(0.7), size: 18),
                 const SizedBox(width: 8),
                 Text(
                   'Categories',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: theme.colorScheme.onSurface,
+                  style: TextStyle(
+                    color: theme.iconColor,
                     fontWeight: FontWeight.w600,
                     fontSize: 14,
                   ),
@@ -513,7 +514,7 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
                 
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Divider(color: theme.colorScheme.surface),
+                  child: Divider(color: theme.dividerColor),
                 ),
                 
                 _buildCategoryItem('🗂️', 'General', Colors.grey, theme),
@@ -531,7 +532,7 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
     );
   }
 
-  Widget _buildCategoryItem(String emoji, String name, Color color, ThemeData theme) {
+  Widget _buildCategoryItem(String emoji, String name, Color color, AppTheme theme) {
     final isSelected = _selectedCategory == name;
     
     return Material(
@@ -550,7 +551,7 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
           margin: const EdgeInsets.only(bottom: 4),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            color: isSelected ? theme.colorScheme.primary.withOpacity(0.1) : Colors.transparent,
+            color: isSelected ? Colors.amber.withOpacity(0.1) : Colors.transparent, // Amber selection
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
@@ -561,14 +562,14 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
                 child: Text(
                   name,
                   style: TextStyle(
-                    color: isSelected ? theme.colorScheme.primary : Colors.grey[400],
+                    color: isSelected ? Colors.amber : theme.iconColor.withOpacity(0.7),
                     fontSize: 13,
                     fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                   ),
                 ),
               ),
               if (isSelected)
-                Icon(Icons.check, size: 14, color: theme.colorScheme.primary),
+                const Icon(Icons.check, size: 14, color: Colors.amber),
             ],
           ),
         ),
@@ -576,9 +577,9 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
     );
   }
 
-  Widget _buildMacrosPanel(ThemeData theme) {
+  Widget _buildMacrosPanel(AppTheme theme) {
     return Container(
-      color: theme.scaffoldBackgroundColor,
+      color: theme.backgroundColor,
       child: Column(
         children: [
           // Search Bar
@@ -586,11 +587,11 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
             padding: const EdgeInsets.all(20),
             child: TextField(
               controller: _searchController,
-              style: TextStyle(color: theme.colorScheme.onSurface),
+              style: TextStyle(color: theme.iconColor),
               decoration: InputDecoration(
                 hintText: 'Search macros...',
-                hintStyle: TextStyle(color: Colors.grey[600]),
-                prefixIcon: Icon(Icons.search, color: Colors.grey[500]),
+                hintStyle: TextStyle(color: theme.iconColor.withOpacity(0.5)),
+                prefixIcon: Icon(Icons.search, color: theme.iconColor.withOpacity(0.5)),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
                         icon: Icon(Icons.clear, color: Colors.grey[500]),
@@ -601,7 +602,7 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
                       )
                     : null,
                 filled: true,
-                fillColor: theme.colorScheme.surface,
+                fillColor: theme.micIdleBackground,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -617,15 +618,15 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
           // Macro List
           Expanded(
             child: _isLoading
-                ? Center(
-                    child: CircularProgressIndicator(color: theme.colorScheme.primary),
+                ? const Center(
+                    child: CircularProgressIndicator(color: Colors.amber),
                   )
                 : _filteredMacros.isEmpty
                     ? Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.search_off, color: theme.colorScheme.surface, size: 60),
+                            Icon(Icons.search_off, color: theme.iconColor.withOpacity(0.2), size: 60),
                             const SizedBox(height: 16),
                             Text(
                               'No macros found',
@@ -648,12 +649,12 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
     );
   }
 
-  Widget _buildMacroCard(Macro macro, ThemeData theme) {
+  Widget _buildMacroCard(Macro macro, AppTheme theme) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface, // Slate 800
+        color: theme.micIdleBackground, // Card background
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: Colors.transparent, // Clean look
@@ -665,7 +666,7 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
           IconButton(
             icon: Icon(
               macro.isFavorite ? Icons.star : Icons.star_border,
-              color: macro.isFavorite ? Colors.amber : Colors.grey[600],
+              color: macro.isFavorite ? Colors.amber : theme.iconColor.withOpacity(0.6),
             ),
             onPressed: () => _toggleFavorite(macro),
             tooltip: macro.isFavorite ? 'Unfavorite' : 'Favorite',
@@ -679,7 +680,7 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
                 Text(
                   macro.trigger,
                   style: TextStyle(
-                    color: theme.colorScheme.onSurface,
+                    color: theme.iconColor,
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
                   ),
@@ -687,7 +688,7 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
                 const SizedBox(height: 4),
                 Text(
                   macro.content.length > 100 ? macro.content.substring(0, 100) + '...' : macro.content,
-                  style: TextStyle(color: Colors.grey[500], fontSize: 13),
+                  style: TextStyle(color: theme.iconColor.withOpacity(0.5), fontSize: 13),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -695,13 +696,13 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withOpacity(0.1),
+                    color: Colors.amber.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     macro.category,
-                    style: TextStyle(
-                      color: theme.colorScheme.primary,
+                    style: const TextStyle(
+                      color: Colors.amber,
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
                     ),

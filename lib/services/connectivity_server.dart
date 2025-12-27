@@ -6,9 +6,11 @@ import 'package:shelf_web_socket/shelf_web_socket.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../utils/wav_utils.dart';
+import '../models/inbox_note.dart';
 import 'groq_service.dart';
 import 'gemini_service.dart';
 import 'macro_service.dart';
+import 'inbox_service.dart';
 
 class ConnectivityServer {
   HttpServer? _server;
@@ -73,7 +75,38 @@ class ConnectivityServer {
             } else if (message == "STOP_RECORDING") {
               _isReceivingAudio = false;
               _statusController.add("Processing Audio...");
-              await processAudio();
+              await processAudio(webSocket);
+            } else if (message == "GET_MACROS") {
+              final macrosJson = await _macroService.getMacrosAsJson();
+              webSocket.sink.add(macrosJson); 
+            } else if (message.startsWith("SAVE_NOTE:")) {
+               // Phase 3: Final Save from Mobile
+               try {
+                 final jsonStr = message.substring(10);
+                 // We can parse generic JSON here. For now, let's treat it as the final content content.
+                 // Actually, let's look for a JSON object with { "text": "...", "patient": "..." }
+                 // Or just the raw text if simpler for now. 
+                 // Let's assume JSON for extensibility.
+                 
+                 // For now, simpler: "SAVE_NOTE:Patient Name|Content" or just Content.
+                 // Let's stick to JSON in the implementation_plan logic.
+                 // But strictly, let's just save valid text to InboxService.
+                 
+                 // Direct service usage
+                 final InboxService inbox = InboxService();
+                 
+                 // Add as generic note
+                 final newId = await inbox.addNote(jsonStr);
+                 
+                 // Mark as Processed (Ready)
+                 await inbox.updateStatus(newId, InboxStatus.processed);
+                 
+                 _statusController.add("Saved from Mobile (Ready)");
+                 webSocket.sink.add("SAVED_ACK");
+               } catch (e) {
+                 print("Error saving note: $e");
+                 webSocket.sink.add("ERROR:Save Failed");
+               }
             } else if (message == "PING") {
               webSocket.sink.add("PONG");
             }
@@ -107,8 +140,23 @@ class ConnectivityServer {
     _audioStreamController.add(data);
   }
 
-  /// Processes a complete WAV file directly (used for Desktop file-based recording)
-  Future<void> transcribeWav(Uint8List wavData) async {
+      // Broadcast text locally (Desktop)
+      _textStreamController.add(formattedText);
+      _statusController.add("Ready (Groq Only)");
+
+      // 🚀 SEND BACK TO MOBILE
+      // We need to know WHICH client sent it. 
+      // For now, since we usually have 1 active mobile user, we can broadcast or refactor transcribeWav to accept the client.
+      // Refactoring transcribeWav to accept 'WebSocketChannel client' is better.
+      
+    } catch (e) {
+      print("Error processing WAV: $e");
+      _statusController.add("Error: $e");
+    }
+  }
+
+  /// Processes a complete WAV file directly
+  Future<void> transcribeWav(Uint8List wavData, {WebSocketChannel? client}) async {
     _statusController.add("Transcribing...");
     
     try {
@@ -124,42 +172,66 @@ class ConnectivityServer {
         _statusController.add("Formatting (Gemini)...");
       }
 
-      // Send to Gemini (DISABLED FOR TESTING)
-      // final formattedText = await _geminiService.formatText(rawText, macroContext: macroExpansion);
-      final formattedText = rawText; // Direct pass-through
+      final formattedText = rawText; // Direct pass-through for now
       
-      // Broadcast text
+      // Broadcast to Desktop UI
       _textStreamController.add(formattedText);
-      _statusController.add("Ready (Groq Only)");
+      
+      // Send to Mobile Client
+      if (client != null) {
+        client.sink.add("TRANSCRIPT:$formattedText");
+      } else {
+        // Fallback: Broadcast to all
+        for (var c in _clients) {
+          c.sink.add("TRANSCRIPT:$formattedText");
+        }
+      }
+
+      _statusController.add("Ready (Sent to Mobile)");
       
     } catch (e) {
       print("Error processing WAV: $e");
       _statusController.add("Error: $e");
+      client?.sink.add("ERROR:$e");
     }
   }
 
-  Future<void> processAudio() async {
+  Future<void> processAudio(WebSocketChannel client) async {
     if (_audioBuffer.isEmpty) return;
     
     try {
       // Convert raw PCM to WAV
       // Assuming 16kHz 1 channel 16bit PCM from mobile
       // Check if we already have a RIFF header
-      Uint8List wavData;
-      if (_audioBuffer.length > 44 && 
+      Uint8List audioData;
+      String filename = 'recording.wav';
+
+      // Check for M4A/MP4 Header (ftyp)
+      // Usually starts with ....ftyp or 00 00 00 18 66 74 79 70
+      if (_audioBuffer.length > 12 && 
+          _audioBuffer[4] == 0x66 && // f
+          _audioBuffer[5] == 0x74 && // t
+          _audioBuffer[6] == 0x79 && // y
+          _audioBuffer[7] == 0x70) { // p
+        print("M4A/AAC Header detected.");
+        audioData = Uint8List.fromList(_audioBuffer);
+        filename = 'recording.m4a';
+      } 
+      // Check for RIFF (WAV)
+      else if (_audioBuffer.length > 44 && 
           _audioBuffer[0] == 0x52 && // R
           _audioBuffer[1] == 0x49 && // I
           _audioBuffer[2] == 0x46 && // F
           _audioBuffer[3] == 0x46) { // F
-        print("WAV Header detected, skipping manual header addition.");
-        wavData = Uint8List.fromList(_audioBuffer);
+        print("WAV Header detected.");
+        audioData = Uint8List.fromList(_audioBuffer);
       } else {
-        print("No WAV Header detected, adding one.");
-        wavData = WavUtils.addWavHeader(Uint8List.fromList(_audioBuffer), 16000, 1);
+        print("Raw PCM detected (assuming), adding WAV header.");
+        audioData = WavUtils.addWavHeader(Uint8List.fromList(_audioBuffer), 16000, 1);
       }
       
       // Send to Groq
-      final rawText = await _groqService.transcribe(wavData);
+      final rawText = await _groqService.transcribe(audioData, filename: filename);
       print("Groq Transcribed Text: $rawText");
       
       // Check for Macros
@@ -174,15 +246,19 @@ class ConnectivityServer {
       final formattedText = await _geminiService.formatText(rawText, macroContext: macroExpansion);
       // final formattedText = rawText; // Direct pass-through
       
-      // Broadcast text
+      // Broadcast to Desktop UI
       _textStreamController.add(formattedText);
-      _statusController.add("Ready (Groq Only)");
+      _statusController.add("Ready (Sent to Mobile)");
+
+      // 🚀 SEND TO MOBILE CLIENT
+      client.sink.add("TRANSCRIPT:$formattedText");
       
       // Clear buffer
       _audioBuffer.clear();
     } catch (e) {
       print("Processing Error: $e");
       _statusController.add("Error: $e");
+      client.sink.add("ABORTED:$e");
     }
   }
 

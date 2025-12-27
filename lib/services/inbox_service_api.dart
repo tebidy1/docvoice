@@ -18,7 +18,7 @@ class InboxService {
     _isInitialized = true;
   }
 
-  Future<void> addNote(
+  Future<int> addNote(
     String rawText, {
     String? patientName,
     String? summary,
@@ -33,9 +33,13 @@ class InboxService {
         if (suggestedMacroId != null) 'suggested_macro_id': suggestedMacroId,
       });
 
-      if (response['status'] != true) {
+      if (response['status'] != true || response['payload'] == null) {
         throw Exception(response['message'] ?? 'Failed to add note');
       }
+      
+      final payload = response['payload'];
+      return payload['id'] is int ? payload['id'] : int.parse(payload['id'].toString());
+      
     } catch (e) {
       // Log error but don't print if it's a timeout/network error (already handled by ApiService)
       if (!e.toString().contains('timeout') && !e.toString().contains('connection')) {
