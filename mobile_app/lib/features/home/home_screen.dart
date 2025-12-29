@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import 'package:record/record.dart'; // For Amplitude
-import 'dart:io';
+import 'package:universal_io/io.dart';
 import '../../services/websocket_service.dart';
 import '../../core/theme.dart';
 import '../../models/note_model.dart';
@@ -23,11 +23,21 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0; // 0: Inbox, 1: Settings
   bool _isRecording = false;
   final AudioRecordingService _audioService = AudioRecordingService();
+  
+  // Key to control Inbox state
+  final GlobalKey<InboxScreenState> _inboxKey = GlobalKey<InboxScreenState>();
 
-  final List<Widget> _screens = const [
-    InboxScreen(),
-    SettingsScreen(),
-  ];
+  // Screens list must use the key
+  late final List<Widget> _screens;
+
+  @override
+  void initState() {
+    super.initState();
+    _screens = [
+      InboxScreen(key: _inboxKey),
+      const SettingsScreen(),
+    ];
+  }
 
   void _onItemTapped(int index) {
     setState(() {
@@ -63,10 +73,29 @@ class _HomeScreenState extends State<HomeScreen> {
           ..updatedAt = DateTime.now();
 
         if (mounted) {
-          Navigator.push(
+          // Navigate to Editor and wait for result
+          final result = await Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => EditorScreen(draftNote: draft)),
           );
+
+          // If note returned, animate it into inbox
+          if (result != null && result is String && result.isNotEmpty) {
+             // Create updated note model
+             // In real app, EditorScreen should return full NoteModel, but string is okay for now.
+             draft.content = result;
+             draft.title = "Processed Note"; // Or extract title
+             draft.status = NoteStatus.processed;
+             
+             // Switch to Inbox tab
+             setState(() => _selectedIndex = 0);
+             
+             // Trigger Animation
+             // Small delay to allow tab switch to complete
+             Future.delayed(const Duration(milliseconds: 100), () {
+                _inboxKey.currentState?.addNote(draft);
+             });
+          }
         }
       }
     }
@@ -77,7 +106,10 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       body: SafeArea(
-        child: _screens[_selectedIndex],
+        child: IndexedStack(
+          index: _selectedIndex,
+          children: _screens,
+        ),
       ),
       floatingActionButton: SizedBox(
         width: 80,
@@ -87,10 +119,7 @@ class _HomeScreenState extends State<HomeScreen> {
               stream: _audioService.onAmplitudeChanged,
               builder: (context, snapshot) {
                  final amp = snapshot.data?.current ?? -160.0;
-                 // Normalize: Quiet (-60dB) -> 1.0, Loud (0dB) -> 1.5
-                 // Clamp between -60 and 0
                  double normalized = (amp.clamp(-60.0, 0.0) + 60) / 60; 
-                 // Scale factor: 1.0 (base) + up to 0.4 (variability)
                  double scale = 1.0 + (normalized * 0.4);
                  
                  return Transform.scale(

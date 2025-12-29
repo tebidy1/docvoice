@@ -8,7 +8,7 @@ class GroqService {
   // Hardcoded for standalone test - ideally moved to secure storage or settings
   GroqService({this.apiKey = "gsk_..."}); // TODO: Insert Real Key or load from Settings
 
-  Future<String> transcribe(Uint8List audioBytes, {String filename = 'recording.m4a'}) async {
+  Future<String> transcribe(Uint8List audioBytes, {String filename = 'recording.m4a', String modelId = 'whisper-large-v3'}) async {
     // Check if key is valid (simple check)
     if (apiKey.isEmpty || apiKey.contains("...")) {
       return "Error: Groq API Key not set in Mobile.";
@@ -22,11 +22,13 @@ class GroqService {
 
       request.headers['Authorization'] = 'Bearer $apiKey';
       
-      request.fields['model'] = 'whisper-large-v3';
+      request.fields['model'] = modelId; // Dynamic Model ID
       request.fields['response_format'] = 'json';
       // Force "transcribe only" behavior using a prompt (Whisper feature)
-      request.fields['prompt'] = 'Transcribe exactly what is said. Do NOT translate from Arabic to English or vice versa. Write Arabic as Arabic, English as English.';
-      // request.fields['language'] = 'en'; // Removed to allow Auto-Detect (Arabic/English)
+      // Simplify prompt to avoid confusion (Negative constraints often fail)
+      request.fields['prompt'] = 'Transcribe the audio exactly as spoken in English.';
+      request.fields['language'] = 'en'; // Forced English as per user request
+      request.fields['task'] = 'transcribe'; // Strictly prevent translation (reduces latency)
 
       request.files.add(
         http.MultipartFile.fromBytes(

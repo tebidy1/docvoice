@@ -1,0 +1,20 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Mobile App (Chrome)",
+            "request": "launch",
+            "type": "dart",
+            "flutterMode": "debug",
+            "program": "${workspaceFolder}/mobile_app/lib/main.dart",
+            "args": ["-d", "chrome"]
+        },
+        {
+            "name": "Mobile App (Android)",
+            "request": "launch",
+            "type": "dart",
+            "flutterMode": "debug",
+            "program": "${workspaceFolder}/mobile_app/lib/main.dart"
+        }
+    ]
+}

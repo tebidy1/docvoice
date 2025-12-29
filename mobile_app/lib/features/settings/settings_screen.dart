@@ -18,6 +18,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _geminiKeyController = TextEditingController();
   final TextEditingController _specialtyController = TextEditingController();
   final TextEditingController _promptController = TextEditingController();
+  
+  String _groqModel = 'whisper-large-v3'; // Default to High Accuracy
   bool _isLoading = false;
   String _statusMessage = "Not Connected";
   Color _statusColor = Colors.grey;
@@ -35,9 +37,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() {
       _ipController.text = prefs.getString('server_ip') ?? "192.168.1.100";
       _apiKeyController.text = prefs.getString('groq_api_key') ?? "";
-      _geminiKeyController.text = prefs.getString('gemini_api_key') ?? "";
+      _geminiKeyController.text = prefs.getString('gemini_api_key') ?? "AIzaSyBy2cwuD7oisj_glDlm8ga1036iN_CsLsU";
+      _specialtyController.text = prefs.getString('specialty') ?? "";
       _specialtyController.text = prefs.getString('specialty') ?? "";
       _promptController.text = prefs.getString('global_ai_prompt') ?? "";
+      _groqModel = prefs.getString('groq_model') ?? 'whisper-large-v3';
     });
   }
 
@@ -47,6 +51,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await prefs.setString('gemini_api_key', _geminiKeyController.text.trim());
     await prefs.setString('specialty', _specialtyController.text.trim());
     await prefs.setString('global_ai_prompt', _promptController.text.trim());
+    await prefs.setString('groq_model', _groqModel);
     
     if (mounted) {
        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("AI Configuration Saved ✅"), backgroundColor: AppTheme.successGreen));
@@ -87,152 +92,191 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text("Settings", style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 24),
-          
-          _buildSectionHeader(context, "Server Configuration"),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                children: [
-                  TextField(
-                    controller: _ipController,
-                    decoration: const InputDecoration(
-                      labelText: "Desktop IP Address",
-                      hintText: "e.g. 192.168.1.105",
-                      prefixIcon: Icon(Icons.computer),
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 100), // Added bottom padding
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("Settings", style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 24),
+            
+            _buildSectionHeader(context, "Server Configuration"),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  children: [
+                    TextField(
+                      controller: _ipController,
+                      decoration: const InputDecoration(
+                        labelText: "Desktop IP Address",
+                        hintText: "e.g. 192.168.1.105",
+                        prefixIcon: Icon(Icons.computer),
+                      ),
+                      keyboardType: TextInputType.number,
                     ),
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: _isLoading ? null : _saveAndConnect,
-                      icon: _isLoading 
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) 
-                        : const Icon(Icons.link),
-                      label: Text(_isLoading ? "Connecting..." : "Connect to Desktop"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primary,
-                        foregroundColor: Colors.black,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _isLoading ? null : _saveAndConnect,
+                        icon: _isLoading 
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) 
+                          : const Icon(Icons.link),
+                        label: Text(_isLoading ? "Connecting..." : "Connect to Desktop"),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.primary,
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.circle, size: 10, color: _statusColor),
-                      const SizedBox(width: 8),
-                      Text(_statusMessage, style: TextStyle(color: _statusColor, fontWeight: FontWeight.bold)),
-                    ],
-                  )
-                ],
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.circle, size: 10, color: _statusColor),
+                        const SizedBox(width: 8),
+                        Text(_statusMessage, style: TextStyle(color: _statusColor, fontWeight: FontWeight.bold)),
+                      ],
+                    )
+                  ],
+                ),
               ),
             ),
-          ),
-          
-          
-          _buildSectionHeader(context, "AI Brain & Macros"),
-          Card(
-            child: ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: AppTheme.accent.withOpacity(0.2), shape: BoxShape.circle),
-                child: const Icon(Icons.psychology, color: AppTheme.accent),
+            
+            
+            _buildSectionHeader(context, "AI Brain & Macros"),
+            Card(
+              child: ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: AppTheme.accent.withOpacity(0.2), shape: BoxShape.circle),
+                  child: const Icon(Icons.psychology, color: AppTheme.accent),
+                ),
+                title: const Text("Macro Manager"),
+                subtitle: const Text("Manage custom templates"),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                onTap: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const MacroManagerScreen()));
+                },
               ),
-              title: const Text("Macro Manager"),
-              subtitle: const Text("Manage custom templates"),
-              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-              onTap: () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const MacroManagerScreen()));
-              },
             ),
-          ),
 
-          const SizedBox(height: 24),
-          const SizedBox(height: 24),
-          _buildSectionHeader(context, "AI Configuration (Standalone)"),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                children: [
-                   TextField(
-                    controller: _apiKeyController, // Groq Key
-                    decoration: const InputDecoration(
-                      labelText: "Groq API Key (STT)",
-                      hintText: "gsk_...",
-                      prefixIcon: Icon(Icons.mic),
+            const SizedBox(height: 24),
+            const SizedBox(height: 24),
+            _buildSectionHeader(context, "AI Configuration (Standalone)"),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  children: [
+                     TextField(
+                      controller: _apiKeyController, // Groq Key
+                      decoration: const InputDecoration(
+                        labelText: "Groq API Key (STT)",
+                        hintText: "gsk_...",
+                        prefixIcon: Icon(Icons.mic),
+                      ),
+                      obscureText: true,
                     ),
-                    obscureText: true,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _geminiKeyController,
-                    decoration: const InputDecoration(
-                      labelText: "Gemini API Key (LLM)",
-                      hintText: "AIza...",
-                      prefixIcon: Icon(Icons.psychology),
-                    ),
-                    obscureText: true,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _specialtyController,
-                    decoration: const InputDecoration(
-                      labelText: "Your Specialty",
-                      hintText: "e.g. Cardiology",
-                      prefixIcon: Icon(Icons.person_outline),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _promptController,
-                    decoration: const InputDecoration(
-                      labelText: "Global AI Instructions",
-                      hintText: "e.g. Always use British spelling...",
-                      prefixIcon: Icon(Icons.description_outlined),
-                    ),
-                    maxLines: 2,
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: _saveAIConfig,
-                      icon: const Icon(Icons.save),
-                      label: const Text("Save AI Configuration"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.accent,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                    const SizedBox(height: 12),
+                    
+                    // Groq Model Selection
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black12,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.fromLTRB(12, 12, 12, 4),
+                            child: Text("Transcription Model (Speed vs Accuracy)", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                          ),
+                          RadioListTile<String>(
+                            title: const Text("High Accuracy (Slower)", style: TextStyle(fontSize: 14)),
+                            subtitle: const Text("whisper-large-v3", style: TextStyle(fontSize: 11, color: Colors.grey)),
+                            value: 'whisper-large-v3', 
+                            groupValue: _groqModel, 
+                            onChanged: (val) => setState(() => _groqModel = val!),
+                            activeColor: AppTheme.accent,
+                            dense: true,
+                          ),
+                          RadioListTile<String>(
+                            title: const Text("Super Fast (Less Accurate)", style: TextStyle(fontSize: 14)),
+                            subtitle: const Text("distil-whisper-large-v3-en", style: TextStyle(fontSize: 11, color: Colors.grey)),
+                            value: 'distil-whisper-large-v3-en', 
+                            groupValue: _groqModel, 
+                            onChanged: (val) => setState(() => _groqModel = val!),
+                            activeColor: AppTheme.accent,
+                             dense: true,
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                ],
+
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _geminiKeyController,
+                      decoration: const InputDecoration(
+                        labelText: "Gemini API Key (LLM)",
+                        hintText: "AIza...",
+                        prefixIcon: Icon(Icons.psychology),
+                      ),
+                      obscureText: true,
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _specialtyController,
+                      decoration: const InputDecoration(
+                        labelText: "Your Specialty",
+                        hintText: "e.g. Cardiology",
+                        prefixIcon: Icon(Icons.person_outline),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _promptController,
+                      decoration: const InputDecoration(
+                         labelText: "Global AI Instructions",
+                         hintText: "e.g. Always use British spelling...",
+                         prefixIcon: Icon(Icons.description_outlined),
+                      ),
+                      maxLines: 2,
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _saveAIConfig,
+                        icon: const Icon(Icons.save),
+                        label: const Text("Save AI Configuration"),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.accent,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          
-          const SizedBox(height: 24),
-          _buildSectionHeader(context, "Account"),
-          const Card(
-            child: ListTile(
-              leading: Icon(Icons.person),
-              title: Text("Dr. Strange"),
-              subtitle: Text("Cardiology"),
+            
+            const SizedBox(height: 24),
+            _buildSectionHeader(context, "Account"),
+            const Card(
+              child: ListTile(
+                leading: Icon(Icons.person),
+                title: Text("Dr. Strange"),
+                subtitle: Text("Cardiology"),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

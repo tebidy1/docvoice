@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'package:universal_io/io.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -9,6 +9,8 @@ class AudioRecordingService {
   String? _currentPath;
 
   Future<bool> hasPermission() async {
+    if (kIsWeb) return true; // Web manages permissions via browser prompt automatically on start
+    
     // Check permission using permission_handler for broader compatibility
     var status = await Permission.microphone.status;
     if (status.isDenied) {
@@ -21,11 +23,18 @@ class AudioRecordingService {
     _audioRecorder ??= AudioRecorder();
     try {
       if (await hasPermission()) {
-        final Directory appDocDir = await getApplicationDocumentsDirectory();
-        final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-        // Use m4a for AAC encoding (efficient and widely supported)
-        final String path = '${appDocDir.path}/recording_$timestamp.wav';
-        _currentPath = path;
+        String? path;
+        
+        if (!kIsWeb) {
+          final Directory appDocDir = await getApplicationDocumentsDirectory();
+          final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+          // Use m4a for AAC encoding (efficient and widely supported)
+          path = '${appDocDir.path}/recording_$timestamp.wav';
+          _currentPath = path;
+        } else {
+           // On Web, path is ignored or handled internally by browser/recorder
+           _currentPath = null; 
+        }
 
         // Configure recording parameters: WAV is safer for Emulator/Recognition
         const config = RecordConfig(
@@ -35,8 +44,14 @@ class AudioRecordingService {
         );
 
         // Start recording to file
-        await _audioRecorder!.start(config, path: path);
-        debugPrint("Started recording to: $path");
+        if (path != null) {
+          await _audioRecorder!.start(config, path: path);
+          debugPrint("Started recording to: $path");
+        } else {
+           // Web stream / blob
+           await _audioRecorder!.start(config, path: ''); 
+           debugPrint("Started recording (Web)");
+        }
       } else {
         debugPrint("Microphone permission denied");
         throw Exception("Microphone permission denied");
@@ -61,7 +76,7 @@ class AudioRecordingService {
 
   Future<void> cancelRecording() async {
     if (_audioRecorder != null) await _audioRecorder!.cancel();
-    if (_currentPath != null) {
+    if (_currentPath != null && !kIsWeb) {
       final file = File(_currentPath!);
       if (await file.exists()) {
         await file.delete();

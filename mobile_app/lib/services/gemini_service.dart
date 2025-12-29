@@ -8,9 +8,9 @@ class GeminiService {
   late final GenerativeModel _model;
 
   GeminiService({required this.apiKey}) {
-    // Using Gemini 2.5 Flash (latest, fastest, most capable)
+    // Using Gemini 2.5 Flash (latest, fastest, most capable) - Matching Desktop
     _model = GenerativeModel(
-      model: 'gemini-1.5-flash', // Use 1.5 Flash as it is stable in Vertex AI/Studio
+      model: 'gemini-2.5-flash', 
       apiKey: apiKey,
     );
   }
@@ -34,8 +34,71 @@ class GeminiService {
     }
   }
 
+  /// Analyzes raw note text and extracts patient name, summary, and suggests macro type
+  /// Matches Desktop implementation
+  Future<Map<String, dynamic>> analyzeNote(String rawText) async {
+    if (apiKey.isEmpty || apiKey.contains("your_gemini_api_key")) {
+      return {
+        'patientName': 'Unknown Patient',
+        'summary': rawText.substring(0, rawText.length > 50 ? 50 : rawText.length),
+        'suggestedMacroType': 'general'
+      };
+    }
+
+    final prompt = '''
+You are an AI assistant analyzing medical dictation notes. Extract the following information from the text below and return ONLY a JSON object (no other text):
+
+{
+  "patientName": "extracted patient name or 'Unknown Patient' if not found",
+  "summary": "a brief 1-line summary (max 60 characters)",
+  "suggestedMacroType": "one of: 'follow-up', 'soap', 'referral', 'prescription', 'vital-signs', 'general'"
+}
+
+Rules for suggestion:
+- "follow-up" if mentions follow-up, next visit, or monitoring
+- "soap" if structured as subjective/objective/assessment/plan
+- "referral" if mentions "refer to", "consult", or "Dr."
+- "prescription" if mentions medication, dosage, or Rx
+- "vital-signs" if primarily about BP, HR, temp, etc.
+- "general" for everything else
+
+Text to analyze:
+"$rawText"
+
+Return ONLY the JSON object, no markdown, no explanation.
+''';
+
+    try {
+      final content = [Content.text(prompt)];
+      final response = await _model.generateContent(content);
+      final text = response.text ?? '{}';
+      
+      // Clean up response
+      String cleanJson = text.trim();
+      if (cleanJson.startsWith('```json')) {
+        cleanJson = cleanJson.substring(7);
+      }
+      if (cleanJson.startsWith('```')) {
+        cleanJson = cleanJson.substring(3);
+      }
+      if (cleanJson.endsWith('```')) {
+        cleanJson = cleanJson.substring(0, cleanJson.length - 3);
+      }
+      
+      final result = jsonDecode(cleanJson.trim());
+      return result;
+    } catch (e) {
+      print("Gemini analyzeNote Error: $e");
+      return {
+        'patientName': 'Unknown Patient',
+        'summary': rawText.substring(0, rawText.length > 50 ? 50 : rawText.length),
+        'suggestedMacroType': 'general'
+      };
+    }
+  }
+
   Future<String> formatText(String rawText, {String? macroContext, String? instruction, String? specialty, String? globalPrompt}) async {
-    if (apiKey.isEmpty || apiKey.contains("...")) {
+    if (apiKey.isEmpty || apiKey.contains("your_gemini_api_key")) {
       return rawText; // Fallback if no key
     }
 
@@ -79,10 +142,30 @@ You must produce a final, polished, professional medical note ready for the EMR 
    - Output ONLY the final note.
    - Do not add conversational filler like "Here is the note:" or "I have processed the text."
 
-${globalPrompt != null ? '### GLOBAL USER GUIDELINES\n$globalPrompt\n' : ''}
-${specialty != null ? '### MEDICAL SPECIALTY CONTEXT\n$specialty\n' : ''}
-${instruction != null ? '### SPECIFIC INSTRUCTIONS\n$instruction\n' : ''}
+${globalPrompt != null ? '### GLOBAL USER GUIDELINES\\n$globalPrompt\\n' : ''}
+${specialty != null ? '### MEDICAL SPECIALTY CONTEXT\\n$specialty\\n' : ''}
+${instruction != null ? '### SPECIFIC INSTRUCTIONS\\n$instruction\\n' : ''}
 
+### EXAMPLES
+
+**Input Transcript:**
+"patient is sarah, 30 years old. umm came in with a sore throat for 3 days. fever is 38.5. no cough. looks like tonsillitis. i gave her augmentin 1g twice a day for a week. also panadol for pain."
+
+**Template:**
+SUBJECTIVE: [History of Present Illness]
+OBJECTIVE: Temp: [Temp], Exam: [Findings]
+ASSESSMENT: [Diagnosis]
+PLAN: [Medications]
+
+**Target Output:**
+SUBJECTIVE: Patient is a 30-year-old female presenting with a 3-day history of sore throat. Reports fever. Denies cough.
+OBJECTIVE: Temp: 38.5°C. Exam: Consistent with tonsillitis.
+ASSESSMENT: Tonsillitis.
+PLAN:
+1. Augmentin 1g PO BID for 7 days.
+2. Panadol PRN for pain control.
+
+---
 ### BEGIN PROCESSING
 Target Template:
 ${macroContext ?? "No specific template provided. Organize professionally."}
@@ -96,6 +179,7 @@ $rawText
       final response = await _retryWithBackoff(() => _model.generateContent(content));
       final result = response.text ?? rawText;
       
+      // Clean up any markdown formatting that might have been added
       return result
           .replaceAll('```', '')
           .replaceAll('markdown', '')
@@ -114,7 +198,7 @@ $rawText
     String? specialty,
     String? globalPrompt,
   }) async {
-    if (apiKey.isEmpty || apiKey.contains("...")) {
+    if (apiKey.isEmpty || apiKey.contains("your_gemini_api_key")) {
       return {
         'final_note': rawText,
         'missing_suggestions': [],
@@ -167,6 +251,26 @@ You must output a **Single Valid JSON Object** with no markdown formatting. The 
   ]
 }
 
+### EXAMPLE
+
+**Input Transcript:**
+"patient ahmed sore throat fever 38"
+
+**Template:**
+Subjective: [HPI]
+Objective: BP: [BP], Temp: [Temp]
+
+**Target JSON Output:**
+{
+  "final_note": "Subjective: Patient Ahmed presents with sore throat.\\nObjective: BP: [Not Reported], Temp: 38°C.",
+  "missing_suggestions": [
+    { "label": "Add BP: 120/80", "text_to_insert": "BP: 120/80 mmHg." },
+    { "label": "Add: No Cough", "text_to_insert": "Patient denies cough." },
+    { "label": "Add: Tonsils Normal", "text_to_insert": "Tonsils are not enlarged." }
+  ]
+}
+
+---
 ### BEGIN PROCESSING
 Target Template:
 ${macroContext ?? '[No template provided]'}
@@ -181,10 +285,9 @@ ${globalPrompt != null && globalPrompt.isNotEmpty ? '\nAdditional Instructions: 
     try {
       print("GeminiService: Generating with suggestions...");
       
-      // Use JSON response mode for cleaner output (if supported by model, otherwise prompt relies on it)
-      // Note: 1.5 Flash supports responseMimeType: 'application/json'
+      // Use JSON response mode for cleaner output
       final model = GenerativeModel(
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.5-flash',
         apiKey: apiKey,
         generationConfig: GenerationConfig(
           responseMimeType: 'application/json',
@@ -195,24 +298,24 @@ ${globalPrompt != null && globalPrompt.isNotEmpty ? '\nAdditional Instructions: 
       final responseText = response.text;
 
       if (responseText == null || responseText.isEmpty) {
-        print("GeminiService: Empty response");
-        return null;
+        throw "Empty response";
       }
 
       // Parse JSON response
       try {
         final jsonResponse = jsonDecode(responseText) as Map<String, dynamic>;
+        print("GeminiService: Successfully parsed JSON");
         return jsonResponse;
       } catch (parseError) {
-        print("GeminiService: JSON parse error: $parseError");
         // Fallback: try to extract JSON from markdown code blocks
         final jsonMatch = RegExp(r'```json\s*(.*?)\s*```', dotAll: true).firstMatch(responseText);
         if (jsonMatch != null) {
           final jsonResponse = jsonDecode(jsonMatch.group(1)!) as Map<String, dynamic>;
           return jsonResponse;
         }
+        // Final fallback: return text-only response
         return {
-          'final_note': responseText,
+          'final_note': responseText.replaceAll('```json', '').replaceAll('```', '').trim(),
           'missing_suggestions': [],
         };
       }

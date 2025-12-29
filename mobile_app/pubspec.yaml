@@ -51,7 +51,7 @@ dependencies:
   mobile_scanner: ^5.2.0
   permission_handler: ^11.1.0
   vibration: ^3.1.0
-  google_generative_ai: ^0.4.0
+  google_generative_ai: ^0.4.4
   
   # UI & UX
   google_fonts: ^6.1.0
@@ -62,6 +62,7 @@ dependencies:
   # Utils
   uuid: ^4.2.1
   intl: ^0.19.0
+  universal_io: ^2.3.1
 
 dev_dependencies:
   flutter_test:
