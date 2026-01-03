@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
+import '../utils/window_manager_helper.dart';
 import 'admin_dashboard_screen.dart';
 import '../services/auth_service.dart';
 import '../services/theme_service.dart';
@@ -20,10 +21,12 @@ class SettingsDialog extends StatefulWidget {
 class _SettingsDialogState extends State<SettingsDialog> {
   String _localIp = "Loading...";
   String _groqModelPref = GroqModel.precise.modelId;
+  final TextEditingController _geminiKeyController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    WindowManagerHelper.setTransparencyLocked(true);
     _fetchIp();
     _loadSettings();
     _resizeWindow(true);
@@ -34,6 +37,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
     if (mounted) {
       setState(() {
         _groqModelPref = prefs.getString('groq_model_pref') ?? GroqModel.precise.modelId;
+        _geminiKeyController.text = prefs.getString('gemini_api_key') ?? "";
       });
     }
   }
@@ -45,6 +49,8 @@ class _SettingsDialogState extends State<SettingsDialog> {
 
   @override
   void dispose() {
+    WindowManagerHelper.setTransparencyLocked(false);
+    _geminiKeyController.dispose();
     _resizeWindow(false);
     super.dispose();
   }
@@ -67,7 +73,9 @@ class _SettingsDialogState extends State<SettingsDialog> {
       valueListenable: ThemeService(),
       builder: (context, currentTheme, child) {
         return Center( // Center content in the expanded window
-          child: Material(
+          child: GestureDetector(
+            onPanStart: (details) => windowManager.startDragging(),
+            child: Material(
             color: Colors.transparent,
       child: Container(
         width: 500,
@@ -129,6 +137,73 @@ class _SettingsDialogState extends State<SettingsDialog> {
                       );
                     },
                     theme: currentTheme,
+                  ),
+
+                  const SizedBox(height: 16),
+                  _buildSectionHeader("AI Configuration", currentTheme),
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: currentTheme.micIdleBackground,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: currentTheme.dividerColor),
+                    ),
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Gemini API Key",
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: currentTheme.iconColor,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _geminiKeyController,
+                          decoration: InputDecoration(
+                            hintText: "Enter your Gemini API Key",
+                            hintStyle: TextStyle(color: currentTheme.iconColor.withOpacity(0.5)),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: currentTheme.dividerColor),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: currentTheme.dividerColor),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: Theme.of(context).primaryColor),
+                            ),
+                            filled: true,
+                            fillColor: currentTheme.backgroundColor,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                            suffixIcon: IconButton(
+                              icon: const Icon(Icons.save, size: 20),
+                              onPressed: () async {
+                                final prefs = await SharedPreferences.getInstance();
+                                await prefs.setString('gemini_api_key', _geminiKeyController.text.trim());
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text("API Key Saved")),
+                                  );
+                                }
+                              },
+                            ),
+                          ),
+                          style: TextStyle(color: currentTheme.iconColor),
+                          obscureText: true,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Leave empty to use default key",
+                          style: TextStyle(fontSize: 12, color: currentTheme.iconColor.withOpacity(0.6)),
+                        ),
+                      ],
+                    ),
                   ),
 
                   const SizedBox(height: 16),
@@ -238,9 +313,10 @@ class _SettingsDialogState extends State<SettingsDialog> {
           ),
         ),
       ),
+      ),
     );
-      },
-    );
+  }
+);
   }
 
   Widget _buildSectionHeader(String title, AppTheme theme) {

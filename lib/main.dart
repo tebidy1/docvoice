@@ -26,39 +26,30 @@ void main() async {
     try {
       await windowManager.ensureInitialized();
       
-      // Get screen size for auto-positioning
-      WindowOptions windowOptions = const WindowOptions(
-        size: Size(280, 56), // Native Utility size (Tight Fit)
+      // Check Auth State for Window Sizing
+      final authService = AuthService();
+      final bool isAuth = await authService.isAuthenticated();
 
-        center: true, // Center the window on first launch
-        backgroundColor: Colors.transparent, // Transparent for frameless mode
+      // Define Window Options based on Auth
+      // If Auth: Capsule Mode (Small, Top-Right, Fixed) - handled by DesktopApp logic mostly, but start small
+      // If Not Auth: Login Mode (Large, Centered, Resizable)
+      
+      final Size initialSize = isAuth ? const Size(280, 56) : const Size(400, 720);
+      
+      WindowOptions windowOptions = WindowOptions(
+        size: initialSize,
+        center: true, // Center initially (DesktopApp moves it later if Auth)
+        backgroundColor: Colors.transparent, 
         skipTaskbar: false,
         titleBarStyle: TitleBarStyle.hidden,
-        alwaysOnTop: false, // Allow window to be behind other applications
+        alwaysOnTop: isAuth, // Keep capsule on top, login normal
       );
       
       windowManager.waitUntilReadyToShow(windowOptions, () async {
         await windowManager.setBackgroundColor(Colors.transparent);
-        await windowManager.setResizable(false); // Lock size for capsule
+        await windowManager.setResizable(!isAuth); // Resizable only if not logged in
         await windowManager.show();
         await windowManager.focus();
-        
-        // Auto-position to right
-        // Note: We can't get screen size easily here without context or extra packages in main()
-        // But we can try to use windowManager.getPrimaryDisplay() if available, 
-        // or just rely on the app's first frame to dock itself.
-        // However, the user asked to do it here. 
-        // Let's try to get the display info.
-        try {
-           // This might fail if getPrimaryDisplay is not available as seen before.
-           // But wait, the previous error was "The method 'getPrimaryDisplay' isn't defined".
-           // So we CANNOT use it here.
-           // We will rely on a fixed offset for now, or better, 
-           // let the DesktopApp's initState handle the precise docking.
-           // But to satisfy "Default Size", we set 400x800 above.
-        } catch (e) {
-          print("Error getting display: $e");
-        }
       });
     } catch (e) {
       print("Error initializing window manager: $e");

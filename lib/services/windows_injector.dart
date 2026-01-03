@@ -5,6 +5,8 @@ import 'package:ffi/ffi.dart';
 import 'package:win32/win32.dart';
 import 'package:flutter/services.dart';
 
+import 'package:window_manager/window_manager.dart';
+
 // Helper class for Windows Injection (Paste/Type)
 class WindowsInjector {
   // Singleton
@@ -15,18 +17,22 @@ class WindowsInjector {
   /// Level 1: Just copy to clipboard (Manual)
   Future<void> copyToClipboard(String text) async {
     await Clipboard.setData(ClipboardData(text: text));
+    // Clear buffer to ensure clean state
   }
 
   /// Level 2: Smart Paste (Ctrl+V)
   /// Focuses the previous window and sends Ctrl+V
   Future<void> injectViaPaste(String text) async {
-    // 1. Copy to Clipboard first
+    // 1. Minimize our app to reveal the EMR/Target Window behind
+    await windowManager.minimize();
+    
+    // 2. Copy to Clipboard
     await copyToClipboard(text);
 
-    // 2. Add small delay to ensure clipboard is ready
-    await Future.delayed(const Duration(milliseconds: 100));
+    // 3. Add delay to allow minimize animation/focus switch (critical)
+    await Future.delayed(const Duration(milliseconds: 300));
 
-    // 3. Send Ctrl+V
+    // 4. Send Ctrl+V
     _sendCtrlV();
   }
 

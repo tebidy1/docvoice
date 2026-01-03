@@ -63,15 +63,34 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
 
   Future<void> _loadQuickMacros() async {
     await _macroService.init();
-    var macros = await _macroService.getMostUsed(limit: 30);
     
-    if (macros.isEmpty) {
+    // Strategy: Favorites FIRST, then Most Used
+    final favorites = await _macroService.getFavorites();
+    var mostUsed = await _macroService.getMostUsed(limit: 30);
+    
+    // Fallback if most used is empty (e.g. fresh install)
+    if (mostUsed.isEmpty && favorites.isEmpty) {
       final allMacros = await _macroService.getAllMacros();
-      macros = allMacros.take(30).toList();
+      mostUsed = allMacros.take(30).toList();
+    }
+    
+    // Deduplicate and Order
+    final Map<int, Macro> combinedMap = {};
+    
+    // 1. Add Favorites (highest priority)
+    for (var m in favorites) {
+      combinedMap[m.id] = m;
+    }
+    
+    // 2. Add Most Used (if not already added)
+    for (var m in mostUsed) {
+      if (!combinedMap.containsKey(m.id)) {
+        combinedMap[m.id] = m;
+      }
     }
     
     if (mounted) {
-      setState(() => _quickMacros = macros);
+      setState(() => _quickMacros = combinedMap.values.toList());
     }
   }
 
@@ -971,28 +990,105 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     );
   }
 
+  Future<void> _markAsReady() async {
+    try {
+      if (_finalNoteController.text.isEmpty) return;
+      
+      await _inboxService.updateNote(
+        widget.note.id,
+        formattedText: _finalNoteController.text,
+        // Status implicitly set to 'processed' by backend logic when formattedText is present
+      );
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Note saved and marked as Ready'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          )
+        );
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      debugPrint('Error marking as ready: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save: $e'), backgroundColor: Colors.red)
+        );
+      }
+    }
+  }
+
   Widget _buildInjectButton(ThemeData theme) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       color: theme.scaffoldBackgroundColor,
-      child: ElevatedButton(
-        onPressed: _finalNoteController.text.isEmpty ? null : _injectToEMR,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: theme.colorScheme.secondary,
-          foregroundColor: Colors.white,
-          elevation: 4,
-          shadowColor: theme.colorScheme.secondary.withOpacity(0.4),
-          minimumSize: const Size(double.infinity, 48),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.check_circle_outline, size: 20),
-            SizedBox(width: 8),
-            Text('Inject & Archive', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          ],
-        ),
+      child: Row(
+        children: [
+          // 1. Mark Ready Button (Flexible)
+          Expanded(
+            child: OutlinedButton(
+               onPressed: _finalNoteController.text.isEmpty ? null : _markAsReady,
+               style: OutlinedButton.styleFrom(
+                 foregroundColor: theme.colorScheme.secondary,
+                 side: BorderSide(color: theme.colorScheme.secondary),
+                 elevation: 0,
+                 padding: const EdgeInsets.symmetric(horizontal: 8), // Reduce padding
+                 minimumSize: const Size(double.infinity, 48),
+                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+               ),
+               child: const Row(
+                 mainAxisAlignment: MainAxisAlignment.center,
+                 mainAxisSize: MainAxisSize.min, // Shrink to fit
+                 children: [
+                   Icon(Icons.save_outlined, size: 18),
+                   SizedBox(width: 4),
+                   Flexible(
+                     child: Text(
+                       'Mark Ready', 
+                       style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                       overflow: TextOverflow.ellipsis,
+                     ),
+                   ),
+                 ],
+               ),
+             ),
+          ),
+           
+          const SizedBox(width: 12),
+           
+          // 2. Inject Button (Flexible)
+          Expanded(
+             child: ElevatedButton(
+               onPressed: _finalNoteController.text.isEmpty ? null : _injectToEMR,
+               style: ElevatedButton.styleFrom(
+                 backgroundColor: theme.colorScheme.secondary,
+                 foregroundColor: Colors.white,
+                 elevation: 4,
+                 padding: const EdgeInsets.symmetric(horizontal: 8), // Reduce padding
+                 shadowColor: theme.colorScheme.secondary.withOpacity(0.4),
+                 minimumSize: const Size(double.infinity, 48),
+                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+               ),
+               child: const Row(
+                 mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min, // Shrink to fit
+                 children: [
+                    Icon(Icons.check_circle_outline, size: 18),
+                    SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        'Inject & Archive', 
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                 ],
+               ),
+             ),
+          ),
+        ],
       ),
     );
   }

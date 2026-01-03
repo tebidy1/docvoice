@@ -551,9 +551,51 @@ class _EditorScreenState extends State<EditorScreen> {
                     children: [
                       Padding(
                         padding: const EdgeInsets.only(left: 4, bottom: 6),
-                        child: Text(
-                          "ORIGINAL MESSAGE", 
-                          style: GoogleFonts.inter(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.5)
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              "ORIGINAL MESSAGE", 
+                              style: GoogleFonts.inter(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.5)
+                            ),
+                            // Unified Feature: Use Raw Text Button
+                            InkWell(
+                              onTap: () {
+                                if (_sourceController.text.isNotEmpty) {
+                                  setState(() {
+                                    _finalController.text = _sourceController.text;
+                                  });
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text("⬇️ Copied raw text to editor"),
+                                      duration: Duration(milliseconds: 1000),
+                                      backgroundColor: Color(0xFF2C2C2C),
+                                    )
+                                  );
+                                  // Optional: Trigger auto-save immediately
+                                  _saveDraftUpdate();
+                                }
+                              },
+                              borderRadius: BorderRadius.circular(4),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.arrow_downward_rounded, color: AppTheme.accent, size: 12),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      "Use Raw Text",
+                                      style: GoogleFonts.inter(
+                                        color: AppTheme.accent,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w500
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       Container(

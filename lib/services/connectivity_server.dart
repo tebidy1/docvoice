@@ -138,10 +138,14 @@ class ConnectivityServer {
     
     try {
       // 1. Setup Engine & Config
+      // 1. Setup Engine & Config
       final prefs = await SharedPreferences.getInstance();
+      final customGeminiKey = prefs.getString('gemini_api_key');
       final engine = ProcessingEngine(
         groqApiKey: dotenv.env['GROQ_API_KEY'] ?? "",
-        geminiApiKey: dotenv.env['GEMINI_API_KEY'] ?? "",
+        geminiApiKey: (customGeminiKey != null && customGeminiKey.isNotEmpty) 
+            ? customGeminiKey 
+            : (dotenv.env['GEMINI_API_KEY'] ?? ""),
       );
       
       final groqPref = prefs.getString('groq_model_pref') ?? GroqModel.precise.modelId;
@@ -233,10 +237,14 @@ class ConnectivityServer {
       }
       
       // 1. Setup Engine & Config
+      // 1. Setup Engine & Config
       final prefs = await SharedPreferences.getInstance();
+      final customGeminiKey = prefs.getString('gemini_api_key');
       final engine = ProcessingEngine(
         groqApiKey: dotenv.env['GROQ_API_KEY'] ?? "",
-        geminiApiKey: dotenv.env['GEMINI_API_KEY'] ?? "",
+        geminiApiKey: (customGeminiKey != null && customGeminiKey.isNotEmpty) 
+            ? customGeminiKey 
+            : (dotenv.env['GEMINI_API_KEY'] ?? ""),
       );
       
       final groqPref = prefs.getString('groq_model_pref') ?? GroqModel.precise.modelId;

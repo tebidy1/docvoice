@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/macro_service.dart';
 import 'package:window_manager/window_manager.dart';
+import '../utils/window_manager_helper.dart';
 import '../services/keyboard_service.dart';
 import '../models/macro.dart';
 import '../models/app_theme.dart';
@@ -28,12 +29,15 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
   @override
   void initState() {
     super.initState();
+    WindowManagerHelper.setOpacity(1.0); // Enforce full visibility
+    WindowManagerHelper.setTransparencyLocked(true); // Lock opacity
     _resizeWindow(true);
     _loadMacros();
   }
 
   @override
   void dispose() {
+    WindowManagerHelper.setTransparencyLocked(false); // Unlock opacity
     _resizeWindow(false);
     _searchController.dispose();
     super.dispose();
@@ -366,7 +370,9 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
         final colorScheme = theme.colorScheme;
 
         return Center(
-          child: Material(
+          child: GestureDetector(
+            onPanStart: (details) => windowManager.startDragging(),
+            child: Material(
             color: Colors.transparent,
             child: Container(
               width: 900,
@@ -467,11 +473,12 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
               ),
             ],
           ),
+          ),
         ),
       ),
     );
-      },
-    );
+  },
+);
   }
 
   Widget _buildCategoriesSidebar(AppTheme theme) {

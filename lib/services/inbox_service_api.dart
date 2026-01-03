@@ -49,6 +49,40 @@ class InboxService {
     }
   }
 
+  Future<void> updateNote(
+    int noteId, {
+    String? rawText,
+    String? formattedText,
+    String? patientName,
+    String? summary,
+    int? suggestedMacroId,
+  }) async {
+    try {
+      await init();
+      final body = <String, dynamic>{};
+      
+      if (rawText != null) body['raw_text'] = rawText;
+      if (formattedText != null) body['formatted_text'] = formattedText;
+      if (patientName != null) body['patient_name'] = patientName;
+      if (summary != null) body['summary'] = summary;
+      if (suggestedMacroId != null) body['suggested_macro_id'] = suggestedMacroId;
+      
+      // Update status to processed if formatted text is provided
+      if (formattedText != null && formattedText.isNotEmpty) {
+        body['status'] = 'processed';
+      }
+
+      final response = await _apiService.put('/inbox-notes/$noteId', body: body);
+
+      if (response['status'] != true) {
+        throw Exception(response['message'] ?? 'Failed to update note');
+      }
+    } catch (e) {
+      print('Error updating note: $e');
+      rethrow;
+    }
+  }
+
   Future<List<InboxNote>> getPendingNotes() async {
     await init();
     try {

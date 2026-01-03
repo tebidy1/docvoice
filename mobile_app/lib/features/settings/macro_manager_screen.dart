@@ -206,7 +206,14 @@ class _MacroManagerScreenState extends State<MacroManagerScreen> {
                                   m.isFavorite ? Icons.star : Icons.star_border, 
                                   color: m.isFavorite ? Colors.amber : Colors.white30
                                 ),
-                                onPressed: () => _toggleFavorite(m),
+                                onPressed: () async {
+                                  // Optimistically toggle locally for instant feedback
+                                  setState(() {
+                                    m.isFavorite = !m.isFavorite;
+                                  });
+                                  await _service.toggleFavorite(m.id);
+                                  _loadMacros(); // Reload to confirm state
+                                },
                               ),
                               title: Text(m.trigger, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                               subtitle: Text(

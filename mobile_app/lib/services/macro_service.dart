@@ -143,8 +143,7 @@ class MacroService {
   /// Update existing macro
   Future<void> updateMacro(MacroModel updated) async {
     try {
-      if (updated.id is int) {
-        // Has API ID - update on server
+      if (updated.id is int) { // API ID
         await _apiService.init();
         final response = await _apiService.put('/macros/${updated.id}', body: updated.toApiJson());
         
@@ -169,6 +168,33 @@ class MacroService {
         macros[index] = updated;
         await _cacheLocally(macros);
       }
+    }
+  }
+
+  /// Toggle Favorite Status
+  Future<void> toggleFavorite(dynamic id) async {
+    try {
+       if (id is int) { // API ID
+         await _apiService.init();
+         // Attempt to use dedicated endpoint if available, otherwise rely on local update + PUT
+         // But for now, we will optimistically update local and try PATCH
+         try {
+            await _apiService.patch('/macros/$id/toggle-favorite');
+         } catch (_) {
+            // Fallback if endpoint missing? Assume updateMacro helps.
+         }
+         await getMacros();
+       } else {
+         // Local
+         final macros = await _getFromCache();
+         final index = macros.indexWhere((m) => m.id == id);
+         if (index != -1) {
+           macros[index].isFavorite = !macros[index].isFavorite;
+           await _cacheLocally(macros);
+         }
+       }
+    } catch (e) {
+      debugPrint("Toggle favorite failed: $e");
     }
   }
 

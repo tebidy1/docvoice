@@ -77,6 +77,9 @@ class _DesktopAppState extends State<DesktopApp> {
 
   Future<void> _setInitialWindowSize() async {
     try {
+      // Enforce Capsule Mode Properties
+      await windowManager.setResizable(false);
+      await windowManager.setAlwaysOnTop(true);
       // Set window size to match the capsule content (tight fit)
       await windowManager.setSize(const Size(280, 56));
     } catch (e) {
@@ -367,7 +370,10 @@ class _DesktopAppState extends State<DesktopApp> {
           onPanStart: (details) {
             windowManager.startDragging();
           },
-          child: Scaffold(
+          child: MouseRegion(
+            onEnter: (_) => WindowManagerHelper.setOpacity(1.0),
+            onExit: (_) => WindowManagerHelper.setOpacity(0.7),
+            child: Scaffold(
             backgroundColor: Colors.transparent, // Transparent for frameless mode
             body: Stack(
               children: [
@@ -383,8 +389,9 @@ class _DesktopAppState extends State<DesktopApp> {
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(theme.borderRadius), // From Theme
                         child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 4), // Spec: Dense padding
-                        height: 56, // Spec: 56px
+                          width: double.infinity, // Fill the window explicitly
+                          padding: const EdgeInsets.symmetric(horizontal: 4), // Spec: Dense padding
+                          height: 56, // Spec: 56px
                         decoration: BoxDecoration(
                           color: theme.backgroundColor, // From Theme
                           borderRadius: BorderRadius.circular(theme.borderRadius),
@@ -392,7 +399,8 @@ class _DesktopAppState extends State<DesktopApp> {
                           boxShadow: theme.shadows, // From Theme
                         ),
                         child: Row(
-                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          mainAxisSize: MainAxisSize.max,
                           children: [
                          // 1. Close Button (Far Left / End)
                          _buildIconButton(
@@ -554,9 +562,10 @@ class _DesktopAppState extends State<DesktopApp> {
           ],
         ),
       ),
-    );
-    }
-  );
+    ), // MouseRegion
+    ); // Method
+  }
+  ); // ValueListenableBuilder
   }
 
   Widget _buildIconButton({

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:window_manager/window_manager.dart';
+
 import '../services/admin_service.dart';
+import '../utils/window_manager_helper.dart';
 import '../services/auth_service.dart';
 import '../widgets/window_title_bar.dart';
 import 'companies_list_screen.dart';
@@ -23,6 +24,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   @override
   void initState() {
     super.initState();
+    WindowManagerHelper.setTransparencyLocked(true); // Enforce full visibility
     _loadStatistics();
   }
 
@@ -224,10 +226,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         ],
                       ),
                     ),
-          ),
-        ],
-      ),
+            ),
+          ],
+        ),
     );
+  }
+
+  @override
+  void dispose() {
+    WindowManagerHelper.setTransparencyLocked(false); // Restore transparency capability
+    super.dispose();
   }
 }
 

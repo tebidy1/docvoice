@@ -70,8 +70,19 @@ class WindowManagerHelper {
     await windowManager.setAlwaysOnTop(false);
   }
 
-  /// Sets the window opacity
+  static bool _isTransparencyLocked = false;
+
+  /// Locks opacity to 1.0 (prevent dimming)
+  static void setTransparencyLocked(bool locked) {
+    _isTransparencyLocked = locked;
+    if (locked) {
+      setOpacity(1.0); // Enforce full visibility immediately
+    }
+  }
+
+  /// Sets the window opacity (unless locked)
   static Future<void> setOpacity(double opacity) async {
+    if (_isTransparencyLocked && opacity < 1.0) return; // Prevent dimming if locked
     await windowManager.setOpacity(opacity);
   }
 }

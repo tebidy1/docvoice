@@ -6,6 +6,7 @@ import '../../core/theme.dart';
 import 'macro_manager_screen.dart';
 import 'package:scribe_brain/scribe_brain.dart';
 import '../../services/macro_service.dart';
+import '../../services/auth_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -21,86 +22,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _specialtyController = TextEditingController();
   final TextEditingController _promptController = TextEditingController();
   
-  String _groqModel = 'whisper-large-v3'; // Default to High Accuracy
+  String _groqModel = 'whisper-large-v3';
   bool _isLoading = false;
   String _statusMessage = "Not Connected";
   Color _statusColor = Colors.grey;
+
+  Map<String, dynamic>? _currentUser;
+  bool _isFetchingProfile = true;
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
+    _loadUserProfile();
   }
 
-
-
-  Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _ipController.text = prefs.getString('server_ip') ?? "192.168.1.100";
-      _apiKeyController.text = prefs.getString('groq_api_key') ?? "";
-      _geminiKeyController.text = prefs.getString('gemini_api_key') ?? "AIzaSyBy2cwuD7oisj_glDlm8ga1036iN_CsLsU";
-      _specialtyController.text = prefs.getString('specialty') ?? "";
-      _specialtyController.text = prefs.getString('specialty') ?? "";
-      _promptController.text = prefs.getString('global_ai_prompt') ?? "";
-      _groqModel = prefs.getString('groq_model') ?? 'whisper-large-v3';
-    });
-  }
-
-  Future<void> _saveAIConfig() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('groq_api_key', _apiKeyController.text.trim());
-    await prefs.setString('gemini_api_key', _geminiKeyController.text.trim());
-    await prefs.setString('specialty', _specialtyController.text.trim());
-    await prefs.setString('global_ai_prompt', _promptController.text.trim());
-    await prefs.setString('groq_model', _groqModel);
-    
+  Future<void> _loadUserProfile() async {
+    final authService = AuthService();
+    final user = await authService.getCurrentUser();
     if (mounted) {
-       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("AI Configuration Saved ✅"), backgroundColor: AppTheme.successGreen));
+      setState(() {
+        _currentUser = user;
+        _isFetchingProfile = false;
+      });
     }
   }
 
-  Future<void> _saveAndConnect() async {
-    setState(() => _isLoading = true);
-    final ip = _ipController.text.trim();
-    
-    // Save
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('server_ip', ip);
-
-    // Connect
-    final ws = Provider.of<WebSocketService>(context, listen: false);
-    try {
-      await ws.connect(ip, "8080");
-      if (mounted) {
-        setState(() {
-          _statusMessage = "Connected to $ip";
-          _statusColor = AppTheme.successGreen;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Connected!"), backgroundColor: AppTheme.successGreen));
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _statusMessage = "Connection Failed";
-          _statusColor = AppTheme.recordRed;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Failed: $e"), backgroundColor: AppTheme.recordRed));
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _resetMacrosToDefaults() async {
-    // Show confirmation dialog
+  Future<void> _handleLogout() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text("Reset Macros?", style: TextStyle(color: Colors.white)),
+        title: const Text("Log Out?", style: TextStyle(color: Colors.white)),
         content: const Text(
-          "This will DELETE all existing macros and restore the 8 default medical templates (SOAP, Sick Leave, Medical Report, etc.).\n\nThis cannot be undone.",
+          "Are you sure you want to log out?",
           style: TextStyle(color: Colors.white70),
         ),
         actions: [
@@ -110,46 +65,102 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text("Reset", style: TextStyle(color: Colors.orange)),
+            child: const Text("Log Out", style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
     );
 
-    if (confirmed != true || !mounted) return;
+    if (confirmed != true) return;
 
-    // Show loading
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
-    );
-
-    try {
-      final macroService = MacroService();
-      
-      // Reset (deletes cloud macros and re-seeds defaults)
-      await macroService.resetToDefaults();
-      
-      if (mounted) {
-        Navigator.pop(context); // Close loading
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("✅ Macros reset to medical templates"),
-            backgroundColor: AppTheme.successGreen,
-          ),
+    if (mounted) {
+        showDialog(
+            context: context, 
+            barrierDismissible: false,
+            builder: (_) => const Center(child: CircularProgressIndicator())
         );
+    }
+
+    await AuthService().logout();
+
+    if (mounted) {
+      // Clear navigation stack and go to Login
+      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+    }
+  }
+
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _ipController.text = prefs.getString('server_ip') ?? "192.168.1.100";
+      _apiKeyController.text = prefs.getString('groq_api_key') ?? "";
+      _geminiKeyController.text = prefs.getString('gemini_api_key') ?? "AIzaSyBy2cwuD7oisj_glDlm8ga1036iN_CsLsU";
+      _specialtyController.text = prefs.getString('specialty') ?? "";
+      // Removed duplicate line
+      _promptController.text = prefs.getString('global_ai_prompt') ?? "";
+      _groqModel = prefs.getString('groq_model') ?? 'whisper-large-v3';
+    });
+  }
+
+// ... existing code ...
+
+  Future<void> _saveAndConnect() async {
+    setState(() => _isLoading = true);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('server_ip', _ipController.text);
+    
+    try {
+      await WebSocketService().connect(_ipController.text, "8080");
+       if (mounted) {
+        setState(() {
+          _statusMessage = "Connected";
+          _statusColor = AppTheme.successGreen;
+          _isLoading = false;
+        });
       }
     } catch (e) {
-      if (mounted) {
-        Navigator.pop(context); // Close loading
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Failed to reset: $e"),
-            backgroundColor: Colors.red,
-          ),
-        );
+       if (mounted) {
+        setState(() {
+          _statusMessage = "Error: $e";
+          _statusColor = Colors.red;
+          _isLoading = false;
+        });
       }
+    }
+  }
+
+  Future<void> _resetMacrosToDefaults() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: const Text("Reset Macros?", style: TextStyle(color: Colors.white)),
+        content: const Text("This will restore default templates.", style: TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Reset", style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await MacroService().resetToDefaults();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Macros reset to defaults")));
+      }
+    }
+  }
+
+  Future<void> _saveAIConfig() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('groq_api_key', _apiKeyController.text);
+    await prefs.setString('gemini_api_key', _geminiKeyController.text);
+    await prefs.setString('specialty', _specialtyController.text);
+    await prefs.setString('global_ai_prompt', _promptController.text);
+    await prefs.setString('groq_model', _groqModel);
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("AI Configuration Saved")));
     }
   }
 
@@ -157,14 +168,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       child: Padding(
-        padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 100), // Added bottom padding
+        padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 100), 
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text("Settings", style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 24),
             
+            // --- Profile Section (Moved to Top as per standard UX) ---
+            _buildSectionHeader(context, "Account"),
+            Card(
+              clipBehavior: Clip.antiAlias,
+              child: _isFetchingProfile 
+              ? const Padding(padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
+              : Column(
+                children: [
+                  ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: AppTheme.primary.withOpacity(0.2),
+                      child: Text(
+                        _currentUser?['name'] != null ? (_currentUser!['name'] as String)[0].toUpperCase() : "?",
+                        style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold)
+                      ),
+                    ),
+                    title: Text(_currentUser?['name'] ?? "Guest User", style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text(_currentUser?['email'] ?? "Not logged in", style: const TextStyle(fontSize: 12)),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.logout, color: Colors.redAccent, size: 20),
+                    title: const Text("Log Out", style: TextStyle(color: Colors.redAccent, fontSize: 14)),
+                    onTap: _handleLogout,
+                    dense: true,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
             _buildSectionHeader(context, "Server Configuration"),
+            // ... existing code ...
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -240,7 +283,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
 
-            const SizedBox(height: 24),
             const SizedBox(height: 24),
             _buildSectionHeader(context, "AI Configuration (Standalone)"),
             Card(
@@ -342,15 +384,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             
-            const SizedBox(height: 24),
-            _buildSectionHeader(context, "Account"),
-            const Card(
-              child: ListTile(
-                leading: Icon(Icons.person),
-                title: Text("Dr. Strange"),
-                subtitle: Text("Cardiology"),
-              ),
-            ),
+            // Removed duplicate Account Section
           ],
         ),
       ),

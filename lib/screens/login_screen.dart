@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
 import '../widgets/window_controls.dart';
+import 'package:window_manager/window_manager.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -105,10 +106,15 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       body: Column(
         children: [
-          // Window Controls
-          Container(
-            alignment: Alignment.centerRight,
-            child: const WindowControls(),
+          // Window Controls (Draggable Header)
+          GestureDetector(
+            onPanStart: (_) => windowManager.startDragging(),
+            child: Container(
+              height: 40,
+              color: Colors.transparent, // Ensures hit test works
+              alignment: Alignment.centerRight,
+              child: const WindowControls(),
+            ),
           ),
           // Main Content
           Expanded(
