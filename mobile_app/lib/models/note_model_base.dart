@@ -26,4 +26,8 @@ class NoteModelBase {
 
   // Metadata for AI
   String? appliedMacroId;
+  
+  // API Sync Fields
+  String originalText = ''; // Raw text from API/Input
+  String formattedText = ''; // Processed text from API/AI
 }

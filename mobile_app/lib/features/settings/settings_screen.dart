@@ -4,6 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/websocket_service.dart';
 import '../../core/theme.dart';
 import 'macro_manager_screen.dart';
+import 'package:scribe_brain/scribe_brain.dart';
+import '../../services/macro_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -90,6 +92,67 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _resetMacrosToDefaults() async {
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: const Text("Reset Macros?", style: TextStyle(color: Colors.white)),
+        content: const Text(
+          "This will DELETE all existing macros and restore the 8 default medical templates (SOAP, Sick Leave, Medical Report, etc.).\n\nThis cannot be undone.",
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Reset", style: TextStyle(color: Colors.orange)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final macroService = MacroService();
+      
+      // Reset (deletes cloud macros and re-seeds defaults)
+      await macroService.resetToDefaults();
+      
+      if (mounted) {
+        Navigator.pop(context); // Close loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("✅ Macros reset to medical templates"),
+            backgroundColor: AppTheme.successGreen,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Close loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Failed to reset: $e"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -163,6 +226,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 },
               ),
             ),
+            Card(
+              child: ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: Colors.orange.withOpacity(0.2), shape: BoxShape.circle),
+                  child: const Icon(Icons.restore, color: Colors.orange),
+                ),
+                title: const Text("Reset to Default Macros"),
+                subtitle: const Text("Replace all with 8 medical templates"),
+                trailing: const Icon(Icons.warning, size: 16, color: Colors.orange),
+                onTap: _resetMacrosToDefaults,
+              ),
+            ),
 
             const SizedBox(height: 24),
             const SizedBox(height: 24),
@@ -197,18 +273,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             child: Text("Transcription Model (Speed vs Accuracy)", style: TextStyle(color: Colors.grey, fontSize: 12)),
                           ),
                           RadioListTile<String>(
-                            title: const Text("High Accuracy (Slower)", style: TextStyle(fontSize: 14)),
+                            title: const Text("High Precision (Slower)", style: TextStyle(fontSize: 14)),
                             subtitle: const Text("whisper-large-v3", style: TextStyle(fontSize: 11, color: Colors.grey)),
-                            value: 'whisper-large-v3', 
+                            value: GroqModel.precise.modelId, // Use enum from scribe_brain
                             groupValue: _groqModel, 
                             onChanged: (val) => setState(() => _groqModel = val!),
                             activeColor: AppTheme.accent,
                             dense: true,
                           ),
                           RadioListTile<String>(
-                            title: const Text("Super Fast (Less Accurate)", style: TextStyle(fontSize: 14)),
-                            subtitle: const Text("distil-whisper-large-v3-en", style: TextStyle(fontSize: 11, color: Colors.grey)),
-                            value: 'distil-whisper-large-v3-en', 
+                            title: const Text("Turbo (Fastest)", style: TextStyle(fontSize: 14)),
+                            subtitle: const Text("whisper-large-v3-turbo", style: TextStyle(fontSize: 11, color: Colors.grey)),
+                            value: GroqModel.turbo.modelId, // Use enum from scribe_brain
                             groupValue: _groqModel, 
                             onChanged: (val) => setState(() => _groqModel = val!),
                             activeColor: AppTheme.accent,

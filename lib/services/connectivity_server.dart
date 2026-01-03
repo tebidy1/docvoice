@@ -6,9 +6,9 @@ import 'package:shelf_web_socket/shelf_web_socket.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../utils/wav_utils.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:scribe_brain/scribe_brain.dart';
 import '../models/inbox_note.dart';
-import 'groq_service.dart';
-import 'gemini_service.dart';
 import 'macro_service.dart';
 import 'inbox_service.dart';
 
@@ -21,8 +21,6 @@ class ConnectivityServer {
   bool _isReceivingAudio = false;
   
   // Services
-  late GroqService _groqService;
-  late GeminiService _geminiService;
   final MacroService _macroService = MacroService();
   
   // Stream for received text (Transcription)
@@ -38,17 +36,11 @@ class ConnectivityServer {
   Stream<List<int>> get audioStream => _audioStreamController.stream;
 
   ConnectivityServer() {
-    // Initialize Services
-    _groqService = GroqService(apiKey: dotenv.env['GROQ_API_KEY'] ?? "");
-    _geminiService = GeminiService(apiKey: dotenv.env['GEMINI_API_KEY'] ?? "");
     _macroService.init();
   }
 
   Future<void> startServer({int port = 8080}) async {
-    // Reload env to be sure
     await dotenv.load();
-    _groqService = GroqService(apiKey: dotenv.env['GROQ_API_KEY'] ?? "");
-    _geminiService = GeminiService(apiKey: dotenv.env['GEMINI_API_KEY'] ?? "");
     await _macroService.init();
     
     var handler = webSocketHandler((WebSocketChannel webSocket) {
@@ -140,31 +132,35 @@ class ConnectivityServer {
     _audioStreamController.add(data);
   }
 
-      // Broadcast text locally (Desktop)
-      _textStreamController.add(formattedText);
-      _statusController.add("Ready (Groq Only)");
-
-      // 🚀 SEND BACK TO MOBILE
-      // We need to know WHICH client sent it. 
-      // For now, since we usually have 1 active mobile user, we can broadcast or refactor transcribeWav to accept the client.
-      // Refactoring transcribeWav to accept 'WebSocketChannel client' is better.
-      
-    } catch (e) {
-      print("Error processing WAV: $e");
-      _statusController.add("Error: $e");
-    }
-  }
-
   /// Processes a complete WAV file directly
   Future<void> transcribeWav(Uint8List wavData, {WebSocketChannel? client}) async {
     _statusController.add("Transcribing...");
     
     try {
-      // Send to Groq
-      final rawText = await _groqService.transcribe(wavData);
+      // 1. Setup Engine & Config
+      final prefs = await SharedPreferences.getInstance();
+      final engine = ProcessingEngine(
+        groqApiKey: dotenv.env['GROQ_API_KEY'] ?? "",
+        geminiApiKey: dotenv.env['GEMINI_API_KEY'] ?? "",
+      );
+      
+      final groqPref = prefs.getString('groq_model_pref') ?? GroqModel.precise.modelId;
+      final config = ProcessingConfig(
+        groqModel: GroqModel.values.firstWhere((e) => e.modelId == groqPref, orElse: () => GroqModel.precise),
+        geminiMode: GeminiMode.fast,
+        userPreferences: {}
+      );
+
+      // 2. Transcribe
+      final transcriptResult = await engine.processRequest(
+        audioBytes: wavData, 
+        config: config,
+        skipAi: true
+      );
+      final rawText = transcriptResult.rawTranscript;
       print("Groq Transcribed Text: $rawText");
       
-      // Check for Macros
+      // 3. Detect Macro
       final macroExpansion = await _macroService.findExpansion(rawText);
       if (macroExpansion != null) {
         _statusController.add("Macro Found: $macroExpansion");
@@ -172,7 +168,13 @@ class ConnectivityServer {
         _statusController.add("Formatting (Gemini)...");
       }
 
-      final formattedText = rawText; // Direct pass-through for now
+      // 4. Format
+      final finalResult = await engine.processRequest(
+        rawTranscript: rawText,
+        config: config,
+        macroContent: macroExpansion
+      );
+      final formattedText = finalResult.formattedText;
       
       // Broadcast to Desktop UI
       _textStreamController.add(formattedText);
@@ -230,11 +232,32 @@ class ConnectivityServer {
         audioData = WavUtils.addWavHeader(Uint8List.fromList(_audioBuffer), 16000, 1);
       }
       
-      // Send to Groq
-      final rawText = await _groqService.transcribe(audioData, filename: filename);
+      // 1. Setup Engine & Config
+      final prefs = await SharedPreferences.getInstance();
+      final engine = ProcessingEngine(
+        groqApiKey: dotenv.env['GROQ_API_KEY'] ?? "",
+        geminiApiKey: dotenv.env['GEMINI_API_KEY'] ?? "",
+      );
+      
+      final groqPref = prefs.getString('groq_model_pref') ?? GroqModel.precise.modelId;
+      final config = ProcessingConfig(
+        groqModel: GroqModel.values.firstWhere((e) => e.modelId == groqPref, orElse: () => GroqModel.precise),
+        geminiMode: GeminiMode.fast, // Desktop usually fast mode (text only)
+        userPreferences: {
+           // Can pass global prompt here if stored in desktop prefs (ToDo)
+        }
+      );
+
+      // 2. Transcribe (Skip AI formatting first to allow macro detection)
+      final transcriptResult = await engine.processRequest(
+        audioBytes: audioData, 
+        config: config,
+        skipAi: true
+      );
+      var rawText = transcriptResult.rawTranscript;
       print("Groq Transcribed Text: $rawText");
       
-      // Check for Macros
+      // 3. Detect Macro
       final macroExpansion = await _macroService.findExpansion(rawText);
       if (macroExpansion != null) {
         _statusController.add("Macro Detected! Formatting...");
@@ -242,9 +265,13 @@ class ConnectivityServer {
         _statusController.add("Formatting (Gemini)...");
       }
 
-      // Send to Gemini
-      final formattedText = await _geminiService.formatText(rawText, macroContext: macroExpansion);
-      // final formattedText = rawText; // Direct pass-through
+      // 4. Format with AI
+      final finalResult = await engine.processRequest(
+        rawTranscript: rawText,
+        config: config, 
+        macroContent: macroExpansion
+      );
+      final formattedText = finalResult.formattedText;
       
       // Broadcast to Desktop UI
       _textStreamController.add(formattedText);

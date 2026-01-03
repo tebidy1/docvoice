@@ -1,19 +1,25 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../models/processing_config.dart';
 
 class GroqService {
   final String apiKey;
   
-  // Hardcoded for standalone test - ideally moved to secure storage or settings
-  GroqService({String? apiKey}) 
-      : apiKey = apiKey ?? dotenv.env['GROQ_API_KEY'] ?? "";
+  GroqService({required this.apiKey});
 
-  Future<String> transcribe(Uint8List audioBytes, {String filename = 'recording.m4a', String modelId = 'whisper-large-v3'}) async {
-    // Check if key is valid (simple check)
+  /// Transcribes audio using the specified model.
+  /// 
+  /// [modelId] can be 'whisper-large-v3' (Precise) or 'whisper-large-v3-turbo' (Fast).
+  /// Defaults to Precise if not specified, but usually controlled by ProcessingConfig.
+  Future<String> transcribe(Uint8List audioBytes, {
+    String filename = 'recording.m4a', 
+    String? modelId,
+  }) async {
+    final effectiveModel = modelId ?? GroqModel.precise.modelId;
+
     if (apiKey.isEmpty) {
-      return "Error: Groq API Key not set in Mobile.";
+      return "Error: Groq API Key not set.";
     }
 
     try {
@@ -24,13 +30,11 @@ class GroqService {
 
       request.headers['Authorization'] = 'Bearer $apiKey';
       
-      request.fields['model'] = modelId; // Dynamic Model ID
+      request.fields['model'] = effectiveModel;
       request.fields['response_format'] = 'json';
-      // Force "transcribe only" behavior using a prompt (Whisper feature)
-      // Simplify prompt to avoid confusion (Negative constraints often fail)
       request.fields['prompt'] = 'Transcribe the audio exactly as spoken in English.';
-      request.fields['language'] = 'en'; // Forced English as per user request
-      request.fields['task'] = 'transcribe'; // Strictly prevent translation (reduces latency)
+      request.fields['language'] = 'en'; 
+      // Groq does not support 'task' param, unlike OpenAI
 
       request.files.add(
         http.MultipartFile.fromBytes(
@@ -49,8 +53,6 @@ class GroqService {
       } else {
         print("Groq Error Status: ${response.statusCode}");
         print("Groq Error Body: ${response.body}");
-        print("Request Headers: ${request.headers}");
-        print("Request Fields: ${request.fields}");
         return "Error: ${response.statusCode} - ${response.body}";
       }
     } catch (e) {

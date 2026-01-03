@@ -26,6 +26,10 @@ dependencies:
   # AI & Logic
   google_generative_ai: ^0.4.4
   
+  # Shared Logic
+  scribe_brain:
+    path: packages/scribe_brain
+  
   # Local Database - Enabled for Windows/Desktop (Isar doesn't support web)
   isar: ^3.1.0+1
   isar_flutter_libs: ^3.1.0+1

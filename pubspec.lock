@@ -696,6 +696,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.1.9"
+  scribe_brain:
+    dependency: "direct main"
+    description:
+      path: "packages/scribe_brain"
+      relative: true
+    source: path
+    version: "0.1.0"
   shared_preferences:
     dependency: "direct main"
     description:

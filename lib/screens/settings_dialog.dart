@@ -7,6 +7,8 @@ import '../services/theme_service.dart';
 import '../models/app_theme.dart';
 import '../services/connectivity_server.dart';
 import '../desktop/qr_pairing_dialog.dart';
+import 'package:scribe_brain/scribe_brain.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsDialog extends StatefulWidget {
   const SettingsDialog({super.key});
@@ -17,12 +19,23 @@ class SettingsDialog extends StatefulWidget {
 
 class _SettingsDialogState extends State<SettingsDialog> {
   String _localIp = "Loading...";
+  String _groqModelPref = GroqModel.precise.modelId;
 
   @override
   void initState() {
     super.initState();
     _fetchIp();
+    _loadSettings();
     _resizeWindow(true);
+  }
+
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _groqModelPref = prefs.getString('groq_model_pref') ?? GroqModel.precise.modelId;
+      });
+    }
   }
 
   Future<void> _fetchIp() async {
@@ -129,8 +142,33 @@ class _SettingsDialogState extends State<SettingsDialog> {
                       Navigator.pop(context);
                       await showDialog(
                         context: context,
-                        builder: (context) => const QrPairingDialog(),
+                        builder: (context) => QrPairingDialog(ipAddress: _localIp, port: 8080),
                       );
+                    },
+                    theme: currentTheme,
+                  ),
+
+                  const SizedBox(height: 16),
+                  _buildSectionHeader("Transcription Precision", currentTheme),
+                  _buildThemeItem(
+                    icon: Icons.speed,
+                    label: "Turbo (Fastest)",
+                    isSelected: _groqModelPref == GroqModel.turbo.modelId,
+                    onTap: () async {
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.setString('groq_model_pref', GroqModel.turbo.modelId);
+                      setState(() => _groqModelPref = GroqModel.turbo.modelId);
+                    },
+                    theme: currentTheme,
+                  ),
+                  _buildThemeItem(
+                    icon: Icons.psychology_alt,
+                    label: "High Precision (Slower)",
+                    isSelected: _groqModelPref == GroqModel.precise.modelId,
+                    onTap: () async {
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.setString('groq_model_pref', GroqModel.precise.modelId);
+                      setState(() => _groqModelPref = GroqModel.precise.modelId);
                     },
                     theme: currentTheme,
                   ),

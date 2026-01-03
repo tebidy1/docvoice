@@ -1,12 +1,22 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'api_service.dart';
 
 class MacroModel {
-  String id;
+  // ID can be String (local) or int (API) - we'll manage both
+  dynamic id; // Will be String for local-only, int for API-synced
   String trigger;
   String content;
   bool isFavorite;
   String category;
+  
+  // API-specific fields
+  int? usageCount;
+  DateTime? lastUsed;
+  bool isAiMacro;
+  String? aiInstruction;
+  DateTime? createdAt;
 
   MacroModel({
     required this.id, 
@@ -14,6 +24,11 @@ class MacroModel {
     required this.content,
     this.isFavorite = false,
     this.category = 'General',
+    this.usageCount,
+    this.lastUsed,
+    this.isAiMacro = false,
+    this.aiInstruction,
+    this.createdAt,
   });
 
   Map<String, dynamic> toJson() => {
@@ -22,6 +37,20 @@ class MacroModel {
     'content': content,
     'isFavorite': isFavorite,
     'category': category,
+    if (usageCount != null) 'usage_count': usageCount,
+    if (lastUsed != null) 'last_used': lastUsed?.toIso8601String(),
+    'is_ai_macro': isAiMacro,
+    if (aiInstruction != null) 'ai_instruction': aiInstruction,
+    if (createdAt != null) 'created_at': createdAt?.toIso8601String(),
+  };
+
+  // For API POST/PUT requests
+  Map<String, dynamic> toApiJson() => {
+    'trigger': trigger,
+    'content': content,
+    'category': category,
+    'is_ai_macro': isAiMacro,
+    if (aiInstruction != null) 'ai_instruction': aiInstruction,
   };
 
   factory MacroModel.fromJson(Map<String, dynamic> json) {
@@ -29,22 +58,203 @@ class MacroModel {
       id: json['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
       trigger: json['trigger'] ?? "",
       content: json['content'] ?? "",
-      isFavorite: json['isFavorite'] ?? false,
+      isFavorite: json['isFavorite'] ?? json['is_favorite'] ?? false,
       category: json['category'] ?? "General",
+      usageCount: json['usage_count'],
+      lastUsed: json['last_used'] != null ? DateTime.parse(json['last_used']) : null,
+      isAiMacro: json['is_ai_macro'] ?? false,
+      aiInstruction: json['ai_instruction'],
+      createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']) : null,
+    );
+  }
+  
+  // Factory for API responses
+  factory MacroModel.fromApi(Map<String, dynamic> json) {
+    return MacroModel(
+      id: json['id'], // int from API
+      trigger: json['trigger'] ?? "",
+      content: json['content'] ?? "",
+      isFavorite: json['is_favorite'] ?? false,
+      category: json['category'] ?? "General",
+      usageCount: json['usage_count'] ?? 0,
+      lastUsed: json['last_used'] != null ? DateTime.parse(json['last_used']) : null,
+      isAiMacro: json['is_ai_macro'] ?? false,
+      aiInstruction: json['ai_instruction'],
+      createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']) : DateTime.now(),
     );
   }
 }
 
 class MacroService {
   static const String _storageKey = 'user_macros';
+  static const String _lastSyncKey = 'macros_last_sync';
+  static const String _migratedKey = 'macros_migrated_to_cloud';
+  
+  final ApiService _apiService = ApiService();
 
+  /// Get all macros - API first, cache fallback
   Future<List<MacroModel>> getMacros() async {
+    try {
+      // Try API first
+      await _apiService.init();
+      final response = await _apiService.get('/macros');
+      
+      if (response['status'] == true && response['payload'] != null) {
+        final payload = response['payload'];
+        final List<dynamic> data = payload['data'] is List
+            ? payload['data']
+            : (payload is List ? payload : []);
+        
+        final macros = data.map((json) => MacroModel.fromApi(json)).toList();
+        
+        // Cache for offline use
+        await _cacheLocally(macros);
+        await _updateLastSync();
+        
+        return macros;
+      }
+    } catch (e) {
+      debugPrint("API failed, using cache: $e");
+    }
+    
+    // Fallback to cache
+    return await _getFromCache();
+  }
+
+  /// Add a new macro - saves to API and cache
+  Future<void> addMacro(MacroModel macro) async {
+    try {
+      await _apiService.init();
+      final response = await _apiService.post('/macros', body: macro.toApiJson());
+      
+      if (response['status'] == true) {
+        // Refresh from API to get server-assigned ID
+        await getMacros();
+      }
+    } catch (e) {
+      debugPrint("Failed to add macro to API: $e");
+      // Fallback: save locally only
+      final macros = await _getFromCache();
+      macros.add(macro);
+      await _cacheLocally(macros);
+    }
+  }
+
+  /// Update existing macro
+  Future<void> updateMacro(MacroModel updated) async {
+    try {
+      if (updated.id is int) {
+        // Has API ID - update on server
+        await _apiService.init();
+        final response = await _apiService.put('/macros/${updated.id}', body: updated.toApiJson());
+        
+        if (response['status'] == true) {
+          await getMacros(); // Refresh
+        }
+      } else {
+        // Local-only macro - update cache
+        final macros = await _getFromCache();
+        final index = macros.indexWhere((m) => m.id == updated.id);
+        if (index != -1) {
+          macros[index] = updated;
+          await _cacheLocally(macros);
+        }
+      }
+    } catch (e) {
+      debugPrint("Failed to update macro: $e");
+      // Fallback to local update
+      final macros = await _getFromCache();
+      final index = macros.indexWhere((m) => m.id == updated.id);
+      if (index != -1) {
+        macros[index] = updated;
+        await _cacheLocally(macros);
+      }
+    }
+  }
+
+  /// Delete macro
+  Future<void> deleteMacro(dynamic id) async {
+    try {
+      if (id is int) {
+        await _apiService.init();
+        await _apiService.delete('/macros/$id');
+        await getMacros(); // Refresh
+      } else {
+        // Local-only - delete from cache
+        final macros = await _getFromCache();
+        macros.removeWhere((m) => m.id == id);
+        await _cacheLocally(macros);
+      }
+    } catch (e) {
+      debugPrint("Failed to delete macro: $e");
+      // Fallback
+      final macros = await _getFromCache();
+      macros.removeWhere((m) => m.id == id);
+      await _cacheLocally(macros);
+    }
+  }
+
+  /// Reset to defaults and seed to cloud
+  Future<void> resetToDefaults() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_storageKey);
+    await prefs.remove(_migratedKey);
+    await seedDefaultMacrosToCloud();
+  }
+  
+  /// Seed default macros to cloud (for all users)
+  Future<void> seedDefaultMacrosToCloud() async {
+    try {
+      final defaults = _defaultMacros();
+      
+      for (final macro in defaults) {
+        try {
+          await addMacro(macro);
+          debugPrint("Seeded macro: ${macro.trigger}");
+        } catch (e) {
+          debugPrint("Failed to seed ${macro.trigger}: $e");
+        }
+      }
+      
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_migratedKey, true);
+    } catch (e) {
+      debugPrint("Failed to seed defaults: $e");
+    }
+  }
+
+  /// Migrate local macros to cloud (one-time for existing users)
+  Future<void> migrateLocalToCloud() async {
+    final prefs = await SharedPreferences.getInstance();
+    final alreadyMigrated = prefs.getBool(_migratedKey) ?? false;
+    
+    if (!alreadyMigrated) {
+      debugPrint("Migrating local macros to cloud...");
+      final localMacros = await _getFromCache();
+      
+      for (final macro in localMacros) {
+        try {
+          await addMacro(macro);
+        } catch (e) {
+          debugPrint("Migration failed for ${macro.trigger}: $e");
+        }
+      }
+      
+      await prefs.setBool(_migratedKey, true);
+      debugPrint("Migration complete");
+    }
+  }
+
+  // === Private Helper Methods ===
+  
+  Future<List<MacroModel>> _getFromCache() async {
     final prefs = await SharedPreferences.getInstance();
     final String? data = prefs.getString(_storageKey);
+    
     if (data == null) {
-      // Seed Defaults
+      // No cache - return defaults and cache them
       final defaults = _defaultMacros();
-      await saveMacros(defaults);
+      await _cacheLocally(defaults);
       return defaults;
     }
     
@@ -55,38 +265,20 @@ class MacroService {
       return _defaultMacros();
     }
   }
-
-  Future<void> saveMacros(List<MacroModel> macros) async {
+  
+  Future<void> _cacheLocally(List<MacroModel> macros) async {
     final prefs = await SharedPreferences.getInstance();
     final String data = jsonEncode(macros.map((e) => e.toJson()).toList());
     await prefs.setString(_storageKey, data);
   }
-
-  Future<void> addMacro(MacroModel macro) async {
-    final macros = await getMacros();
-    macros.add(macro);
-    await saveMacros(macros);
-  }
-
-  Future<void> updateMacro(MacroModel updated) async {
-    final macros = await getMacros();
-    final index = macros.indexWhere((m) => m.id == updated.id);
-    if (index != -1) {
-      macros[index] = updated;
-      await saveMacros(macros);
-    }
-  }
-
-  Future<void> deleteMacro(String id) async {
-    final macros = await getMacros();
-    macros.removeWhere((m) => m.id == id);
-    await saveMacros(macros);
-  }
-
-  Future<void> resetToDefaults() async {
+  
+  Future<void> _updateLastSync() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_storageKey);
-    await getMacros();
+    await prefs.setString(_lastSyncKey, DateTime.now().toIso8601String());
+  }
+
+  Future<void> saveMacros(List<MacroModel> macros) async {
+    await _cacheLocally(macros);
   }
 
   List<MacroModel> _defaultMacros() {
