@@ -16,6 +16,7 @@ import '../../models/note_model.dart'; // Ensure NoteModel is imported
 import 'package:uuid/uuid.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'animated_loading_text.dart';
+import 'dart:math'; // For exponential backoff in retry logic
 
 class EditorScreen extends StatefulWidget {
   final NoteModel? draftNote;
@@ -89,6 +90,32 @@ class _EditorScreenState extends State<EditorScreen> {
     });
   }
 
+  /// Retry helper with exponential backoff
+  Future<T> _retryOperation<T>(
+    Future<T> Function() operation, {
+    int maxRetries = 3,
+    Duration initialDelay = const Duration(seconds: 1),
+  }) async {
+    int attempt = 0;
+    
+    while (true) {
+      try {
+        return await operation();
+      } catch (e) {
+        attempt++;
+        
+        if (attempt >= maxRetries) {
+          debugPrint('❌ Retry failed after $maxRetries attempts');
+          rethrow;
+        }
+        
+        final delay = initialDelay * pow(2, attempt - 1).toInt();
+        debugPrint('⏳ Retry attempt $attempt/$maxRetries after ${delay.inSeconds}s');
+        await Future.delayed(delay);
+      }
+    }
+  }
+
   Future<void> _saveDraftUpdate() async {
     if (_currentNoteId == null) return;
     
@@ -110,26 +137,28 @@ class _EditorScreenState extends State<EditorScreen> {
      final macroService = MacroService();
      final macros = await macroService.getMacros();
      
-     // 🚀 FETCH LATEST DATA: Don't rely solely on the passed draftNote (which might be stale)
-     if (_currentNoteId != null) {
+     // 🚀 FETCH LATEST DATA: But only if we don't have fresh content
+     // This prevents cache from overwriting AI-generated results
+     if (_currentNoteId != null && _finalController.text.isEmpty) {
        try {
          final inboxService = InboxService();
          final freshNote = await inboxService.getNoteById(_currentNoteId!);
          if (freshNote != null && mounted) {
-           // Only update if fresh data exists and is different/newer
-           if (freshNote.formattedText.isNotEmpty && freshNote.formattedText != _finalController.text) {
-              debugPrint("🔄 Refreshing Editor with latest Cloud data...");
-              _finalController.text = freshNote.formattedText;
-              
-              // Also update suggestions if available/persisted (future improvement)
+           // Load saved AI result from cloud
+           if (freshNote.formattedText.isNotEmpty) {
+             debugPrint("🔄 Loading saved AI result from cloud...");
+             debugPrint("   Formatted Text Length: ${freshNote.formattedText.length}");
+             _finalController.text = freshNote.formattedText;
            }
-           if (freshNote.originalText.isNotEmpty && freshNote.originalText != _sourceController.text) {
+           if (freshNote.originalText.isNotEmpty) {
              _sourceController.text = freshNote.originalText;
            }
          }
        } catch (e) {
-         debugPrint("⚠️ Failed to refresh note data: $e");
+         debugPrint("⚠️ Failed to load note: $e");
        }
+     } else if (_currentNoteId != null && _finalController.text.isNotEmpty) {
+       debugPrint("⏭️ Skipping cloud refresh - editor has fresh content");
      }
      
      if (mounted) {
@@ -354,48 +383,189 @@ class _EditorScreenState extends State<EditorScreen> {
           _suggestions = result.suggestions.map((s) => s.toJson()).toList(); // Map back to existing UI logic
         });
 
+
         // 5. AUTO-SAVE: Update existing note or create new one
+        debugPrint('💾 Starting auto-save process...');
+        debugPrint('   Current Note ID: $_currentNoteId');
+        debugPrint('   Formatted Text Length: ${result.formattedText.length}');
+        debugPrint('   Raw Text Length: ${_sourceController.text.length}');
+
         try {
           final inboxService = InboxService();
           
           if (_currentNoteId != null) {
-            // Update existing draft with AI result
-            await inboxService.updateNote(
-              _currentNoteId!,
-              rawText: _sourceController.text, // REQUIRED by backend
+            debugPrint('   Mode: UPDATE existing note');
+            
+            await _retryOperation(
+              () => inboxService.updateNote(
+                _currentNoteId!,
+                rawText: _sourceController.text,
+                formattedText: result.formattedText,
+                suggestedMacroId: int.tryParse(macro.id.toString()) ?? 0,
+                patientName: macro.trigger,
+              ),
+              maxRetries: 3, // Retry up to 3 times
+            );
+            
+            debugPrint('✅ UPDATE successful - Note ID: $_currentNoteId');
+            
+            // Verify save by fetching back
+            final saved = await inboxService.getNoteById(_currentNoteId!);
+            if (saved?.formattedText == result.formattedText) {
+              debugPrint('✅ VERIFIED: Cloud data matches AI result');
+              
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text("✅ AI Result saved and verified"),
+                  backgroundColor: Colors.green,
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            } else {
+              debugPrint('⚠️  WARNING: Verification mismatch - saved data differs from AI result');
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text("⚠️ Saved but verification failed"),
+                  backgroundColor: Colors.orange,
+                  duration: Duration(seconds: 3),
+                ),
+              );
+            }
+            
+          } else {
+            debugPrint('   Mode: CREATE new note');
+            
+            final noteId = await inboxService.addNote(
+              result.rawTranscript,
               formattedText: result.formattedText,
               suggestedMacroId: int.tryParse(macro.id.toString()) ?? 0,
               patientName: macro.trigger,
             );
             
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("✅ AI Result saved to Cloud"), backgroundColor: Colors.green, duration: Duration(seconds: 1)),
-            );
-          } else {
-            // Fallback: create new note if no draft exists
-            final noteId = await inboxService.addNote(
-               result.rawTranscript,
-               formattedText: result.formattedText,
-               suggestedMacroId: int.tryParse(macro.id.toString()) ?? 0,
-               patientName: macro.trigger,
-            );
-            
             setState(() => _currentNoteId = noteId);
+            debugPrint('✅ CREATE successful - New Note ID: $noteId');
             
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("✅ AI Result saved to Cloud"), backgroundColor: Colors.green, duration: Duration(seconds: 1)),
+              SnackBar(
+                content: Text("✅ New note created (#$noteId)"),
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 2),
+              ),
             );
           }
-        } catch (e) {
-             // Fallback or Error handling
-             ScaffoldMessenger.of(context).showSnackBar(
-               SnackBar(content: Text("Cloud update failed: $e"), backgroundColor: Colors.orange),
-             );
+          
+        } catch (e, stackTrace) {
+          debugPrint('❌ AUTO-SAVE FAILED: $e');
+          debugPrint('   Stack trace:\n$stackTrace');
+          
+          // Determine if it's a network issue or API error
+          final errorStr = e.toString().toLowerCase();
+          final isNetworkError = errorStr.contains('socketexception') ||
+                                 errorStr.contains('timeout') ||
+                                 errorStr.contains('connection') ||
+                                 errorStr.contains('failed host lookup');
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isNetworkError ? '⚠️ Save Failed: Network Error' : '❌ Save Failed: Server Error',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    isNetworkError
+                        ? 'Could not connect to server. Your result is visible locally but not synced.'
+                        : 'Server error occurred. Please try again.',
+                    style: GoogleFonts.inter(fontSize: 11),
+                  ),
+                ],
+              ),
+              backgroundColor: isNetworkError ? Colors.orange : Colors.red,
+              duration: const Duration(seconds: 6),
+              action: SnackBarAction(
+                label: 'Retry',
+                textColor: Colors.white,
+                onPressed: () => _applyMacroWithAI(macro),
+              ),
+            ),
+          );
         }
       }
 
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("AI Error: $e"), backgroundColor: Colors.red));
+
+    } catch (e, stackTrace) {
+      debugPrint('❌ FULL AI ERROR: $e');
+      debugPrint('❌ STACK TRACE:\n$stackTrace');
+      
+      if (mounted) {
+        String errorTitle = 'AI Processing Failed';
+        String errorMessage = 'Failed to process template';
+        Color errorColor = Colors.red;
+        
+        // Categorize error for better UX
+        final errorStr = e.toString().toLowerCase();
+        
+        if (errorStr.contains('invalid') && errorStr.contains('api key')) {
+          errorTitle = 'Invalid API Key';
+          errorMessage = 'The Gemini API key is invalid or missing.\n\nPlease configure a valid key in Settings.';
+          errorColor = Colors.orange;
+        } else if (errorStr.contains('placeholder') || errorStr.contains('your_')) {
+          errorTitle = 'API Key Not Configured';
+          errorMessage = 'The default placeholder API key is still being used.\n\nPlease set a real Gemini API key in Settings.';
+          errorColor = Colors.orange;
+        } else if (errorStr.contains('network') || errorStr.contains('connection') || errorStr.contains('timeout')) {
+          errorTitle = 'Network Error';
+          errorMessage = 'Could not connect to AI service.\n\nCheck your internet connection and try again.';
+        } else if (errorStr.contains('503') || errorStr.contains('overloaded')) {
+          errorTitle = 'Service Temporarily Unavailable';
+          errorMessage = 'Gemini AI is currently overloaded.\n\nPlease try again in a few seconds.';
+        }
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(errorTitle, style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                Text(errorMessage, style: GoogleFonts.inter(fontSize: 12)),
+              ],
+            ),
+            backgroundColor: errorColor,
+            duration: const Duration(seconds: 6),
+            action: SnackBarAction(
+              label: 'Details',
+              textColor: Colors.white,
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    backgroundColor: const Color(0xFF1E1E1E),
+                    title: Text('Error Details', style: GoogleFonts.inter(color: Colors.white)),
+                    content: SingleChildScrollView(
+                      child: SelectableText(
+                        e.toString(),
+                        style: GoogleFonts.sourceCodePro(color: Colors.white70, fontSize: 12),
+                      ),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Close', style: TextStyle(color: AppTheme.accent)),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          )
+        );
+      }
     } finally {
       if (mounted) setState(() => _isProcessing = false);
     }

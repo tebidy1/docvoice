@@ -35,7 +35,12 @@ class GeminiService {
 
   /// Fast Mode: Text Only
   Future<String> formatText(String rawText, {String? macroContext, String? instruction, String? specialty, String? globalPrompt}) async {
-    if (apiKey.isEmpty) return rawText;
+    // 🔧 DEBUG: Validate API Key
+    if (apiKey.isEmpty || apiKey.contains('your_') || apiKey.contains('placeholder')) {
+      print('❌ GEMINI ERROR: Invalid or placeholder API key detected');
+      print('   API Key: ${apiKey.isEmpty ? "(empty)" : "${apiKey.substring(0, min(10, apiKey.length))}..."}');
+      throw Exception('Invalid Gemini API key. Please configure a valid key in Settings or .env file');
+    }
 
     final prompt = '''
 ### ROLE & OBJECTIVE
@@ -58,13 +63,26 @@ ${globalPrompt != null ? '### GLOBAL GUIDELINES\n$globalPrompt\n' : ''}
 ${specialty != null ? '### CONTEXT\n$specialty\n' : ''}
 ''';
 
+    print('🔧 DEBUG: Sending request to Gemini');
+    print('   Prompt length: ${prompt.length} chars');
+    print('   Raw text length: ${rawText.length} chars');
+    print('   Template provided: ${macroContext != null}');
+
     try {
       final content = [Content.text(prompt)];
       final response = await _retryWithBackoff(() => _model.generateContent(content));
-      return (response.text ?? rawText).replaceAll('```', '').trim();
+      
+      final result = (response.text ?? rawText).replaceAll('```', '').trim();
+      
+      print('✅ GEMINI SUCCESS: Response received');
+      print('   Result length: ${result.length} chars');
+      print('   Changed: ${result != rawText}');
+      
+      return result;
     } catch (e) {
-      print("Gemini formatText Error: $e");
-      return rawText;
+      print('❌ GEMINI ERROR: $e');
+      print('   Stack trace: ${StackTrace.current}');
+      rethrow; // Don't silently return rawText - let caller handle error
     }
   }
 
@@ -75,8 +93,10 @@ ${specialty != null ? '### CONTEXT\n$specialty\n' : ''}
     String? specialty,
     String? globalPrompt,
   }) async {
-    if (apiKey.isEmpty) {
-      return {'final_note': rawText, 'missing_suggestions': []};
+    // 🔧 DEBUG: Validate API Key
+    if (apiKey.isEmpty || apiKey.contains('your_') || apiKey.contains('placeholder')) {
+      print('❌ GEMINI SMART MODE ERROR: Invalid API key');
+      throw Exception('Invalid Gemini API key for Smart Mode');
     }
 
     final prompt = '''
@@ -108,6 +128,10 @@ ${globalPrompt != null ? '### GLOBAL GUIDELINES\n$globalPrompt\n' : ''}
 ${specialty != null ? '### CONTEXT\n$specialty\n' : ''}
 ''';
 
+    print('🔧 DEBUG SMART MODE: Sending request to Gemini');
+    print('   High Accuracy Mode: ENABLED');
+    print('   Expecting JSON response with suggestions');
+
     try {
       final model = GenerativeModel(
         model: 'gemini-2.5-flash',
@@ -120,9 +144,15 @@ ${specialty != null ? '### CONTEXT\n$specialty\n' : ''}
 
       if (responseText == null || responseText.isEmpty) throw "Empty response";
 
+      print('✅ GEMINI SMART MODE SUCCESS');
+      print('   Response length: ${responseText.length}');
+
       try {
-        return jsonDecode(responseText) as Map<String, dynamic>;
+        final parsed = jsonDecode(responseText) as Map<String, dynamic>;
+        print('   Suggestions count: ${(parsed['missing_suggestions'] as List?)?.length ?? 0}');
+        return parsed;
       } catch (e) {
+        print('⚠️  JSON Parse failed, trying markdown extraction');
         // Fallback for markdown json
         final match = RegExp(r'```json\s*(.*?)\s*```', dotAll: true).firstMatch(responseText);
         if (match != null) {
@@ -131,8 +161,9 @@ ${specialty != null ? '### CONTEXT\n$specialty\n' : ''}
         return {'final_note': responseText, 'missing_suggestions': []};
       }
     } catch (e) {
-      print("Gemini Smart Mode Error: $e");
-      return null;
+      print('❌ GEMINI SMART MODE ERROR: $e');
+      print('   Stack trace: ${StackTrace.current}');
+      rethrow; // Don't return null silently
     }
   }
 }
