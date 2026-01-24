@@ -1,0 +1,19 @@
+name: scribe_brain
+description: The unified business logic "brain" for ScribeFlow.
+version: 0.1.0
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  http: ^1.2.0
+  google_generative_ai: ^0.4.4
+  # Isar for Learning Service logic (Platform agnostic)
+  isar: ^3.1.0+1
+  meta: ^1.10.0
+
+dev_dependencies:
+  lints: ^2.0.0
+  test: ^1.24.0
+  # Generation
+  build_runner: ^2.4.7
+  isar_generator: ^3.1.0+1
