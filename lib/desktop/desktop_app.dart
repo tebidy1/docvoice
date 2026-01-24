@@ -50,7 +50,7 @@ class _DesktopAppState extends State<DesktopApp> {
   @override
   void initState() {
     super.initState();
-    _geminiService = GeminiService(apiKey: dotenv.env['GEMINI_API_KEY'] ?? "");
+    _geminiService = GeminiService(apiKey: dotenv.env['GEMINI_API_KEY'] ?? "AIzaSyCytBIf72AhxeTpy-RA1pqMf8fSykJbqes");
     _startServer();
     _listInputDevices();
     _checkAdminStatus();

@@ -142,10 +142,10 @@ class ConnectivityServer {
       final prefs = await SharedPreferences.getInstance();
       final customGeminiKey = prefs.getString('gemini_api_key');
       final engine = ProcessingEngine(
-        groqApiKey: dotenv.env['GROQ_API_KEY'] ?? "",
+        groqApiKey: dotenv.env['GROQ_API_KEY'] ?? "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",
         geminiApiKey: (customGeminiKey != null && customGeminiKey.isNotEmpty) 
             ? customGeminiKey 
-            : (dotenv.env['GEMINI_API_KEY'] ?? ""),
+            : (dotenv.env['GEMINI_API_KEY'] ?? "AIzaSyCytBIf72AhxeTpy-RA1pqMf8fSykJbqes"),
       );
       
       final groqPref = prefs.getString('groq_model_pref') ?? GroqModel.precise.modelId;
@@ -241,10 +241,10 @@ class ConnectivityServer {
       final prefs = await SharedPreferences.getInstance();
       final customGeminiKey = prefs.getString('gemini_api_key');
       final engine = ProcessingEngine(
-        groqApiKey: dotenv.env['GROQ_API_KEY'] ?? "",
+        groqApiKey: dotenv.env['GROQ_API_KEY'] ?? "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",
         geminiApiKey: (customGeminiKey != null && customGeminiKey.isNotEmpty) 
             ? customGeminiKey 
-            : (dotenv.env['GEMINI_API_KEY'] ?? ""),
+            : (dotenv.env['GEMINI_API_KEY'] ?? "AIzaSyCytBIf72AhxeTpy-RA1pqMf8fSykJbqes"),
       );
       
       final groqPref = prefs.getString('groq_model_pref') ?? GroqModel.precise.modelId;
