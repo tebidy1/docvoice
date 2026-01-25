@@ -5,13 +5,13 @@ import '../services/windows_injector.dart'; // Desktop Injector
 import 'inbox_note_detail_view.dart';
 
 class InboxCard extends StatelessWidget {
-  final InboxNote note;
+  final NoteModel note;
   final VoidCallback onArchived;
   final List<Macro> quickMacros;
 
   const InboxCard({
-    super.key, 
-    required this.note, 
+    super.key,
+    required this.note,
     required this.onArchived,
     this.quickMacros = const [],
   });
@@ -19,9 +19,10 @@ class InboxCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Determine status icon/color
-    final isProcessed = note.status == InboxStatus.processed || note.status == InboxStatus.archived;
+    final isProcessed = note.status == NoteStatus.processed ||
+        note.status == NoteStatus.archived;
     final statusColor = isProcessed ? Colors.blue : Colors.grey;
-    
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12, left: 16, right: 16),
       decoration: BoxDecoration(
@@ -45,10 +46,12 @@ class InboxCard extends StatelessWidget {
           Material(
             color: Colors.transparent,
             child: InkWell(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(12)),
               onTap: () => _openDetailView(context),
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -59,7 +62,7 @@ class InboxCard extends StatelessWidget {
                       color: statusColor,
                     ),
                     const SizedBox(width: 12),
-                    
+
                     // Content
                     Expanded(
                       child: Column(
@@ -69,7 +72,9 @@ class InboxCard extends StatelessWidget {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                note.patientName ?? 'Unknown Patient',
+                                note.patientName.isNotEmpty
+                                    ? note.patientName
+                                    : 'Unknown Patient',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w600,
@@ -104,16 +109,16 @@ class InboxCard extends StatelessWidget {
               ),
             ),
           ),
-          
 
-          
           // Action Bar (Inject + Macros)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.02),
-              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
-              border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05))),
+              borderRadius:
+                  const BorderRadius.vertical(bottom: Radius.circular(12)),
+              border: Border(
+                  top: BorderSide(color: Colors.white.withOpacity(0.05))),
             ),
             child: Row(
               children: [
@@ -124,17 +129,23 @@ class InboxCard extends StatelessWidget {
                     onTap: () => _injectNote(context),
                     borderRadius: BorderRadius.circular(4),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                         color: Colors.blueAccent.withOpacity(0.2), 
-                         borderRadius: BorderRadius.circular(4),
-                         border: Border.all(color: Colors.blueAccent.withOpacity(0.3))
-                      ),
+                          color: Colors.blueAccent.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                              color: Colors.blueAccent.withOpacity(0.3))),
                       child: Row(
                         children: [
-                          Icon(Icons.input, size: 14, color: Colors.blueAccent.shade100),
+                          Icon(Icons.input,
+                              size: 14, color: Colors.blueAccent.shade100),
                           const SizedBox(width: 6),
-                          Text("INJECT", style: TextStyle(color: Colors.blueAccent.shade100, fontSize: 11, fontWeight: FontWeight.bold)),
+                          Text("INJECT",
+                              style: TextStyle(
+                                  color: Colors.blueAccent.shade100,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold)),
                         ],
                       ),
                     ),
@@ -142,10 +153,13 @@ class InboxCard extends StatelessWidget {
                 ),
 
                 const SizedBox(width: 12),
-                
+
                 // Quick Macros (if any)
                 if (quickMacros.isNotEmpty) ...[
-                  Container(width: 1, height: 20, color: Colors.white.withOpacity(0.1)),
+                  Container(
+                      width: 1,
+                      height: 20,
+                      color: Colors.white.withOpacity(0.1)),
                   const SizedBox(width: 12),
                   const Icon(Icons.flash_on, size: 14, color: Colors.amber),
                   const SizedBox(width: 8),
@@ -158,22 +172,24 @@ class InboxCard extends StatelessWidget {
                           return Padding(
                             padding: const EdgeInsets.only(right: 8),
                             child: InkWell(
-                                onTap: () => _openDetailView(context, autoStartMacro: macro),
-                                borderRadius: BorderRadius.circular(20),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(12),
-                                    color: Colors.white.withOpacity(0.05),
-                                  ),
-                                  child: Text(
-                                    macro.trigger,
-                                    style: TextStyle(
-                                      color: Colors.white.withOpacity(0.9),
-                                      fontSize: 11,
-                                    ),
+                              onTap: () => _openDetailView(context,
+                                  autoStartMacro: macro),
+                              borderRadius: BorderRadius.circular(20),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  color: Colors.white.withOpacity(0.05),
+                                ),
+                                child: Text(
+                                  macro.trigger,
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.9),
+                                    fontSize: 11,
                                   ),
                                 ),
+                              ),
                             ),
                           );
                         }).toList(),
@@ -191,30 +207,30 @@ class InboxCard extends StatelessWidget {
 
   Future<void> _injectNote(BuildContext context) async {
     // 1. Feedback
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Injecting to EMR... (Focus target window now!)", style: TextStyle(color: Colors.white)),
-        backgroundColor: Colors.blueAccent,
-        duration: Duration(seconds: 2),
-      )
-    );
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text("Injecting to EMR... (Focus target window now!)",
+          style: TextStyle(color: Colors.white)),
+      backgroundColor: Colors.blueAccent,
+      duration: Duration(seconds: 2),
+    ));
 
     // 2. Inject
-    // Wait small bit for user to theoretically focus, though usually they focus first then click inject? 
+    // Wait small bit for user to theoretically focus, though usually they focus first then click inject?
     // Actually for desktop app -> EMR, the flow is:
-    // User clicks "Inject" on our app -> We minimize -> User clicks EMR text field? 
+    // User clicks "Inject" on our app -> We minimize -> User clicks EMR text field?
     // OR: User clicks "Inject" -> We copy to clipboard -> User pastes.
     // The "Smart Paste" in WindowsInjector does: Copy -> Wait -> Send Ctrl+V.
     // So user should have EMR open in background.
-    
-    // Let's minimize our app first to reveal EMR? 
-    // Or just assume user will Alt+Tab? 
+
+    // Let's minimize our app first to reveal EMR?
+    // Or just assume user will Alt+Tab?
     // For now, simple injection.
-    
+
     await WindowsInjector().injectViaPaste(note.rawText);
   }
 
-  Future<void> _openDetailView(BuildContext context, {Macro? autoStartMacro}) async {
+  Future<void> _openDetailView(BuildContext context,
+      {Macro? autoStartMacro}) async {
     await showDialog(
       context: context,
       barrierDismissible: true,
@@ -230,7 +246,7 @@ class InboxCard extends StatelessWidget {
     if (dt == null) return '';
     final now = DateTime.now();
     final diff = now.difference(dt);
-    
+
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
     if (diff.inHours < 24) return '${diff.inHours}h ago';
     return '${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';

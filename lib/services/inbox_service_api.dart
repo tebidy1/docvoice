@@ -1,54 +1,80 @@
 import 'dart:async';
-import '../models/inbox_note.dart';
-import 'api_service.dart';
+import 'package:flutter/foundation.dart';
+import '../mobile_app/models/note_model.dart';
+import 'inbox_note_api_service.dart';
+import 'sync_manager.dart';
+import 'cache_manager.dart';
 
 class InboxService {
   static final InboxService _instance = InboxService._internal();
   factory InboxService() => _instance;
   InboxService._internal();
 
-  final ApiService _apiService = ApiService();
+  final InboxNoteApiService _apiService = InboxNoteApiService();
+  final SyncManager _syncManager = SyncManager();
+  final CacheManager _cacheManager = CacheManager();
+
   bool _isInitialized = false;
 
   Future<void> init() async {
-    if (_isInitialized) {
-      return;
-    }
-    await _apiService.init();
+    if (_isInitialized) return;
+    await _syncManager.init();
+    await _cacheManager.init();
     _isInitialized = true;
   }
 
+  // ============================================
+  // Note Operations
+  // ============================================
+
+  /// Add a new note (Legacy signature)
   Future<int> addNote(
     String rawText, {
     String? patientName,
     String? summary,
     int? suggestedMacroId,
+    String? formattedText,
   }) async {
-    try {
-      await init();
-      final response = await _apiService.post('/inbox-notes', body: {
-        'raw_text': rawText,
-        if (patientName != null) 'patient_name': patientName,
-        if (summary != null) 'summary': summary,
-        if (suggestedMacroId != null) 'suggested_macro_id': suggestedMacroId,
-      });
+    final note = NoteModel();
+    note.uuid = DateTime.now().millisecondsSinceEpoch.toString();
+    note.originalText = rawText;
+    note.patientName = patientName ?? 'Untitled';
+    note.summary = summary;
+    note.suggestedMacroId = suggestedMacroId;
+    note.formattedText = formattedText ?? '';
+    note.status =
+        note.formattedText.isNotEmpty ? NoteStatus.processed : NoteStatus.draft;
+    note.createdAt = DateTime.now();
+    note.updatedAt = DateTime.now();
 
-      if (response['status'] != true || response['payload'] == null) {
-        throw Exception(response['message'] ?? 'Failed to add note');
-      }
-      
-      final payload = response['payload'];
-      return payload['id'] is int ? payload['id'] : int.parse(payload['id'].toString());
-      
+    final createdNote = await addNoteModel(note);
+    return createdNote.id;
+  }
+
+  /// Add a new note using NoteModel
+  Future<NoteModel> addNoteModel(NoteModel note) async {
+    await init();
+
+    try {
+      final createdNote = await _apiService.createNote(note);
+      _invalidateCache();
+      return createdNote;
     } catch (e) {
-      // Log error but don't print if it's a timeout/network error (already handled by ApiService)
-      if (!e.toString().contains('timeout') && !e.toString().contains('connection')) {
-        print('Error adding note: $e');
-      }
-      rethrow;
+      debugPrint('⚠️ Network failure, queuing note for sync: $e');
+
+      await _syncManager.addToQueue(SyncItem(
+        id: note.uuid,
+        endpoint: '/inbox-notes',
+        operation: SyncOperation.create,
+        data: note.toJson(),
+        timestamp: DateTime.now(),
+      ));
+
+      return note;
     }
   }
 
+  /// Update an existing note (Legacy signature)
   Future<void> updateNote(
     int noteId, {
     String? rawText,
@@ -57,224 +83,180 @@ class InboxService {
     String? summary,
     int? suggestedMacroId,
   }) async {
+    final existing = await getNoteById(noteId);
+    if (existing == null) return;
+
+    if (rawText != null) existing.originalText = rawText;
+    if (formattedText != null) existing.formattedText = formattedText;
+    if (patientName != null) existing.patientName = patientName;
+    if (summary != null) existing.summary = summary;
+    if (suggestedMacroId != null) existing.suggestedMacroId = suggestedMacroId;
+
+    if (formattedText != null && formattedText.isNotEmpty) {
+      existing.status = NoteStatus.processed;
+    }
+
+    await updateNoteModel(existing);
+  }
+
+  /// Update an existing note using NoteModel
+  Future<NoteModel> updateNoteModel(NoteModel note) async {
+    await init();
+
     try {
-      await init();
-      final body = <String, dynamic>{};
-      
-      if (rawText != null) body['raw_text'] = rawText;
-      if (formattedText != null) body['formatted_text'] = formattedText;
-      if (patientName != null) body['patient_name'] = patientName;
-      if (summary != null) body['summary'] = summary;
-      if (suggestedMacroId != null) body['suggested_macro_id'] = suggestedMacroId;
-      
-      // Update status to processed if formatted text is provided
-      if (formattedText != null && formattedText.isNotEmpty) {
-        body['status'] = 'processed';
-      }
-
-      final response = await _apiService.put('/inbox-notes/$noteId', body: body);
-
-      if (response['status'] != true) {
-        throw Exception(response['message'] ?? 'Failed to update note');
-      }
+      final updatedNote =
+          await _apiService.updateNote(note.id.toString(), note);
+      _invalidateCache();
+      return updatedNote;
     } catch (e) {
-      print('Error updating note: $e');
-      rethrow;
+      debugPrint('⚠️ Network failure, queuing update for sync: $e');
+
+      await _syncManager.addToQueue(SyncItem(
+        id: note.id.toString(),
+        endpoint: '/inbox-notes/${note.id}',
+        operation: SyncOperation.update,
+        data: note.toJson(),
+        timestamp: DateTime.now(),
+      ));
+
+      return note;
     }
   }
 
-  Future<List<InboxNote>> getPendingNotes() async {
+  /// Get a single note by ID
+  Future<NoteModel?> getNoteById(int id) async {
     await init();
     try {
-      final response = await _apiService.get('/inbox-notes/pending');
-
-      if (response['status'] == true && response['payload'] != null) {
-        final List<dynamic> data = response['payload'] is List
-            ? response['payload']
-            : [];
-        
-        return data.map((json) => _mapToInboxNote(json)).toList();
-      }
-
-      return [];
+      return await _apiService.fetchNoteById(id.toString());
     } catch (e) {
-      // Don't print here - let watchPendingNotes handle error logging
-      rethrow;
+      debugPrint('Error fetching note $id: $e');
+      return null;
     }
   }
 
-  Future<List<InboxNote>> getArchivedNotes() async {
-    try {
-      final response = await _apiService.get('/inbox-notes/archived');
-
-      if (response['status'] == true && response['payload'] != null) {
-        final List<dynamic> data = response['payload'] is List
-            ? response['payload']
-            : [];
-        
-        return data.map((json) => _mapToInboxNote(json)).toList();
-      }
-
-      return [];
-    } catch (e) {
-      print('Error getting archived notes: $e');
-      return [];
-    }
-  }
-
-  Future<void> updateStatus(int id, InboxStatus status) async {
-    await init();
-    try {
-      final response = await _apiService.patch(
-        '/inbox-notes/$id/status',
-        body: {'status': status.name},
-      );
-
-      if (response['status'] != true) {
-        throw Exception(response['message'] ?? 'Failed to update status');
-      }
-    } catch (e) {
-      print('Error updating status: $e');
-      rethrow;
-    }
-  }
-
+  /// Archive a note
   Future<void> archiveNote(int id) async {
-    try {
-      final response = await _apiService.patch('/inbox-notes/$id/archive');
+    await init();
 
-      if (response['status'] != true) {
-        throw Exception(response['message'] ?? 'Failed to archive note');
-      }
+    try {
+      await _apiService.archiveNote(id.toString());
+      _invalidateCache();
     } catch (e) {
-      print('Error archiving note: $e');
-      rethrow;
+      debugPrint('⚠️ Network failure, queuing archive for sync: $e');
+
+      await _syncManager.addToQueue(SyncItem(
+        id: id.toString(),
+        endpoint: '/inbox-notes/$id/archive',
+        operation: SyncOperation.patch,
+        timestamp: DateTime.now(),
+      ));
     }
   }
 
+  /// Update status (Desktop compatibility)
+  Future<void> updateStatus(int id, NoteStatus status) async {
+    await init();
+    try {
+      await _apiService.updateStatus(id.toString(), status);
+      _invalidateCache();
+    } catch (e) {
+      debugPrint('Error updating status: $e');
+    }
+  }
+
+  /// Delete a note
   Future<void> deleteNote(int id) async {
     await init();
+
     try {
-      final response = await _apiService.delete('/inbox-notes/$id');
-
-      if (response['status'] != true) {
-        throw Exception(response['message'] ?? 'Failed to delete note');
-      }
+      await _apiService.deleteNote(id.toString());
+      _invalidateCache();
     } catch (e) {
-      print('Error deleting note: $e');
-      rethrow;
+      debugPrint('⚠️ Network failure, queuing delete for sync: $e');
+
+      await _syncManager.addToQueue(SyncItem(
+        id: id.toString(),
+        endpoint: '/inbox-notes/$id',
+        operation: SyncOperation.delete,
+        timestamp: DateTime.now(),
+      ));
     }
   }
 
-  Stream<List<InboxNote>> watchPendingNotes() async* {
-    // Polling implementation - can be replaced with WebSocket later
-    int consecutiveErrors = 0;
-    String? lastError;
-    const int maxConsecutiveErrors = 3;
-    const Duration baseDelay = Duration(seconds: 5);
-    const Duration maxDelay = Duration(seconds: 30);
-    
+  // ============================================
+  // Fetch Operations
+  // ============================================
+
+  /// Get pending notes with caching
+  Future<List<NoteModel>> getPendingNotes({bool forceRefresh = false}) async {
+    await init();
+
+    return await _cacheManager.fetchWithStrategy<List<NoteModel>>(
+      cacheKey: 'pending_notes',
+      strategy:
+          forceRefresh ? CacheStrategy.networkFirst : CacheStrategy.cacheFirst,
+      apiCall: () => _apiService.fetchPendingNotes(),
+      fromJson: (json) =>
+          (json as List).map((i) => NoteModelJson.fromJson(i)).toList(),
+      toJson: (notes) => notes.map((n) => n.toJson()).toList(),
+      cacheExpiry: const Duration(minutes: 10),
+    );
+  }
+
+  /// Get archived notes with caching
+  Future<List<NoteModel>> getArchivedNotes({bool forceRefresh = false}) async {
+    await init();
+
+    return await _cacheManager.fetchWithStrategy<List<NoteModel>>(
+      cacheKey: 'archived_notes',
+      strategy:
+          forceRefresh ? CacheStrategy.networkFirst : CacheStrategy.cacheFirst,
+      apiCall: () => _apiService.fetchArchivedNotes(),
+      fromJson: (json) =>
+          (json as List).map((i) => NoteModelJson.fromJson(i)).toList(),
+      toJson: (notes) => notes.map((n) => n.toJson()).toList(),
+      cacheExpiry: const Duration(minutes: 30),
+    );
+  }
+
+  // ============================================
+  // Real-time Streams (Polling)
+  // ============================================
+
+  /// Watch pending notes
+  Stream<List<NoteModel>> watchPendingNotes() async* {
     while (true) {
       try {
-        final notes = await getPendingNotes();
+        final notes = await getPendingNotes(forceRefresh: true);
         yield notes;
-        // Reset error count on success
-        consecutiveErrors = 0;
-        lastError = null;
-        await Future.delayed(baseDelay);
       } catch (e) {
-        consecutiveErrors++;
-        final errorMessage = e.toString();
-        
-        // Only print error if it's different from the last one or first time
-        if (errorMessage != lastError || consecutiveErrors == 1) {
-          // Suppress repeated error messages after maxConsecutiveErrors
-          if (consecutiveErrors <= maxConsecutiveErrors) {
-            print('Error watching pending notes: $e');
-          }
-          lastError = errorMessage;
-        }
-        
-        yield [];
-        
-        // Exponential backoff: increase delay with each consecutive error
-        final delaySeconds = (baseDelay.inSeconds * (1 << (consecutiveErrors - 1).clamp(0, 3))).clamp(
-          baseDelay.inSeconds,
-          maxDelay.inSeconds,
-        );
-        await Future.delayed(Duration(seconds: delaySeconds));
+        debugPrint('Error polling pending notes: $e');
+        // Handle error in UI
       }
+      await Future.delayed(const Duration(seconds: 10)); // Poll every 10s
     }
   }
 
-  Stream<List<InboxNote>> watchArchivedNotes() async* {
-    // Polling implementation - can be replaced with WebSocket later
-    int consecutiveErrors = 0;
-    String? lastError;
-    const int maxConsecutiveErrors = 3;
-    const Duration baseDelay = Duration(seconds: 5);
-    const Duration maxDelay = Duration(seconds: 30);
-    
+  /// Watch archived notes
+  Stream<List<NoteModel>> watchArchivedNotes() async* {
     while (true) {
       try {
-        final notes = await getArchivedNotes();
+        final notes = await getArchivedNotes(forceRefresh: true);
         yield notes;
-        // Reset error count on success
-        consecutiveErrors = 0;
-        lastError = null;
-        await Future.delayed(baseDelay);
       } catch (e) {
-        consecutiveErrors++;
-        final errorMessage = e.toString();
-        
-        // Only print error if it's different from the last one or first time
-        if (errorMessage != lastError || consecutiveErrors == 1) {
-          // Suppress repeated error messages after maxConsecutiveErrors
-          if (consecutiveErrors <= maxConsecutiveErrors) {
-            print('Error watching archived notes: $e');
-          }
-          lastError = errorMessage;
-        }
-        
-        yield [];
-        
-        // Exponential backoff: increase delay with each consecutive error
-        final delaySeconds = (baseDelay.inSeconds * (1 << (consecutiveErrors - 1).clamp(0, 3))).clamp(
-          baseDelay.inSeconds,
-          maxDelay.inSeconds,
-        );
-        await Future.delayed(Duration(seconds: delaySeconds));
+        debugPrint('Error polling archived notes: $e');
       }
+      await Future.delayed(
+          const Duration(seconds: 30)); // Poll every 30s for archive
     }
   }
 
-  InboxNote _mapToInboxNote(Map<String, dynamic> json) {
-    // Map API response to InboxNote model
-    // Note: This is a simplified mapping. You may need to adjust based on your actual API response structure
-    // Since we're using the web model (not Isar), we create a simple class instance
-    final note = InboxNote();
-    note.id = json['id'] ?? 0;
-    note.rawText = json['raw_text'] ?? '';
-    note.patientName = json['patient_name'];
-    note.summary = json['summary'];
-    note.status = _mapStatus(json['status'] ?? 'pending');
-    note.createdAt = json['created_at'] != null
-        ? DateTime.parse(json['created_at'])
-        : DateTime.now();
-    note.suggestedMacroId = json['suggested_macro_id'];
-    return note;
-  }
+  // ============================================
+  // Helpers
+  // ============================================
 
-  InboxStatus _mapStatus(String status) {
-    switch (status.toLowerCase()) {
-      case 'pending':
-        return InboxStatus.pending;
-      case 'processed':
-        return InboxStatus.processed;
-      case 'archived':
-        return InboxStatus.archived;
-      default:
-        return InboxStatus.pending;
-    }
+  void _invalidateCache() {
+    _cacheManager.remove('pending_notes');
+    _cacheManager.remove('archived_notes');
   }
 }

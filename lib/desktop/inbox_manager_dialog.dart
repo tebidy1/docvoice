@@ -37,14 +37,14 @@ class _InboxManagerDialogState extends State<InboxManagerDialog> {
   Future<void> _loadMacros() async {
     await _macroService.init();
     var macros = await _macroService.getMostUsed(limit: 10);
-    
+
     // Fallback: If no "most used" (e.g. fresh install), show all/default macros
     if (macros.isEmpty) {
       print("InboxManager: No most used macros found, fetching defaults...");
       final allMacros = await _macroService.getAllMacros();
       macros = allMacros.take(10).toList();
     }
-    
+
     print("InboxManager: Loaded ${macros.length} quick macros");
 
     if (mounted) {
@@ -98,7 +98,8 @@ class _InboxManagerDialogState extends State<InboxManagerDialog> {
                 color: theme.scaffoldBackgroundColor,
                 child: Row(
                   children: [
-                    Icon(Icons.inbox_outlined, color: colorScheme.primary, size: 24),
+                    Icon(Icons.inbox_outlined,
+                        color: colorScheme.primary, size: 24),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Container(
@@ -127,14 +128,15 @@ class _InboxManagerDialogState extends State<InboxManagerDialog> {
 
               // Notes List
               Expanded(
-                child: StreamBuilder<List<InboxNote>>(
+                child: StreamBuilder<List<NoteModel>>(
                   stream: _selectedTab == 0
                       ? _inboxService.watchPendingNotes()
                       : _inboxService.watchArchivedNotes(),
                   builder: (context, snapshot) {
                     if (!snapshot.hasData) {
                       return Center(
-                        child: CircularProgressIndicator(color: colorScheme.primary),
+                        child: CircularProgressIndicator(
+                            color: colorScheme.primary),
                       );
                     }
 
@@ -175,20 +177,24 @@ class _InboxManagerDialogState extends State<InboxManagerDialog> {
                     }
 
                     // Group notes by date
-                    final groupedNotes = <String, List<InboxNote>>{};
+                    final groupedNotes = <String, List<NoteModel>>{};
                     for (var note in notes) {
-                      final date = note.createdAt ?? DateTime.now();
+                      final date = note.createdAt;
                       final now = DateTime.now();
                       String key;
-                      
-                      if (date.year == now.year && date.month == now.month && date.day == now.day) {
+
+                      if (date.year == now.year &&
+                          date.month == now.month &&
+                          date.day == now.day) {
                         key = 'Today';
-                      } else if (date.year == now.year && date.month == now.month && date.day == now.day - 1) {
+                      } else if (date.year == now.year &&
+                          date.month == now.month &&
+                          date.day == now.day - 1) {
                         key = 'Yesterday';
                       } else {
                         key = DateFormat('MMMM d, y').format(date);
                       }
-                      
+
                       if (!groupedNotes.containsKey(key)) {
                         groupedNotes[key] = [];
                       }
@@ -196,17 +202,19 @@ class _InboxManagerDialogState extends State<InboxManagerDialog> {
                     }
 
                     return ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 0, vertical: 10),
                       itemCount: groupedNotes.length,
                       itemBuilder: (context, index) {
                         final key = groupedNotes.keys.elementAt(index);
                         final groupNotes = groupedNotes[key]!;
-                        
+
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Padding(
-                              padding: const EdgeInsets.only(left: 20, bottom: 8, top: 16),
+                              padding: const EdgeInsets.only(
+                                  left: 20, bottom: 8, top: 16),
                               child: Text(
                                 key.toUpperCase(),
                                 style: TextStyle(
@@ -218,12 +226,12 @@ class _InboxManagerDialogState extends State<InboxManagerDialog> {
                               ),
                             ),
                             ...groupNotes.map((note) => InboxCard(
-                              note: note,
-                              quickMacros: _quickMacros,
-                              onArchived: () {
-                                // Card will update via stream
-                              },
-                            )),
+                                  note: note,
+                                  quickMacros: _quickMacros,
+                                  onArchived: () {
+                                    // Card will update via stream
+                                  },
+                                )),
                           ],
                         );
                       },
@@ -245,7 +253,9 @@ class _InboxManagerDialogState extends State<InboxManagerDialog> {
         onTap: () => setState(() => _selectedTab = index),
         child: Container(
           decoration: BoxDecoration(
-            color: isSelected ? colorScheme.primary.withOpacity(0.2) : Colors.transparent,
+            color: isSelected
+                ? colorScheme.primary.withOpacity(0.2)
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(18),
           ),
           alignment: Alignment.center,
