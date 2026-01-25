@@ -3,10 +3,11 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  connectivity_plus
   isar_flutter_libs
   permission_handler_windows
   record_windows
-  screen_retriever
+  screen_retriever_windows
   window_manager
 )
 

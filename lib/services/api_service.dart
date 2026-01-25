@@ -10,10 +10,17 @@ class ApiService {
 
   String? _baseUrl;
   String? _token;
-  final int _timeout = int.tryParse(dotenv.env['API_TIMEOUT'] ?? '30000') ?? 30000;
+  final int _timeout =
+      int.tryParse(dotenv.env['API_TIMEOUT'] ?? '30000') ?? 30000;
 
   Future<void> init() async {
-    _baseUrl = dotenv.env['API_BASE_URL'] ?? 'https://docvoice.gumra-ai.com/api';
+    _baseUrl =
+        dotenv.env['API_BASE_URL'] ?? 'https://docvoice.gumra-ai.com/api';
+    // Ensure base URL doesn't end with a slash to avoid double slashes with endpoint
+    if (_baseUrl!.endsWith('/')) {
+      _baseUrl = _baseUrl!.substring(0, _baseUrl!.length - 1);
+    }
+    print('ApiService initialized with baseUrl: $_baseUrl');
     await _loadToken();
   }
 
@@ -38,10 +45,13 @@ class ApiService {
         if (_token != null) 'Authorization': 'Bearer $_token',
       };
 
-  Future<Map<String, dynamic>> get(String endpoint, {Map<String, String>? queryParams}) async {
+  Future<Map<String, dynamic>> get(String endpoint,
+      {Map<String, String>? queryParams}) async {
     try {
       await init();
-      var uri = Uri.parse('$_baseUrl$endpoint');
+      final fullUrl = '$_baseUrl$endpoint';
+      print('ApiService GET request to: $fullUrl');
+      var uri = Uri.parse(fullUrl);
       if (queryParams != null && queryParams.isNotEmpty) {
         uri = uri.replace(queryParameters: queryParams);
       }
@@ -56,10 +66,13 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>> post(String endpoint, {Map<String, dynamic>? body}) async {
+  Future<Map<String, dynamic>> post(String endpoint,
+      {Map<String, dynamic>? body}) async {
     try {
       await init();
-      final uri = Uri.parse('$_baseUrl$endpoint');
+      final fullUrl = '$_baseUrl$endpoint';
+      print('ApiService POST request to: $fullUrl');
+      final uri = Uri.parse(fullUrl);
 
       final response = await http
           .post(
@@ -75,7 +88,8 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>> put(String endpoint, {Map<String, dynamic>? body}) async {
+  Future<Map<String, dynamic>> put(String endpoint,
+      {Map<String, dynamic>? body}) async {
     try {
       await init();
       final uri = Uri.parse('$_baseUrl$endpoint');
@@ -94,7 +108,8 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>> patch(String endpoint, {Map<String, dynamic>? body}) async {
+  Future<Map<String, dynamic>> patch(String endpoint,
+      {Map<String, dynamic>? body}) async {
     try {
       await init();
       final uri = Uri.parse('$_baseUrl$endpoint');
@@ -134,7 +149,12 @@ class ApiService {
 
     if (responseBody.isEmpty) {
       if (statusCode >= 200 && statusCode < 300) {
-        return {'status': true, 'code': statusCode, 'message': 'Success', 'payload': null};
+        return {
+          'status': true,
+          'code': statusCode,
+          'message': 'Success',
+          'payload': null
+        };
       }
       throw ApiException('Empty response', statusCode);
     }
@@ -146,7 +166,8 @@ class ApiService {
       if (statusCode == 422 && data.containsKey('errors')) {
         final errors = data['errors'] as Map<String, dynamic>;
         final firstError = errors.values.first;
-        final errorMessage = firstError is List ? firstError.first : firstError.toString();
+        final errorMessage =
+            firstError is List ? firstError.first : firstError.toString();
         throw ApiException(
           errorMessage,
           statusCode,
@@ -182,7 +203,12 @@ class ApiService {
 
       // Fallback for non-standard responses
       if (statusCode >= 200 && statusCode < 300) {
-        return {'status': true, 'code': statusCode, 'message': 'Success', 'payload': data};
+        return {
+          'status': true,
+          'code': statusCode,
+          'message': 'Success',
+          'payload': data
+        };
       }
 
       throw ApiException(
@@ -201,12 +227,16 @@ class ApiService {
       return error;
     }
 
-    if (error.toString().contains('TimeoutException') || error.toString().contains('timeout')) {
-      return ApiException('Request timeout. Please check your connection.', 408);
+    if (error.toString().contains('TimeoutException') ||
+        error.toString().contains('timeout')) {
+      return ApiException(
+          'Request timeout. Please check your connection.', 408);
     }
 
-    if (error.toString().contains('SocketException') || error.toString().contains('Failed host lookup')) {
-      return ApiException('No internet connection. Please check your network.', 0);
+    if (error.toString().contains('SocketException') ||
+        error.toString().contains('Failed host lookup')) {
+      return ApiException(
+          'No internet connection. Please check your network.', 0);
     }
 
     return ApiException('An unexpected error occurred: $error', 500);

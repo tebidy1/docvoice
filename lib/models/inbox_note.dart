@@ -1,7 +1,11 @@
-/// Platform-specific inbox note model
-/// Exports the correct implementation based on the platform
+import '../mobile_app/models/note_model.dart';
 
-// Export IO implementation with Isar on non-web platforms
-// Export simple class on web
-export 'inbox_note_io.dart'
-    if (dart.library.html) 'inbox_note_web.dart';
+/// Unified Inbox Note model
+/// Exports the correct implementation based on the platform
+export '../mobile_app/models/note_model.dart';
+
+/// Legacy compatibility for Desktop app
+typedef InboxNote = NoteModel;
+
+/// Legacy compatibility for Desktop app
+enum InboxStatus { pending, processed, archived }
