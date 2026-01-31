@@ -160,7 +160,21 @@ class ApiService {
     }
 
     try {
-      final data = jsonDecode(responseBody) as Map<String, dynamic>;
+      final dynamic decoded = jsonDecode(responseBody);
+      
+      // Handle List Response (Wrap it)
+      if (decoded is List) {
+         if (statusCode >= 200 && statusCode < 300) {
+            return {
+              'status': true,
+              'code': statusCode,
+              'message': 'Success',
+              'data': decoded
+            };
+         }
+      }
+
+      final data = decoded as Map<String, dynamic>;
 
       // Handle validation errors (422)
       if (statusCode == 422 && data.containsKey('errors')) {

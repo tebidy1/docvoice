@@ -11,6 +11,12 @@ class GeminiService {
     _model = GenerativeModel(
       model: 'gemini-2.5-flash', 
       apiKey: apiKey,
+      safetySettings: [
+        SafetySetting(HarmCategory.harassment, HarmBlockThreshold.none),
+        SafetySetting(HarmCategory.hateSpeech, HarmBlockThreshold.none),
+        SafetySetting(HarmCategory.sexuallyExplicit, HarmBlockThreshold.none),
+        SafetySetting(HarmCategory.dangerousContent, HarmBlockThreshold.none),
+      ],
     );
   }
 
@@ -72,7 +78,16 @@ ${specialty != null ? '### CONTEXT\n$specialty\n' : ''}
       final content = [Content.text(prompt)];
       final response = await _retryWithBackoff(() => _model.generateContent(content));
       
-      final result = (response.text ?? rawText).replaceAll('```', '').trim();
+      final text = response.text;
+      if (text == null) {
+         print('❌ GEMINI BLOCKED: Response text is null. Safety Settings?');
+         if (response.promptFeedback != null) {
+            print('   Prompt Feedback: ${response.promptFeedback?.blockReason}');
+         }
+         throw Exception("Gemini blocked the response (Safety Filter).");
+      }
+
+      final result = text.replaceAll('```', '').trim();
       
       print('✅ GEMINI SUCCESS: Response received');
       print('   Result length: ${result.length} chars');
@@ -137,6 +152,12 @@ ${specialty != null ? '### CONTEXT\n$specialty\n' : ''}
         model: 'gemini-2.5-flash',
         apiKey: apiKey,
         generationConfig: GenerationConfig(responseMimeType: 'application/json'),
+        safetySettings: [
+          SafetySetting(HarmCategory.harassment, HarmBlockThreshold.none),
+          SafetySetting(HarmCategory.hateSpeech, HarmBlockThreshold.none),
+          SafetySetting(HarmCategory.sexuallyExplicit, HarmBlockThreshold.none),
+          SafetySetting(HarmCategory.dangerousContent, HarmBlockThreshold.none),
+        ],
       );
       
       final response = await _retryWithBackoff(() => model.generateContent([Content.text(prompt)]));

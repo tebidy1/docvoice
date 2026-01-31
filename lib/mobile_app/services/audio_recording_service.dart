@@ -29,7 +29,7 @@ class AudioRecordingService {
           final Directory appDocDir = await getApplicationDocumentsDirectory();
           final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
           // Use m4a for AAC encoding (efficient and widely supported)
-          path = '${appDocDir.path}/recording_$timestamp.wav';
+          path = '${appDocDir.path}/recording_$timestamp.m4a';
           _currentPath = path;
         } else {
            // On Web, path is ignored or handled internally by browser/recorder
@@ -38,8 +38,8 @@ class AudioRecordingService {
 
         // Configure recording parameters: WAV is safer for Emulator/Recognition
         const config = RecordConfig(
-          encoder: AudioEncoder.wav, 
-          sampleRate: 44100, // Standard
+          encoder: AudioEncoder.aacLc, 
+          sampleRate: 44100, 
           bitRate: 128000,
         );
 

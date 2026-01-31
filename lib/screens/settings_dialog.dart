@@ -22,6 +22,13 @@ class _SettingsDialogState extends State<SettingsDialog> {
   String _localIp = "Loading...";
   String _groqModelPref = GroqModel.precise.modelId;
   final TextEditingController _geminiKeyController = TextEditingController();
+  final TextEditingController _groqKeyController = TextEditingController();
+  
+  // Track initial values to determine if changes occurred
+  String _initialGeminiKey = "";
+  String _initialGroqKey = "";
+  bool _isGeminiKeyChanged = false;
+  bool _isGroqKeyChanged = false;
 
   @override
   void initState() {
@@ -30,6 +37,22 @@ class _SettingsDialogState extends State<SettingsDialog> {
     _fetchIp();
     _loadSettings();
     _resizeWindow(true);
+    
+    // Add Listeners
+    _geminiKeyController.addListener(_checkGeminiChanges);
+    _groqKeyController.addListener(_checkGroqChanges);
+  }
+
+  void _checkGeminiChanges() {
+    setState(() {
+      _isGeminiKeyChanged = _geminiKeyController.text != _initialGeminiKey;
+    });
+  }
+
+  void _checkGroqChanges() {
+    setState(() {
+      _isGroqKeyChanged = _groqKeyController.text != _initialGroqKey;
+    });
   }
 
   Future<void> _loadSettings() async {
@@ -38,6 +61,13 @@ class _SettingsDialogState extends State<SettingsDialog> {
       setState(() {
         _groqModelPref = prefs.getString('groq_model_pref') ?? GroqModel.precise.modelId;
         _geminiKeyController.text = prefs.getString('gemini_api_key') ?? "";
+        _groqKeyController.text = prefs.getString('groq_api_key') ?? "";
+        
+        // Update initial values
+        _initialGeminiKey = _geminiKeyController.text;
+        _initialGroqKey = _groqKeyController.text;
+        _isGeminiKeyChanged = false;
+        _isGroqKeyChanged = false; 
       });
     }
   }
@@ -50,7 +80,10 @@ class _SettingsDialogState extends State<SettingsDialog> {
   @override
   void dispose() {
     WindowManagerHelper.setTransparencyLocked(false);
+    _geminiKeyController.removeListener(_checkGeminiChanges);
+    _groqKeyController.removeListener(_checkGroqChanges);
     _geminiKeyController.dispose();
+    _groqKeyController.dispose();
     _resizeWindow(false);
     super.dispose();
   }
@@ -153,6 +186,59 @@ class _SettingsDialogState extends State<SettingsDialog> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
+                          "Groq API Key",
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: currentTheme.iconColor,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _groqKeyController,
+                          decoration: InputDecoration(
+                            hintText: "Enter your Groq API Key",
+                            hintStyle: TextStyle(color: currentTheme.iconColor.withOpacity(0.5)),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: currentTheme.dividerColor),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: currentTheme.dividerColor),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: Theme.of(context).primaryColor),
+                            ),
+                            filled: true,
+                            fillColor: currentTheme.backgroundColor,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                            suffixIcon: IconButton(
+                              icon: Icon(Icons.save, size: 20, color: _isGroqKeyChanged ? Theme.of(context).primaryColor : Colors.grey),
+                              onPressed: !_isGroqKeyChanged ? null : () async {
+                                final prefs = await SharedPreferences.getInstance();
+                                final newKey = _groqKeyController.text.trim();
+                                await prefs.setString('groq_api_key', newKey);
+                                
+                                setState(() {
+                                    _initialGroqKey = newKey;
+                                    _isGroqKeyChanged = false;
+                                });
+
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text("Groq Key Saved")),
+                                  );
+                                }
+                              },
+                            ),
+                          ),
+                          style: TextStyle(color: currentTheme.iconColor),
+                          obscureText: true,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
                           "Gemini API Key",
                           style: TextStyle(
                             fontSize: 14,
@@ -182,10 +268,17 @@ class _SettingsDialogState extends State<SettingsDialog> {
                             fillColor: currentTheme.backgroundColor,
                             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
                             suffixIcon: IconButton(
-                              icon: const Icon(Icons.save, size: 20),
-                              onPressed: () async {
+                              icon: Icon(Icons.save, size: 20, color: _isGeminiKeyChanged ? Theme.of(context).primaryColor : Colors.grey),
+                              onPressed: !_isGeminiKeyChanged ? null : () async {
                                 final prefs = await SharedPreferences.getInstance();
-                                await prefs.setString('gemini_api_key', _geminiKeyController.text.trim());
+                                final newKey = _geminiKeyController.text.trim();
+                                await prefs.setString('gemini_api_key', newKey);
+                                
+                                setState(() {
+                                    _initialGeminiKey = newKey;
+                                    _isGeminiKeyChanged = false;
+                                });
+
                                 if (mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(content: Text("API Key Saved")),
@@ -201,6 +294,52 @@ class _SettingsDialogState extends State<SettingsDialog> {
                         Text(
                           "Leave empty to use default key",
                           style: TextStyle(fontSize: 12, color: currentTheme.iconColor.withOpacity(0.6)),
+                        ),
+                        const SizedBox(height: 16),
+                        
+                        // Explicit Save Button
+                        if (_isGeminiKeyChanged || _isGroqKeyChanged)
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            icon: const Icon(Icons.save, size: 18),
+                            label: const Text("Save Changes"),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Theme.of(context).primaryColor,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            onPressed: () async {
+                              final prefs = await SharedPreferences.getInstance();
+                              
+                              if (_isGroqKeyChanged) {
+                                final newGroqKey = _groqKeyController.text.trim();
+                                await prefs.setString('groq_api_key', newGroqKey);
+                                setState(() {
+                                    _initialGroqKey = newGroqKey;
+                                    _isGroqKeyChanged = false;
+                                });
+                              }
+                              
+                              if (_isGeminiKeyChanged) {
+                                final newGeminiKey = _geminiKeyController.text.trim();
+                                await prefs.setString('gemini_api_key', newGeminiKey);
+                                setState(() {
+                                    _initialGeminiKey = newGeminiKey;
+                                    _isGeminiKeyChanged = false;
+                                });
+                              }
+
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text("Settings Saved Successfully"),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                              }
+                            },
+                          ),
                         ),
                       ],
                     ),

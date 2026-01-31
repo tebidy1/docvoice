@@ -8,9 +8,9 @@ class GeminiService {
   late final GenerativeModel _model;
 
   GeminiService({required this.apiKey}) {
-    // Using Gemini 2.5 Flash (latest, fastest, most capable)
+    // Using Gemini 1.5 Flash (stable, fast)
     _model = GenerativeModel(
-      model: 'gemini-2.5-flash', 
+      model: 'gemini-1.5-flash', 
       apiKey: apiKey,
     );
   }
@@ -69,10 +69,10 @@ Return ONLY the JSON object, no markdown, no explanation.
 
     try {
       final content = [Content.text(prompt)];
-      final response = await _model.generateContent(content);
+      final response = await _retryWithBackoff(() => _model.generateContent(content));
       final text = response.text ?? '{}';
       
-      // Clean up response (remove markdown if present)
+      // Clean up response
       String cleanJson = text.trim();
       if (cleanJson.startsWith('```json')) {
         cleanJson = cleanJson.substring(7);
@@ -84,10 +84,35 @@ Return ONLY the JSON object, no markdown, no explanation.
         cleanJson = cleanJson.substring(0, cleanJson.length - 3);
       }
       
-      final result = jsonDecode(cleanJson.trim());
-      return result;
+      try {
+        final result = jsonDecode(cleanJson.trim());
+        return result;
+      } catch (e) {
+        return {
+          'patientName': 'Unknown Patient',
+          'summary': rawText.substring(0, rawText.length > 50 ? 50 : rawText.length),
+          'suggestedMacroType': 'general'
+        };
+      }
     } catch (e) {
       print("Gemini analyzeNote Error: $e");
+
+      // Fallback
+      if (e.toString().contains('not found') || e.toString().contains('not supported')) {
+         try {
+            print("GeminiService: Retrying analyzeNote with fallback...");
+            final fallbackModel = GenerativeModel(model: 'gemini-1.5-flash-latest', apiKey: apiKey);
+            final response = await _retryWithBackoff(() => fallbackModel.generateContent([Content.text(prompt)]));
+            final text = response.text ?? '{}';
+             // Clean up response
+            String cleanJson = text.trim();
+            if (cleanJson.startsWith('```json')) cleanJson = cleanJson.substring(7);
+            if (cleanJson.startsWith('```')) cleanJson = cleanJson.substring(3);
+            if (cleanJson.endsWith('```')) cleanJson = cleanJson.substring(0, cleanJson.length - 3);
+            return jsonDecode(cleanJson.trim());
+         } catch (_) {}
+      }
+
       return {
         'patientName': 'Unknown Patient',
         'summary': rawText.substring(0, rawText.length > 50 ? 50 : rawText.length),
@@ -98,7 +123,7 @@ Return ONLY the JSON object, no markdown, no explanation.
 
   Future<String> formatText(String rawText, {String? macroContext, String? instruction, String? specialty, String? globalPrompt}) async {
     if (apiKey.isEmpty || apiKey.contains("your_gemini_api_key")) {
-      return rawText; // Fallback if no key
+      throw Exception("Invalid API Key: Please check settings");
     }
 
     final prompt = '''
@@ -185,7 +210,22 @@ $rawText
           .trim();
     } catch (e) {
       print("Gemini formatText Error: $e");
-      return rawText; // Fallback to raw text
+      
+      // Fallback to 'gemini-1.5-flash-latest' if primary model fails
+      if (e.toString().contains('not found') || e.toString().contains('not supported')) {
+        try {
+          print("GeminiService: Retrying with fallback model (gemini-1.5-flash-latest)...");
+          final fallbackModel = GenerativeModel(model: 'gemini-1.5-flash-latest', apiKey: apiKey);
+          final response = await _retryWithBackoff(() => fallbackModel.generateContent([Content.text(prompt)]));
+          return (response.text ?? rawText)
+              .replaceAll('```', '')
+              .replaceAll('markdown', '')
+              .trim();
+        } catch (fallbackError) {
+          print("GeminiService: Fallback failed: $fallbackError");
+        }
+      }
+      return rawText; 
     }
   }
 
@@ -253,6 +293,7 @@ Your task is to:
 
 3. **Style & Tone:**
    - Use formal, concise medical English. Remove filler words.
+   - **Formatting:** Use clear headers. For lists, USE DASHES (-) or BULLETS (•) instead of asterisks (*). Do not clutter the text with excessive bolding markers unless necessary for section headers.
 
 4. **Suggestion Generation Logic (New Feature):**
    - Analyze the transcript against the template.
@@ -307,42 +348,70 @@ ${globalPrompt != null && globalPrompt.isNotEmpty ? '\nAdditional Instructions: 
 ''';
 
     try {
-      print("GeminiService: Generating with suggestions...");
-      
-      // Use JSON response mode for cleaner output
-      final model = GenerativeModel(
-        model: 'gemini-2.5-flash',
-        apiKey: apiKey,
-        generationConfig: GenerationConfig(
-          responseMimeType: 'application/json',
-        ),
-      );
-      
-      final response = await _retryWithBackoff(() => model.generateContent([Content.text(prompt)]));
-      final responseText = response.text;
-
-      if (responseText == null || responseText.isEmpty) {
-        print("GeminiService: Empty response");
-        return null;
-      }
-
-      print("GeminiService: Raw response: ${responseText.substring(0, responseText.length > 200 ? 200 : responseText.length)}...");
-
-      // Parse JSON response
+      // 1. Try with native JSON mode (most reliable)
       try {
-        final jsonResponse = jsonDecode(responseText) as Map<String, dynamic>;
-        print("GeminiService: Successfully parsed JSON with ${(jsonResponse['missing_suggestions'] as List?)?.length ?? 0} suggestions");
-        return jsonResponse;
-      } catch (parseError) {
-        print("GeminiService: JSON parse error: $parseError");
-        // Fallback: try to extract JSON from markdown code blocks
-        final jsonMatch = RegExp(r'```json\s*(.*?)\s*```', dotAll: true).firstMatch(responseText);
-        if (jsonMatch != null) {
-          final jsonResponse = jsonDecode(jsonMatch.group(1)!) as Map<String, dynamic>;
+        print("GeminiService: Generating with suggestions (JSON Mode)...");
+        final model = GenerativeModel(
+          model: 'gemini-1.5-flash',
+          apiKey: apiKey,
+          generationConfig: GenerationConfig(
+            responseMimeType: 'application/json',
+          ),
+        );
+        
+        final response = await _retryWithBackoff(() => model.generateContent([Content.text(prompt)]));
+        final responseText = response.text;
+
+        if (responseText != null && responseText.isNotEmpty) {
+          final jsonResponse = jsonDecode(responseText) as Map<String, dynamic>;
+          print("GeminiService: Successfully parsed JSON");
           return jsonResponse;
         }
-        // Final fallback: return text-only response
+      } catch (e) {
+        print("GeminiService: JSON mode failed ($e). Falling back to text mode...");
+      }
+
+      // 2. Fallback: Text mode + Regex Extraction
+      String? responseText;
+      try {
+        final response = await _retryWithBackoff(() => _model.generateContent([Content.text(prompt)]));
+        responseText = response.text;
+      } catch(e) {
+         print("GeminiService: Primary model text mode failed ($e). Trying fallback 'gemini-1.5-flash-latest'...");
+         final fallbackModel = GenerativeModel(model: 'gemini-1.5-flash-latest', apiKey: apiKey);
+         final response = await _retryWithBackoff(() => fallbackModel.generateContent([Content.text(prompt)]));
+         responseText = response.text;
+      }
+
+      if (responseText == null || responseText.isEmpty) {
+        throw "Empty response";
+      }
+
+      // Parse JSON from text response
+      try {
+        // Try direct parse
+        try {
+          return jsonDecode(responseText) as Map<String, dynamic>;
+        } catch (_) {
+          // Find JSON block
+          final jsonMatch = RegExp(r'\{[\s\S]*\}', dotAll: true).firstMatch(responseText);
+          if (jsonMatch != null) {
+            return jsonDecode(jsonMatch.group(0)!) as Map<String, dynamic>;
+          }
+           // Markdown block fallback
+          final mdMatch = RegExp(r'```json\s*(.*?)\s*```', dotAll: true).firstMatch(responseText);
+          if (mdMatch != null) {
+            return jsonDecode(mdMatch.group(1)!) as Map<String, dynamic>;
+          }
+        }
+        
+        // Final fallback: return text-only response wrapper
         return {
+          'final_note': responseText.replaceAll('```json', '').replaceAll('```', '').trim(),
+          'missing_suggestions': [],
+        };
+      } catch (parseError) {
+         return {
           'final_note': responseText,
           'missing_suggestions': [],
         };

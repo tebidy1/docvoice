@@ -69,18 +69,28 @@ class InboxCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(
-                                note.patientName.isNotEmpty
-                                    ? note.patientName
-                                    : 'Unknown Patient',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 15,
+                              Expanded(
+                                child: Text(
+                                  (note.patientName.isNotEmpty &&
+                                          !["Unknown Patient", "Untitled"]
+                                              .contains(note.patientName))
+                                      ? note.patientName
+                                      : (note.content.isNotEmpty
+                                          ? note.content
+                                              .replaceAll('\n', ' ')
+                                              .trim()
+                                          : "No Content"),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 15,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
+                              const SizedBox(width: 8),
                               Text(
                                 _formatTime(note.createdAt),
                                 style: TextStyle(
@@ -91,8 +101,13 @@ class InboxCard extends StatelessWidget {
                             ],
                           ),
                           const SizedBox(height: 4),
+                          // Subtitle / Summary
                           Text(
-                            note.summary ?? '',
+                            (note.patientName.isNotEmpty &&
+                                    !["Unknown Patient", "Untitled"]
+                                        .contains(note.patientName))
+                                ? (note.summary ?? note.content.replaceAll('\n', ' ').trim())
+                                : "Audio Note", // If title is content, make subtitle generic or summary
                             style: TextStyle(
                               color: Colors.white.withOpacity(0.6),
                               fontSize: 13,

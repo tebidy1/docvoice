@@ -32,7 +32,7 @@ abstract class BaseApiService {
   /// Returns a list of items of type T
   Future<List<T>> fetchAll<T>({
     Map<String, String>? queryParams,
-    required T Function(Map<String, dynamic>) fromJson,
+    required T Function(dynamic) fromJson,
   }) async {
     try {
       final response = await _apiService.get(
@@ -41,10 +41,14 @@ abstract class BaseApiService {
       );
 
       // Handle different response formats
-      final List<dynamic> data = response['data'] ?? response['payload'] ?? [];
-      return data
-          .map((item) => fromJson(item as Map<String, dynamic>))
-          .toList();
+      final dynamic data = response['data'] ?? response['payload'] ?? [];
+      
+      if (data is List) {
+        return data.map((item) => fromJson(item)).toList();
+      }
+      
+      // Fallback if data is not a list
+      return [];
     } catch (e) {
       debugPrint('❌ Error fetching all from $baseEndpoint: $e');
       rethrow;
@@ -52,19 +56,14 @@ abstract class BaseApiService {
   }
 
   /// Fetch a single item by ID
-  ///
-  /// [id] - The ID of the item to fetch
-  /// [fromJson] - Function to convert JSON to model object
-  ///
-  /// Returns the item of type T
   Future<T> fetchById<T>({
     required String id,
-    required T Function(Map<String, dynamic>) fromJson,
+    required T Function(dynamic) fromJson,
   }) async {
     try {
       final response = await _apiService.get('$baseEndpoint/$id');
       final data = response['data'] ?? response['payload'];
-      return fromJson(data as Map<String, dynamic>);
+      return fromJson(data);
     } catch (e) {
       debugPrint('❌ Error fetching $id from $baseEndpoint: $e');
       rethrow;
@@ -72,19 +71,14 @@ abstract class BaseApiService {
   }
 
   /// Create a new item
-  ///
-  /// [data] - The data to create
-  /// [fromJson] - Function to convert JSON response to model object
-  ///
-  /// Returns the created item of type T
   Future<T> create<T>({
     required Map<String, dynamic> data,
-    required T Function(Map<String, dynamic>) fromJson,
+    required T Function(dynamic) fromJson,
   }) async {
     try {
       final response = await _apiService.post(baseEndpoint, body: data);
       final responseData = response['data'] ?? response['payload'];
-      return fromJson(responseData as Map<String, dynamic>);
+      return fromJson(responseData);
     } catch (e) {
       debugPrint('❌ Error creating in $baseEndpoint: $e');
       rethrow;
@@ -92,21 +86,15 @@ abstract class BaseApiService {
   }
 
   /// Update an existing item
-  ///
-  /// [id] - The ID of the item to update
-  /// [data] - The updated data
-  /// [fromJson] - Function to convert JSON response to model object
-  ///
-  /// Returns the updated item of type T
   Future<T> update<T>({
     required String id,
     required Map<String, dynamic> data,
-    required T Function(Map<String, dynamic>) fromJson,
+    required T Function(dynamic) fromJson,
   }) async {
     try {
       final response = await _apiService.put('$baseEndpoint/$id', body: data);
       final responseData = response['data'] ?? response['payload'];
-      return fromJson(responseData as Map<String, dynamic>);
+      return fromJson(responseData);
     } catch (e) {
       debugPrint('❌ Error updating $id in $baseEndpoint: $e');
       rethrow;
@@ -114,10 +102,6 @@ abstract class BaseApiService {
   }
 
   /// Delete an item
-  ///
-  /// [id] - The ID of the item to delete
-  ///
-  /// Returns true if successful, false otherwise
   Future<bool> delete({required String id}) async {
     try {
       await _apiService.delete('$baseEndpoint/$id');
@@ -130,21 +114,15 @@ abstract class BaseApiService {
   }
 
   /// Perform a PATCH operation (partial update)
-  ///
-  /// [endpoint] - The full endpoint path (can include the ID)
-  /// [data] - Optional data to send with the request
-  /// [fromJson] - Function to convert JSON response to model object
-  ///
-  /// Returns the updated item of type T
   Future<T> patch<T>({
     required String endpoint,
     Map<String, dynamic>? data,
-    required T Function(Map<String, dynamic>) fromJson,
+    required T Function(dynamic) fromJson,
   }) async {
     try {
       final response = await _apiService.patch(endpoint, body: data);
       final responseData = response['data'] ?? response['payload'];
-      return fromJson(responseData as Map<String, dynamic>);
+      return fromJson(responseData);
     } catch (e) {
       debugPrint('❌ Error patching $endpoint: $e');
       rethrow;
@@ -152,18 +130,16 @@ abstract class BaseApiService {
   }
 
   /// Perform a custom GET request to a specific endpoint
-  ///
-  /// Useful for endpoints that don't follow the standard CRUD pattern
   Future<T> customGet<T>({
     required String endpoint,
     Map<String, String>? queryParams,
-    required T Function(Map<String, dynamic>) fromJson,
+    required T Function(dynamic) fromJson,
   }) async {
     try {
       final response =
           await _apiService.get(endpoint, queryParams: queryParams);
       final data = response['data'] ?? response['payload'];
-      return fromJson(data as Map<String, dynamic>);
+      return fromJson(data);
     } catch (e) {
       debugPrint('❌ Error in custom GET $endpoint: $e');
       rethrow;
@@ -171,17 +147,15 @@ abstract class BaseApiService {
   }
 
   /// Perform a custom POST request to a specific endpoint
-  ///
-  /// Useful for endpoints that don't follow the standard CRUD pattern
   Future<T> customPost<T>({
     required String endpoint,
     Map<String, dynamic>? data,
-    required T Function(Map<String, dynamic>) fromJson,
+    required T Function(dynamic) fromJson,
   }) async {
     try {
       final response = await _apiService.post(endpoint, body: data);
       final responseData = response['data'] ?? response['payload'];
-      return fromJson(responseData as Map<String, dynamic>);
+      return fromJson(responseData);
     } catch (e) {
       debugPrint('❌ Error in custom POST $endpoint: $e');
       rethrow;

@@ -8,9 +8,9 @@ class GeminiService {
   late final GenerativeModel _model;
 
   GeminiService({required this.apiKey}) {
-    // Using Gemini 2.5 Flash (latest, fastest, most capable) - Matching Desktop
+    // Using Gemini 1.5 Flash (stable, fast)
     _model = GenerativeModel(
-      model: 'gemini-2.5-flash', 
+      model: 'gemini-1.5-flash', 
       apiKey: apiKey,
     );
   }
@@ -287,7 +287,7 @@ ${globalPrompt != null && globalPrompt.isNotEmpty ? '\nAdditional Instructions: 
       
       // Use JSON response mode for cleaner output
       final model = GenerativeModel(
-        model: 'gemini-2.5-flash',
+        model: 'gemini-1.5-flash',
         apiKey: apiKey,
         generationConfig: GenerationConfig(
           responseMimeType: 'application/json',

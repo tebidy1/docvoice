@@ -14,12 +14,15 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/window_manager_helper.dart';
 
+import 'widgets/markdown_controller.dart';
+
 class InboxNoteDetailView extends StatefulWidget {
   final NoteModel note;
   final Macro? autoStartMacro;
+  final Stream<String>? pendingTextStream; // New: For instant open
 
   const InboxNoteDetailView(
-      {super.key, required this.note, this.autoStartMacro});
+      {super.key, required this.note, this.autoStartMacro, this.pendingTextStream});
 
   @override
   State<InboxNoteDetailView> createState() => _InboxNoteDetailViewState();
@@ -32,7 +35,7 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   final _inboxService = InboxService();
   final _macroService = MacroService();
 
-  final _finalNoteController = TextEditingController();
+  final _finalNoteController = MarkdownSyntaxTextEditingController();
   Macro? _selectedMacro;
   bool _isGenerating = false;
   bool _isArchiveExpanded = false;
@@ -50,16 +53,66 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     'Structuring Note...',
   ];
 
+  // Dynamic Layout & Streaming
+  bool _isLoadingText = false;
+  bool _isRawTextExpanded = true;
+  StreamSubscription? _textStreamSubscription;
+
   @override
   void initState() {
     super.initState();
     _dockWindow();
     _loadQuickMacros();
 
+    // 1. Setup Stream (If Instant Open)
+    if (widget.pendingTextStream != null) {
+      _isLoadingText = true;
+      _textStreamSubscription = widget.pendingTextStream!.listen((text) {
+        if (mounted) {
+            setState(() {
+             _finalNoteController.text = text; // Update Field
+             _isLoadingText = false; // Stop Loading
+             
+             // Update the "source" note model effectively so future operations use this text
+             widget.note.rawText = text; // <-- CRITICAL FIX: Ensure UI reads from NoteModel
+           });
+        }
+      }, onError: (e) {
+         _showError("Transcription Failed: $e");
+         setState(() => _isLoadingText = false);
+      });
+    }
+
+    // 2. Initial Load from passed widget (Fast) - Only if not loading stream
+    if (widget.note.formattedText.isNotEmpty && !_isLoadingText) {
+      _finalNoteController.text = widget.note.formattedText;
+    }
+    
+    // 3. Fresh Fetch from Database (Robust)
+    // Fixes "Stale Data" issue where parent list has old object
+    if (!_isLoadingText) {
+       _refreshNoteContent();
+    }
+
     if (widget.autoStartMacro != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _applyTemplate(widget.autoStartMacro!);
       });
+    }
+  }
+
+  Future<void> _refreshNoteContent() async {
+    try {
+      final freshNote = await _inboxService.getNoteById(widget.note.id);
+      if (freshNote != null && freshNote.formattedText.isNotEmpty) {
+        if (mounted && _finalNoteController.text.isEmpty) {
+           setState(() {
+             _finalNoteController.text = freshNote.formattedText;
+           });
+        }
+      }
+    } catch (e) {
+      print("Error fetching fresh note content: $e");
     }
   }
 
@@ -99,6 +152,7 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   @override
   void dispose() {
     _generationTimer?.cancel();
+    _textStreamSubscription?.cancel(); // Clean up stream
     _finalNoteController.dispose();
     _restoreWindow();
     super.dispose();
@@ -120,6 +174,7 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
       _selectedMacro = macro;
       _elapsedSeconds = 0;
       _statusMessageIndex = 0;
+      _isRawTextExpanded = false; // COLLAPSE RAW TEXT ON MACRO START
     });
 
     // Start timer for AI Processing Ring
@@ -144,8 +199,25 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
 
       print("DetailView: Generating... (Suggestions: $enableSuggestions)");
 
+      // Use custom API key if available
+      final customApiKey = prefs.getString('gemini_api_key');
+      final effectiveApiKey = (customApiKey != null && customApiKey.isNotEmpty)
+          ? customApiKey
+          : (dotenv.env['GEMINI_API_KEY'] ?? "");
+
+      // DEBUG: Log API Key details
+      final source = (customApiKey != null && customApiKey.isNotEmpty) ? "Custom Settings" : "Environment (.env)";
+      final maskedKey = effectiveApiKey.length > 8 
+          ? "${effectiveApiKey.substring(0, 4)}...${effectiveApiKey.substring(effectiveApiKey.length - 4)}"
+          : (effectiveApiKey.isEmpty ? "[EMPTY]" : "[TOO SHORT]");
+      print("DetailView: API Key Source: $source");
+      print("DetailView: Key Used: $maskedKey");
+      print("DetailView: Raw Custom Key: '${customApiKey ?? "null"}'"); // Check for hidden chars
+          
+      final geminiService = GeminiService(apiKey: effectiveApiKey);
+
       if (enableSuggestions) {
-        final response = await _geminiService.formatTextWithSuggestions(
+        final response = await geminiService.formatTextWithSuggestions(
           widget.note.rawText,
           macroContext: macro.content,
           specialty: specialty,
@@ -162,11 +234,15 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
                 [];
           });
           print("DetailView: Loaded ${_suggestions.length} suggestions");
+          
+          // AUTO-SAVE (Unified with Mobile)
+          _autoSaveGeneratedContent(response['final_note'] ?? '', macro);
+          
         } else {
           _showError("Failed to generate note");
         }
       } else {
-        final formattedText = await _geminiService.formatText(
+        final formattedText = await geminiService.formatText(
           widget.note.rawText,
           macroContext: macro.content,
           specialty: specialty,
@@ -178,14 +254,42 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
           _suggestions = [];
         });
         print("DetailView: Fast generation complete");
+        
+        // AUTO-SAVE (Unified with Mobile)
+        _autoSaveGeneratedContent(formattedText, macro);
       }
     } catch (e) {
       print("DetailView: Error: $e");
-      _showError("Generation failed: $e");
+      if (e.toString().contains("leaked") || e.toString().contains("key")) {
+         _showError("⚠️ API Key Error: Please check Settings");
+      } else {
+         _showError("Generation failed: $e");
+      }
     } finally {
       _generationTimer?.cancel();
       setState(() => _isGenerating = false);
     }
+  }
+  
+  Future<void> _autoSaveGeneratedContent(String content, Macro macro) async {
+      try {
+        await _inboxService.updateNote(
+          widget.note.id,
+          formattedText: content,
+          // We don't overwrite rawText here as it's the source
+          suggestedMacroId: macro.id, 
+        );
+        
+        if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+             content: Text("✅ Auto-saved AI Result"),
+             backgroundColor: Colors.green,
+             duration: Duration(seconds: 2),
+           ));
+        }
+      } catch (e) {
+        print("Auto-save failed: $e");
+      }
   }
 
   void _insertSuggestion(SmartSuggestion suggestion) {
@@ -365,9 +469,35 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
           child: Column(
             children: [
               _buildHeader(theme),
-              _buildSafetyArchive(theme),
+              // 1. Raw Text / Safety Archive
+              // Behavior:
+              // - Initial: Takes 3/4 of space (Flex 3 vs 1 below)
+              // - Processing: Takes fixed small height (~2 lines)
+              if (_isRawTextExpanded)
+                Expanded(
+                  flex: 3,
+                  child: _buildSafetyArchive(theme),
+                )
+              else
+                 SizedBox(
+                   height: 140, // Fixed height for "2 lines" look + padding
+                   child: _buildSafetyArchive(theme),
+                 ),
+
+              // 2. Templates / Macros
+              // Always visible in the middle
               _buildContextStrip(theme),
-              Expanded(child: _buildWhitePaperEditor(theme)),
+
+              // 3. AI Editor (White Paper)
+              // Behavior:
+              // - Initial: Takes 1/4 of space (Flex 1)
+              // - Processing: Takes ALL remaining space (Expanded)
+              Expanded(
+                flex: _isRawTextExpanded ? 1 : 1,
+                child: _buildWhitePaperEditor(theme),
+              ),
+              
+              // 4. Footer Controls
               _buildBottomControlBar(theme),
               _buildInjectButton(theme),
             ],
@@ -526,31 +656,53 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  SelectableText(
-                    previewLines,
+                  
+                  // LOADING STATE for Instant Review
+                  if (_isLoadingText) 
+                    Center(
+                      child: Column(
+                        children: [
+                          const SizedBox(height: 20),
+                          CircularProgressIndicator(color: theme.colorScheme.primary),
+                          const SizedBox(height: 12),
+                          const Text("Consulting Groq...", style: TextStyle(color: Colors.grey)),
+                          const SizedBox(height: 20),
+                        ],
+                      ),
+                    )
+                  else 
+                    // NORMAL TEXT CONTENT
+                     SelectableText(
+                      _isRawTextExpanded ? widget.note.rawText : previewLines,
+                      style: TextStyle(
+                        color: Colors.grey[300],
+                        fontSize: 13,
+                        height: 1.5,
+                      ),
+                    ),
+
+                ],
+              ),
+            ),
+          ),
+          
+            // Archive Expanion (Only show if NOT in expanded mode, effectively)
+            if (_isArchiveExpanded && hasMore && !_isRawTextExpanded) // Logic tweaking
+              Container(
+                width: double.infinity,
+                constraints: const BoxConstraints(maxHeight: 250),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: SingleChildScrollView(
+                  child: SelectableText(
+                    lines.skip(4).join('\n'),
                     style: TextStyle(
                       color: Colors.grey[300],
                       fontSize: 13,
                       height: 1.5,
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
-          if (_isArchiveExpanded && hasMore)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: SelectableText(
-                lines.skip(4).join('\n'),
-                style: TextStyle(
-                  color: Colors.grey[300],
-                  fontSize: 13,
-                  height: 1.5,
                 ),
               ),
-            ),
         ],
       ),
     );
@@ -575,9 +727,7 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
       // Collapsed: ~86px (enough for 2 lines)
       // Expanded: ~250px (approx 6 lines, scrollable)
       constraints: BoxConstraints(
-        maxHeight: _selectedMacro != null
-            ? 50.0
-            : (_isTemplatesExpanded ? 250.0 : 86.0),
+        maxHeight: _isTemplatesExpanded ? 250.0 : 86.0,
       ),
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -589,197 +739,138 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
           children: [
             Row(
               children: [
-                if (_selectedMacro != null) ...[
-                  Icon(Icons.flash_on,
-                      color: theme.colorScheme.primary, size: 16),
-                  const SizedBox(width: 6),
-                  const SizedBox(width: 6),
                   Flexible(
                     child: Text(
-                      _selectedMacro!.trigger,
-                      overflow: TextOverflow.ellipsis,
+                      'TEMPLATES',
                       style: TextStyle(
                         color: theme.colorScheme.primary,
-                        fontSize: 13,
+                        fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
-                    ),
-                  ),
-                ] else
-                  Text(
-                    'TEMPLATES',
-                    style: TextStyle(
-                      color: theme.colorScheme.primary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
                     ),
                   ),
               ],
             ),
             const SizedBox(height: 8),
-            _selectedMacro == null
-                ? Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      ...displayedMacros.map((macro) {
-                        return InkWell(
-                          onTap: () => _applyTemplate(macro),
-                          borderRadius: BorderRadius.circular(20),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color:
-                                  theme.colorScheme.primary.withOpacity(0.05),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color:
-                                    theme.colorScheme.primary.withOpacity(0.2),
-                              ),
-                            ),
-                            child: Text(
-                              macro.trigger,
-                              style: TextStyle(
-                                color: theme.colorScheme.onSurface
-                                    .withOpacity(0.8),
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-
-                      // "MORE" Button (Expands List)
-                      if (showMoreButton)
-                        InkWell(
-                          onTap: () {
-                            setState(() {
-                              _isTemplatesExpanded = true;
-                            });
-                          },
-                          borderRadius: BorderRadius.circular(20),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.surface,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: Colors.grey[300]!,
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  "More",
-                                  style: TextStyle(
-                                    color: Colors.grey[600],
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(width: 2),
-                                Icon(Icons.keyboard_arrow_down,
-                                    size: 14, color: Colors.grey[600]),
-                              ],
-                            ),
-                          ),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                ...displayedMacros.map((macro) {
+                  final isSelected = _selectedMacro?.id == macro.id;
+                  return InkWell(
+                    onTap: () => _applyTemplate(macro),
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? theme.colorScheme.primary.withOpacity(0.15)
+                            : theme.colorScheme.primary.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isSelected
+                              ? theme.colorScheme.primary.withOpacity(0.5)
+                              : theme.colorScheme.primary.withOpacity(0.2),
                         ),
-
-                      // "ALL MANAGERS" Button (Opens Manager - Only visible when expanded)
-                      if (_isTemplatesExpanded)
-                        InkWell(
-                          onTap: () async {
-                            await WindowManagerHelper.centerDialog();
-                            final macro = await showDialog<Macro>(
-                              context: context,
-                              builder: (context) => const MacroExplorerDialog(),
-                            );
-                            if (mounted)
-                              await WindowManagerHelper.expandToSidebar(
-                                  context);
-                            if (macro != null) _applyTemplate(macro);
-                          },
-                          borderRadius: BorderRadius.circular(20),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primary.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color:
-                                    theme.colorScheme.primary.withOpacity(0.5),
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  "All Managers",
-                                  style: TextStyle(
-                                    color: theme.colorScheme.primary,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                Icon(Icons.arrow_forward,
-                                    size: 10, color: theme.colorScheme.primary),
-                              ],
-                            ),
-                          ),
+                      ),
+                      child: Text(
+                        macro.trigger,
+                        style: TextStyle(
+                          color: isSelected
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.onSurface.withOpacity(0.8),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
                         ),
-                    ],
-                  )
-                : SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: _quickMacros.map((macro) {
-                        final isSelected = _selectedMacro?.id == macro.id;
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: InkWell(
-                            onTap: () => _applyTemplate(macro),
-                            borderRadius: BorderRadius.circular(20),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? theme.colorScheme.primary
-                                        .withOpacity(0.15)
-                                    : theme.colorScheme.primary
-                                        .withOpacity(0.05),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: isSelected
-                                      ? theme.colorScheme.primary
-                                          .withOpacity(0.5)
-                                      : Colors.transparent,
-                                ),
-                              ),
-                              child: Text(
-                                macro.trigger,
-                                style: TextStyle(
-                                  color: isSelected
-                                      ? theme.colorScheme.primary
-                                      : theme.colorScheme.onSurface
-                                          .withOpacity(0.8),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+
+                // "MORE" Button (Expands List)
+                if (showMoreButton)
+                  InkWell(
+                    onTap: () {
+                      setState(() {
+                        _isTemplatesExpanded = true;
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surface,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: Colors.grey[300]!,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            "More",
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                        );
-                      }).toList(),
+                          const SizedBox(width: 2),
+                          Icon(Icons.keyboard_arrow_down,
+                              size: 14, color: Colors.grey[600]),
+                        ],
+                      ),
                     ),
                   ),
+
+                // "ALL MANAGERS" Button (Opens Manager - Only visible when expanded)
+                if (_isTemplatesExpanded)
+                  InkWell(
+                    onTap: () async {
+                      await WindowManagerHelper.centerDialog();
+                      final macro = await showDialog<Macro>(
+                        context: context,
+                        builder: (context) => const MacroExplorerDialog(),
+                      );
+                      if (mounted) await WindowManagerHelper.expandToSidebar(context);
+                      if (macro != null) _applyTemplate(macro);
+                    },
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: theme.colorScheme.primary.withOpacity(0.5),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            "All Managers",
+                            style: TextStyle(
+                              color: theme.colorScheme.primary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(Icons.arrow_forward,
+                              size: 10, color: theme.colorScheme.primary),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ],
         ),
       ),
@@ -1024,8 +1115,8 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
                             onTap: _handleTextFieldTap,
                             style: const TextStyle(
                               color: Color(0xFF1E293B),
-                              fontSize: 14,
-                              height: 1.5,
+                              fontSize: 16, // Increased from 14 to match Mobile standard
+                              height: 1.6,   // Increased from 1.5 to 1.6 for better spacing
                               fontFamily: 'Inter',
                             ),
                             decoration: const InputDecoration(

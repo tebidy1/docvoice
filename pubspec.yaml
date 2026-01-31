@@ -26,7 +26,7 @@ dependencies:
   connectivity_plus: ^7.0.0
   
   # AI & Logic
-  google_generative_ai: ^0.4.4
+  google_generative_ai: ^0.4.6
   
   # Shared Logic
   scribe_brain:
@@ -50,10 +50,10 @@ dependencies:
   
   # QR Pairing
   qr_flutter: ^4.1.0
-  mobile_scanner: ^7.1.4
+  mobile_scanner: ^6.0.1
   
   # UI
-  google_fonts: ^8.0.0
+  google_fonts: ^6.2.1
   glassmorphism: ^3.0.0
   shared_preferences: ^2.2.2
   intl: ^0.20.2
@@ -68,7 +68,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^6.0.0
+  flutter_lints: ^5.0.0
   isar_generator: ^3.1.0+1
   build_runner: ^2.4.8
 

@@ -22,7 +22,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _specialtyController = TextEditingController();
   final TextEditingController _promptController = TextEditingController();
   
-  String _groqModel = 'whisper-large-v3';
+  String _groqModel = 'whisper-large-v3-turbo';
   bool _isLoading = false;
   String _statusMessage = "Not Connected";
   Color _statusColor = Colors.grey;
@@ -98,7 +98,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _specialtyController.text = prefs.getString('specialty') ?? "";
       // Removed duplicate line
       _promptController.text = prefs.getString('global_ai_prompt') ?? "";
-      _groqModel = prefs.getString('groq_model') ?? 'whisper-large-v3';
+      _groqModel = prefs.getString('groq_model') ?? 'whisper-large-v3-turbo';
     });
   }
 

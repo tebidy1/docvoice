@@ -17,6 +17,8 @@ import 'inbox_manager_dialog.dart';
 import '../screens/settings_dialog.dart'; // Import Settings Dialog
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:screen_retriever/screen_retriever.dart';
+import '../models/inbox_note.dart'; // Import NoteModel and NoteStatus
+import 'inbox_note_detail_view.dart'; // Import Detail View for instant open
 
 import '../utils/window_manager_helper.dart';
 import '../widgets/user_profile_header.dart';
@@ -42,10 +44,12 @@ class _DesktopAppState extends State<DesktopApp> {
   String _status = "Initializing...";
   String _ipAddress = "Loading...";
   bool _isRecording = false;
+  bool _isProcessing = false; // Visual feedback for processing
   bool _isMinimizeHovered = false;
   bool _isMaximizeHovered = false;
   bool _isCloseHovered = false;
   bool _isAdmin = false;
+  int _lastViewedCount = 0; // For Smart Badge logic
 
   @override
   void initState() {
@@ -59,6 +63,12 @@ class _DesktopAppState extends State<DesktopApp> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _setInitialWindowSize();
       await _positionWindowToRightCenter();
+      
+      // Initialize last viewed count to current count (assume initially read)
+      final notes = await _inboxService.getPendingNotes();
+      setState(() {
+        _lastViewedCount = notes.length;
+      });
     });
   }
 
@@ -149,6 +159,9 @@ class _DesktopAppState extends State<DesktopApp> {
     _server.statusStream.listen((status) {
       setState(() {
         _status = status;
+        if (status.startsWith("Error")) {
+          _isProcessing = false;
+        }
       });
     });
 
@@ -157,6 +170,8 @@ class _DesktopAppState extends State<DesktopApp> {
     });
 
     _server.textStream.listen((text) async {
+      setState(() => _isProcessing = false); // Stop processing spinner
+
       if (text.trim().isEmpty) {
         print("Skipping: Text is empty");
         return;
@@ -165,72 +180,35 @@ class _DesktopAppState extends State<DesktopApp> {
       print("Received transcription: '$text'");
       
       try {
-        // Analyze with Gemini
-        final analysis = await _geminiService.analyzeNote(text);
+        // Save raw text directly without analysis
+        await _inboxService.addNote(
+          text,
+          patientName: 'Untitled', // Will be updated later by Macro
+          summary: null,
+        );
         
-        // Save to Inbox
-        try {
-          await _inboxService.addNote(
-            text,
-            patientName: analysis['patientName'],
-            summary: analysis['summary'],
+        print("Added to Inbox (Raw)");
+        
+        // Show confirmation
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("📥 Saved Recording"),
+              duration: Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: Colors.green,
+            ),
           );
-          
-          print("Added to Smart Inbox: ${analysis['patientName']}");
-          
-          // Show confirmation
-          if (mounted) {
+        }
+      } catch (e) {
+        print('Error adding valid note to inbox: $e');
+        if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text("📥 Saved: ${analysis['patientName']}"),
-                duration: const Duration(seconds: 2),
-                behavior: SnackBarBehavior.floating,
-                backgroundColor: Colors.green,
-              ),
-            );
-          }
-        } catch (e) {
-          print('Error adding note to inbox: $e');
-          // Show error notification
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text("⚠️ Failed to save note: ${e.toString().contains('timeout') ? 'Connection timeout' : 'Network error'}"),
-                duration: const Duration(seconds: 3),
-                behavior: SnackBarBehavior.floating,
+                content: Text("⚠️ Failed to save: $e"),
                 backgroundColor: Colors.orange,
               ),
             );
-          }
-        }
-      } catch (e) {
-        print('Error analyzing note: $e');
-        // Try to save without analysis if analysis fails
-        try {
-          await _inboxService.addNote(text);
-          print("Added to Smart Inbox (without analysis)");
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text("📥 Saved (analysis unavailable)"),
-                duration: Duration(seconds: 2),
-                behavior: SnackBarBehavior.floating,
-                backgroundColor: Colors.blue,
-              ),
-            );
-          }
-        } catch (saveError) {
-          print('Error saving note without analysis: $saveError');
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text("❌ Failed to save: ${saveError.toString().contains('timeout') ? 'Connection timeout' : 'Network error'}"),
-                duration: const Duration(seconds: 3),
-                behavior: SnackBarBehavior.floating,
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
         }
       }
     });
@@ -252,6 +230,7 @@ class _DesktopAppState extends State<DesktopApp> {
         final path = await _recorder.stop();
         setState(() {
           _isRecording = false;
+          _isProcessing = true; // Start processing spinner
           _status = "Processing...";
         });
         
@@ -261,45 +240,97 @@ class _DesktopAppState extends State<DesktopApp> {
           
           // Check if file exists
           if (!await file.exists()) {
-            print("ERROR: Recording file does not exist at $path");
-            setState(() => _status = "Error: File not found");
-            return;
-          }
-          
-          // Check file size
-          final fileSize = await file.length();
-          print("Recording file size: $fileSize bytes");
-          
-          if (fileSize == 0) {
-            print("ERROR: Recording file is empty (0 bytes)");
-            setState(() => _status = "Error: Empty recording");
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text("Recording failed: File is empty. Please check microphone permissions."),
-                  backgroundColor: Colors.red,
-                  duration: Duration(seconds: 5),
-                ),
-              );
-            }
-            await file.delete();
-            return;
+             // ... error handling ...
+             return;
           }
           
           final bytes = await file.readAsBytes();
           print("Read ${bytes.length} bytes from recording file");
+
+          // ---------------------------------------------------------
+          // INSTANT REVIEW FLOW
+          // ---------------------------------------------------------
+          // 1. Create a StreamController for this specific session
+          final instantTextController = StreamController<String>.broadcast();
           
-          await _server.transcribeWav(bytes);
+          // Use cascade operator since NoteModel has no named constructor
+          final tempNote = NoteModel()
+            ..id = 0 // Temporary ID
+            ..uuid = 'temp_${DateTime.now().millisecondsSinceEpoch}'
+            ..content = '' 
+            ..rawText = ''
+            ..createdAt = DateTime.now()
+            ..updatedAt = DateTime.now()
+            ..status = NoteStatus.draft // Use 'draft' as 'processing' does not exist
+            ..patientName = 'Untitled';
+
+          // 2. Open the View IMMEDIATELY (Do not await yet)
+          // We use a disjoint async block to show dialog so we can continue execution
+          final dialogFuture = showDialog(
+            context: context,
+            barrierDismissible: false, // Prevent closing while loading
+            builder: (context) => InboxNoteDetailView(
+              note: tempNote,
+              pendingTextStream: instantTextController.stream,
+           ),
+          );
+
+          // 3. Start Processing in background
+          // We attach a specific listener for THIS recording session
+          StreamSubscription? serverSub;
+          serverSub = _server.textStream.listen((text) async {
+             // A. Pipe text to the open dialog
+             instantTextController.add(text); // This updates the UI via Stream
+             
+             // B. Save to Database (Real Persistence)
+             try {
+                // Determine Patient Name logic here if needed, or keep "Untitled"
+                // The Detail View handles the "final" version
+                await _inboxService.addNote(
+                  text,
+                  patientName: 'Untitled',
+                  summary: null,
+                );
+                print("✅ Persisted to Inbox");
+             } catch (e) {
+                print("❌ Save failed: $e");
+             }
+
+             // C. Cleanup
+             serverSub?.cancel();
+             instantTextController.close();
+             setState(() => _isProcessing = false);
+          });
           
-          // Cleanup
+          // 4. Trigger the actual heavy lifting
+          try {
+             await _server.transcribeWav(bytes); 
+             // when transcribeWav finishes, it emits to textStream, triggers above logic
+          } catch(e) {
+             instantTextController.addError(e);
+             setState(() => _isProcessing = false);
+             serverSub?.cancel();
+          }
+          
+          // Cleanup File
           await file.delete();
+          
+          // Wait for dialog to close (optional, if we want to track it)
+          // await dialogFuture; 
+          
         } else {
           print("ERROR: Recorder returned null path");
-          setState(() => _status = "Error: No file");
+          setState(() {
+            _status = "Error: No file";
+            _isProcessing = false;
+          });
         }
       } catch (e) {
         print("Error stopping: $e");
-        setState(() => _status = "Error: $e");
+        setState(() {
+          _status = "Error: $e";
+          _isProcessing = false;
+        });
       }
     } else {
       // Start
@@ -435,12 +466,12 @@ class _DesktopAppState extends State<DesktopApp> {
                          _buildIconButton(
                            icon: Icons.flash_on,
                            onTap: () async {
-                              await showDialog(
-                                context: context,
-                                barrierDismissible: true,
-                                barrierColor: Colors.transparent,
-                                builder: (context) => const MacroManagerDialog(),
-                              );
+                               await showDialog(
+                                 context: context,
+                                 barrierDismissible: true,
+                                 barrierColor: Colors.transparent,
+                                 builder: (context) => const MacroManagerDialog(),
+                               );
                            },
                            tooltip: "Macros",
                            color: theme.iconColor,
@@ -451,44 +482,53 @@ class _DesktopAppState extends State<DesktopApp> {
                          
                          // 3. Messages Icon (Inbox)
                          StreamBuilder<List>(
-                            stream: _inboxService.watchPendingNotes(),
-                            builder: (context, snapshot) {
-                              final count = snapshot.data?.length ?? 0;
-                              return Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  _buildIconButton(
-                                     icon: Icons.chat_bubble_outline, 
-                                     onTap: () async {
-                                        await WindowManagerHelper.expandToSidebar(context);
-                                        await showDialog(
-                                          context: context,
-                                          barrierDismissible: true,
-                                          barrierColor: Colors.transparent,
-                                          builder: (context) => const InboxManagerDialog(),
-                                        );
-                                        await WindowManagerHelper.collapseToPill(context);
-                                     },
-                                     tooltip: "Inbox",
-                                     color: theme.iconColor,
-                                     theme: theme,
-                                  ),
-                                  if (count > 0)
-                                    Positioned(
-                                      right: 0,
-                                      top: 0,
-                                      child: Container(
-                                        width: 10,
-                                        height: 10,
-                                        decoration: const BoxDecoration(
-                                          color: Colors.orange,
-                                          shape: BoxShape.circle,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              );
-                            },
+                             stream: _inboxService.watchPendingNotes(),
+                             builder: (context, snapshot) {
+                               final count = snapshot.data?.length ?? 0;
+                               final hasNew = count > _lastViewedCount;
+                               
+                               return Stack(
+                                 clipBehavior: Clip.none,
+                                 children: [
+                                    _buildIconButton(
+                                      icon: hasNew ? Icons.mark_chat_unread_outlined : Icons.chat_bubble_outline, 
+                                      onTap: () async {
+                                         // Update last viewed logic
+                                         setState(() => _lastViewedCount = count);
+                                         
+                                         await WindowManagerHelper.expandToSidebar(context);
+                                         await showDialog(
+                                           context: context,
+                                           barrierDismissible: true,
+                                           barrierColor: Colors.transparent,
+                                           builder: (context) => const InboxManagerDialog(),
+                                         );
+                                         await WindowManagerHelper.collapseToPill(context);
+                                         
+                                         // Update again after closing in case changes happened
+                                         final freshNotes = await _inboxService.getPendingNotes();
+                                         setState(() => _lastViewedCount = freshNotes.length);
+                                      },
+                                      tooltip: "Inbox",
+                                      color: hasNew ? Colors.orange : theme.iconColor, 
+                                      theme: theme,
+                                   ),
+                                   if (hasNew)
+                                     Positioned(
+                                       right: 0,
+                                       top: 0,
+                                       child: Container(
+                                         width: 10,
+                                         height: 10,
+                                         decoration: const BoxDecoration(
+                                           color: Colors.orange,
+                                           shape: BoxShape.circle,
+                                         ),
+                                       ),
+                                     ),
+                                 ],
+                               );
+                             },
                          ),
 
                          const SizedBox(width: 4), // Spec: 4px gap
@@ -502,31 +542,39 @@ class _DesktopAppState extends State<DesktopApp> {
                          
                          const SizedBox(width: 4), // Spec: 4px gap
 
-                         // 4. Microphone Button (Hero - Rounded Square)
-                         MouseRegion(
-                           cursor: SystemMouseCursors.click,
-                           child: GestureDetector(
-                             onTap: _toggleRecording,
-                             child: AnimatedContainer(
-                               duration: const Duration(milliseconds: 200),
-                               width: 40,
-                               height: 40,
-                               decoration: BoxDecoration(
-                                 color: _isRecording ? theme.micRecordingBackground : theme.micIdleBackground, // From Theme
-                                 borderRadius: BorderRadius.circular(4), // Spec: 4px radius
-                                 border: Border.all(
-                                   color: _isRecording ? theme.micRecordingBorder : theme.micIdleBorder, // From Theme
-                                   width: 1
-                                 ),
-                               ),
-                               child: Icon(
-                                 _isRecording ? Icons.stop : Icons.mic,
-                                 color: _isRecording ? theme.micRecordingIcon : theme.micIdleIcon, // From Theme
-                                 size: 20,
-                               ),
-                             ),
-                           ),
-                         ),
+                          // 4. Microphone Button (Hero - Rounded Square)
+                          MouseRegion(
+                            cursor: SystemMouseCursors.click,
+                            child: GestureDetector(
+                              onTap: _isProcessing ? null : _toggleRecording, // Disable tap when processing
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: _isRecording ? theme.micRecordingBackground : theme.micIdleBackground, // From Theme
+                                  borderRadius: BorderRadius.circular(4), // Spec: 4px radius
+                                  border: Border.all(
+                                    color: _isRecording ? theme.micRecordingBorder : theme.micIdleBorder, // From Theme
+                                    width: 1
+                                  ),
+                                ),
+                                child: _isProcessing 
+                                  ? Padding(
+                                      padding: const EdgeInsets.all(10.0),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2, 
+                                        color: theme.micIdleIcon,
+                                      ),
+                                    )
+                                  : Icon(
+                                    _isRecording ? Icons.stop : Icons.mic,
+                                    color: _isRecording ? theme.micRecordingIcon : theme.micIdleIcon, // From Theme
+                                    size: 20,
+                                  ),
+                              ),
+                            ),
+                          ),
 
                          const SizedBox(width: 4), // Spec: 4px gap
 

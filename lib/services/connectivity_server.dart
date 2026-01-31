@@ -143,13 +143,18 @@ class ConnectivityServer {
       // 1. Setup Engine & Config
       final prefs = await SharedPreferences.getInstance();
       final customGeminiKey = prefs.getString('gemini_api_key');
+      final customGroqKey = prefs.getString('groq_api_key');
+
+      // Check for missing keys
+      if (customGroqKey == null || customGroqKey.isEmpty) {
+        throw Exception("Groq API Key is missing. Please configure it in Settings.");
+      }
+
       final engine = ProcessingEngine(
-        groqApiKey: dotenv.env['GROQ_API_KEY'] ??
-            "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",
+        groqApiKey: customGroqKey,
         geminiApiKey: (customGeminiKey != null && customGeminiKey.isNotEmpty)
             ? customGeminiKey
-            : (dotenv.env['GEMINI_API_KEY'] ??
-                "AIzaSyCytBIf72AhxeTpy-RA1pqMf8fSykJbqes"),
+            : (dotenv.env['GEMINI_API_KEY'] ?? ""), // Minimal fallback to .env if absolutely needed, but usually empty
       );
 
       final groqPref =
@@ -169,30 +174,44 @@ class ConnectivityServer {
       // 3. Detect Macro
       final macroExpansion = await _macroService.findExpansion(rawText);
       if (macroExpansion != null) {
-        _statusController.add("Macro Found: $macroExpansion");
+        _statusController.add("Macro Detected! Formatting...");
       } else {
         _statusController.add("Formatting (Gemini)...");
       }
 
-      // 4. Format
-      final finalResult = await engine.processRequest(
-          rawTranscript: rawText, config: config, macroContent: macroExpansion);
-      final formattedText = finalResult.formattedText;
+      // 4. Skip AI Formatting (Raw Text Only)
+      // We skip the second AI pass (`engine.processRequest`) to ensure only 
+      // the raw transcription is saved.
+      final formattedText = rawText;
+      _statusController.add("Saving Raw Text...");
 
       // Broadcast to Desktop UI
       _textStreamController.add(formattedText);
-
-      // Send to Mobile Client
-      if (client != null) {
-        client.sink.add("TRANSCRIPT:$formattedText");
-      } else {
-        // Fallback: Broadcast to all
-        for (var c in _clients) {
-          c.sink.add("TRANSCRIPT:$formattedText");
-        }
+      
+      // Auto-save to InboxService directly from Server (Ensures it appears in list)
+      try {
+          final inbox = InboxService();
+          // Attempt to extract patient name crudely or just "Untitled"
+          String patientName = "Untitled";
+          // If raw text has "patient", maybe extract? No, keep it simple for fallback.
+          
+          await inbox.addNote(formattedText, patientName: patientName, summary: "Audio Note");
+          print("✅ Automatically saved note to inbox");
+      } catch (saveError) {
+          print("❌ Failed to auto-save to inbox: $saveError");
       }
 
       _statusController.add("Ready (Sent to Mobile)");
+
+      // 🚀 SEND TO MOBILE CLIENT
+      if (client != null) {
+         client.sink.add("TRANSCRIPT:$formattedText");
+      } else {
+         for (var c in _clients) c.sink.add("TRANSCRIPT:$formattedText");
+      }
+
+      // Clear buffer
+      _audioBuffer.clear();
     } catch (e) {
       print("Error processing WAV: $e");
       _statusController.add("Error: $e");
@@ -241,13 +260,18 @@ class ConnectivityServer {
       // 1. Setup Engine & Config
       final prefs = await SharedPreferences.getInstance();
       final customGeminiKey = prefs.getString('gemini_api_key');
+      final customGroqKey = prefs.getString('groq_api_key');
+
+      // Check for missing keys
+      if (customGroqKey == null || customGroqKey.isEmpty) {
+        throw Exception("Groq API Key is missing. Please configure it in Settings.");
+      }
+
       final engine = ProcessingEngine(
-        groqApiKey: dotenv.env['GROQ_API_KEY'] ??
-            "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",
+        groqApiKey: customGroqKey,
         geminiApiKey: (customGeminiKey != null && customGeminiKey.isNotEmpty)
             ? customGeminiKey
-            : (dotenv.env['GEMINI_API_KEY'] ??
-                "AIzaSyCytBIf72AhxeTpy-RA1pqMf8fSykJbqes"),
+            : (dotenv.env['GEMINI_API_KEY'] ?? ""),
       );
 
       final groqPref =
@@ -274,14 +298,14 @@ class ConnectivityServer {
         _statusController.add("Formatting (Gemini)...");
       }
 
-      // 4. Format with AI
-      final finalResult = await engine.processRequest(
-          rawTranscript: rawText, config: config, macroContent: macroExpansion);
-      final formattedText = finalResult.formattedText;
-
+      // 4. Skip AI Formatting (Raw Text Only)
+      // We skip the second AI pass (`engine.processRequest`) to ensure only 
+      // the raw transcription is saved.
+      final formattedText = rawText;
+      
       // Broadcast to Desktop UI
       _textStreamController.add(formattedText);
-      _statusController.add("Ready (Sent to Mobile)");
+      _statusController.add("Ready (Raw Text Sent)");
 
       // 🚀 SEND TO MOBILE CLIENT
       client.sink.add("TRANSCRIPT:$formattedText");

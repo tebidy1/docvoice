@@ -141,6 +141,8 @@ class _InboxManagerDialogState extends State<InboxManagerDialog> {
                     }
 
                     final notes = snapshot.data!;
+                    // Sort descending (newest first)
+                    notes.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
                     if (notes.isEmpty) {
                       return Center(

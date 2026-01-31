@@ -42,6 +42,7 @@ class InboxService {
     note.summary = summary;
     note.suggestedMacroId = suggestedMacroId;
     note.formattedText = formattedText ?? '';
+    note.content = note.formattedText.isNotEmpty ? note.formattedText : note.originalText; // Fix LateInitializationError
     note.status =
         note.formattedText.isNotEmpty ? NoteStatus.processed : NoteStatus.draft;
     note.createdAt = DateTime.now();
@@ -58,6 +59,7 @@ class InboxService {
     try {
       final createdNote = await _apiService.createNote(note);
       _invalidateCache();
+      refresh(); // Trigger stream update
       return createdNote;
     } catch (e) {
       debugPrint('⚠️ Network failure, queuing note for sync: $e');
@@ -75,7 +77,7 @@ class InboxService {
   }
 
   /// Update an existing note (Legacy signature)
-  Future<void> updateNote(
+  Future<NoteModel?> updateNote(
     int noteId, {
     String? rawText,
     String? formattedText,
@@ -84,7 +86,7 @@ class InboxService {
     int? suggestedMacroId,
   }) async {
     final existing = await getNoteById(noteId);
-    if (existing == null) return;
+    if (existing == null) return null;
 
     if (rawText != null) existing.originalText = rawText;
     if (formattedText != null) existing.formattedText = formattedText;
@@ -96,7 +98,7 @@ class InboxService {
       existing.status = NoteStatus.processed;
     }
 
-    await updateNoteModel(existing);
+    return await updateNoteModel(existing);
   }
 
   /// Update an existing note using NoteModel
@@ -223,18 +225,51 @@ class InboxService {
   // Real-time Streams (Polling)
   // ============================================
 
-  /// Watch pending notes
-  Stream<List<NoteModel>> watchPendingNotes() async* {
-    while (true) {
-      try {
-        final notes = await getPendingNotes(forceRefresh: true);
-        yield notes;
-      } catch (e) {
-        debugPrint('Error polling pending notes: $e');
-        // Handle error in UI
-      }
-      await Future.delayed(const Duration(seconds: 10)); // Poll every 10s
+  // Real-time Streams (Reactive + Polling)
+  final _pendingNotesController = StreamController<List<NoteModel>>.broadcast();
+  Timer? _pollingTimer;
+
+  Stream<List<NoteModel>> watchPendingNotes() {
+    // Start polling if not already started
+    if (_pollingTimer == null || !_pollingTimer!.isActive) {
+      _startPolling();
     }
+    // Return the stream
+    return _pendingNotesController.stream;
+  }
+
+  void _startPolling() async {
+    // 1. Initial Instant Load from Cache
+    try {
+      final cachedNotes = await getPendingNotes(forceRefresh: false);
+      if (cachedNotes.isNotEmpty) {
+        _pendingNotesController.add(cachedNotes);
+      }
+    } catch (e) {
+      debugPrint('Cache load failed: $e');
+    }
+
+    // 2. Fetch Fresh Data
+    _refreshPendingNotes();
+    
+    // 3. Start Polling
+    _pollingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      _refreshPendingNotes();
+    });
+  }
+
+  Future<void> _refreshPendingNotes() async {
+     try {
+       final notes = await getPendingNotes(forceRefresh: true);
+       _pendingNotesController.add(notes);
+     } catch (e) {
+       debugPrint('Error refreshing pending notes: $e');
+     }
+  }
+
+  /// Manually trigger an update (e.g. after adding a note)
+  Future<void> refresh() async {
+    await _refreshPendingNotes();
   }
 
   /// Watch archived notes

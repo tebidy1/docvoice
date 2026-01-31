@@ -16,7 +16,7 @@ class GroqService {
     String filename = 'recording.m4a', 
     String? modelId,
   }) async {
-    final effectiveModel = modelId ?? GroqModel.precise.modelId;
+    final effectiveModel = modelId ?? GroqModel.turbo.modelId;
 
     if (apiKey.isEmpty) {
       return "Error: Groq API Key not set.";

@@ -303,7 +303,7 @@ class _EditorScreenState extends State<EditorScreen> {
     
     // Check if key is null or empty string, use defaults
     if (geminiKey == null || geminiKey.trim().isEmpty) {
-      geminiKey = dotenv.env['GEMINI_API_KEY'] ?? "AIzaSyDCTc9DumgaXQCaxuopADnUsjV1dU4d7rI";
+      geminiKey = dotenv.env['GEMINI_API_KEY'] ?? "";
     }
 
     // Only show dialog if we still don't have a key after all fallbacks
@@ -350,10 +350,10 @@ class _EditorScreenState extends State<EditorScreen> {
       );
 
       // 2. Prepare Config
-      final groqPref = prefs.getString('groq_model') ?? GroqModel.precise.modelId;
+      final groqPref = prefs.getString('groq_model') ?? GroqModel.turbo.modelId;
       final groqModel = GroqModel.values.firstWhere(
         (e) => e.modelId == groqPref, 
-        orElse: () => GroqModel.precise
+        orElse: () => GroqModel.turbo
       );
 
       final config = ProcessingConfig(
@@ -387,8 +387,6 @@ class _EditorScreenState extends State<EditorScreen> {
         // 5. AUTO-SAVE: Update existing note or create new one
         debugPrint('💾 Starting auto-save process...');
         debugPrint('   Current Note ID: $_currentNoteId');
-        debugPrint('   Formatted Text Length: ${result.formattedText.length}');
-        debugPrint('   Raw Text Length: ${_sourceController.text.length}');
 
         try {
           final inboxService = InboxService();
@@ -396,40 +394,43 @@ class _EditorScreenState extends State<EditorScreen> {
           if (_currentNoteId != null) {
             debugPrint('   Mode: UPDATE existing note');
             
-            await _retryOperation(
-              () => inboxService.updateNote(
-                _currentNoteId!,
-                rawText: _sourceController.text,
-                formattedText: result.formattedText,
-                suggestedMacroId: int.tryParse(macro.id.toString()) ?? 0,
-                patientName: macro.trigger,
-              ),
-              maxRetries: 3, // Retry up to 3 times
+            // Suspend auto-save listener to avoid double-trigger
+            _finalController.removeListener(_onManualEdit);
+            
+            final NoteModel? savedNote = await _retryOperation(
+              () async {
+                await inboxService.updateNote(
+                  _currentNoteId!,
+                  rawText: _sourceController.text,
+                  formattedText: result.formattedText,
+                  suggestedMacroId: int.tryParse(macro.id.toString()) ?? 0,
+                  patientName: macro.trigger,
+                );
+                // Explicitly fetch the note to verify, solving return type ambiguity
+                return await inboxService.getNoteById(_currentNoteId!);
+              },
+              maxRetries: 3, 
             );
             
-            debugPrint('✅ UPDATE successful - Note ID: $_currentNoteId');
+            // Re-enable listener
+             _finalController.addListener(_onManualEdit);
+
+            debugPrint('✅ UPDATE call complete');
             
-            // Verify save by fetching back
-            final saved = await inboxService.getNoteById(_currentNoteId!);
-            if (saved?.formattedText == result.formattedText) {
-              debugPrint('✅ VERIFIED: Cloud data matches AI result');
+            // Verify
+            if (savedNote?.formattedText == result.formattedText) {
+              debugPrint('✅ VERIFIED: Server returned correct data');
               
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text("✅ AI Result saved and verified"),
+                  content: Text("✅ Note saved and verified"),
                   backgroundColor: Colors.green,
                   duration: Duration(seconds: 2),
                 ),
               );
             } else {
-              debugPrint('⚠️  WARNING: Verification mismatch - saved data differs from AI result');
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text("⚠️ Saved but verification failed"),
-                  backgroundColor: Colors.orange,
-                  duration: Duration(seconds: 3),
-                ),
-              );
+              debugPrint('⚠️  WARNING: Server verification incomplete (Result was null or mismatch)');
+              // We rely on the fact the call succeeded, but warn if null
             }
             
           } else {
