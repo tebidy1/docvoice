@@ -6,6 +6,7 @@ import '../components/highlight_line.dart';
 import 'demo_section.dart';
 import 'comparison_section.dart'; // Keep if needed elsewhere, but mainly we use DemoSection now.
 import 'demo_section.dart';
+import 'cinematic_slider_section.dart';
 
 class HeroSection extends StatefulWidget {
   final VoidCallback onTryLive;
@@ -79,37 +80,36 @@ class _HeroSectionState extends State<HeroSection> with SingleTickerProviderStat
                 }
 
                 // Two-Column Desktop Layout
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start, // Align to top
+                // New Plan: Column containing:
+                // 1. Row [CinematicSlider (Right/Start), Text (Left/End)]
+                // 2. DemoSection (Bottom)
+                
+                return Column(
                   children: [
-                    // Right Column (Demo - RTL Start) -> Wait, in RTL Row, First child is Right?
-                    // Flutter Row follows Directionality. If RTL, children are [Right, Left].
-                    // Plan: "Right (or center in RTL): Live demo card".
-                    // "Left: Hero text + badges + CTAs".
-                    // So if direction is RTL:
-                    // Child 1 (Right): Demo Card? No, typically "Start" is Right.
-                    // If we want Demo on Right (Start), it should be first?
-                    // Usually Hero Text is Start (Right in RTL), Demo is End (Left).
-                    // Plan said: "Right (or center in RTL): Live demo card". "Left: Hero text...". 
-                    // This creates a mirrored layout vs standard English (Text Left, Image Right).
-                    // In Arabic: Text Right, Image Left? Or Image Right, Text Left?
-                    // User Plan: "Right (or center in RTL): Live demo card". "Left: Hero text".
-                    // This means Demo is at the START (Right). Text is at END (Left).
-                    // This is unusual for SaaS (usually Text is Start), but I will follow instructions.
-                    // "Option A: Right (or center in RTL): Live demo card".
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center, // Align center vertically
+                      children: [
+                        // Right Column (Start in RTL): Cinematic Slider
+                        Expanded(
+                          flex: 5,
+                          child: Padding(
+                             padding: const EdgeInsets.only(top: 0),
+                             child: const CinematicSliderSection(isHeroMode: true),
+                          ),
+                        ),
+                        const SizedBox(width: 60),
+                        // Left Column (End in RTL): Text
+                        Expanded(
+                          flex: 6,
+                          child: _buildTextContent(context, false), // isCentered = false
+                        ),
+                      ],
+                    ),
                     
-                    Expanded(
-                      flex: 5,
-                      child: Padding(
-                         padding: const EdgeInsets.only(top: 40), // Align visually
-                         child: const DemoSection(),
-                      ),
-                    ),
-                    const SizedBox(width: 60),
-                    Expanded(
-                      flex: 6,
-                      child: _buildTextContent(context, false),
-                    ),
+                    const SizedBox(height: 80),
+                    
+                    // Bottom: Live Demo
+                    const DemoSection(),
                   ],
                 );
               },

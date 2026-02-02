@@ -11,8 +11,11 @@
         "128": "icons/Icon-192.png"
     },
     "permissions": [
-        "storage", 
+        "storage",
         "activeTab"
+    ],
+    "host_permissions": [
+        "https://docvoice.gumra-ai.com/*"
     ],
     "content_security_policy": {
         "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"

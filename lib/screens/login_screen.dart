@@ -94,8 +94,13 @@ class _LoginScreenState extends State<LoginScreen> {
         });
       }
     } catch (e) {
+      String msg = e.toString();
+      if (msg.contains('XMLHttpRequest') || msg.contains('NetworkError') || msg.contains('Failed host lookup')) {
+        msg = 'Network Error: Cannot reach server.\nThis might be a CORS issue or server is down.';
+      }
+      
       setState(() {
-        _errorMessage = 'Login failed: ${e.toString()}';
+        _errorMessage = msg;
         _isLoading = false;
       });
     }

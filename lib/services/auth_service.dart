@@ -16,6 +16,7 @@ class AuthService {
         'password': password,
       });
 
+      // ... (Rest of successful logic is fine) ...
       // Laravel API returns success/user/token format
       if (response['success'] == true) {
         String? token = response['token'];
@@ -50,10 +51,13 @@ class AuthService {
         }
       }
 
+      // If we got a valid JSON response but success is false, it's likely credentials
       return false;
+      
     } catch (e) {
       print('Login error: $e');
-      return false;
+      // Rethrow so the UI can show "Network Error" or "CORS Error"
+      rethrow;
     }
   }
 

@@ -12,6 +12,7 @@ import 'sections/features_section.dart';
 import 'sections/platforms_section.dart';
 import 'sections/security_section.dart';
 import 'sections/final_cta_section.dart';
+import 'sections/cinematic_slider_section.dart';
 import 'sections/footer_section.dart';
 
 class LandingPage extends StatelessWidget {
@@ -89,17 +90,16 @@ class _LandingHomeScaffoldState extends State<LandingHomeScaffold> {
                 
                 const MobileShowcaseSection(),
 
-                // 2. Comparison Section (moved from Hero)
-                Container(
-                  padding: const EdgeInsets.symmetric(vertical: 40),
-                  child: const ComparisonSection(),
-                ),
+                // ComparisonSection Removed per user request
+                // const ComparisonSection(),
 
                 const PlatformsSection(),
                 const SecuritySection(),
                 
                 FinalCTASection(onStartNow: _scrollToDemo),
                 
+                const CinematicSliderSection(),
+
                 const FooterSection(),
               ],
             ),

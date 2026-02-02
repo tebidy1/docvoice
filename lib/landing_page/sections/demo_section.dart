@@ -37,262 +37,139 @@ class _DemoSectionState extends State<DemoSection> {
 
   @override
   Widget build(BuildContext context) {
-    // Medical Card Container
-    return Container(
-      width: double.infinity,
-      constraints: const BoxConstraints(maxWidth: 800),
-      decoration: BoxDecoration(
-        color: MedColors.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: MedColors.divider),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 20, offset: const Offset(0, 8)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // 1. Card Header
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            decoration: BoxDecoration(
-              color: MedColors.surface.withOpacity(0.5),
-              border: Border(bottom: BorderSide(color: MedColors.divider)),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.description_outlined, color: MedColors.primary, size: 20),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Text(
-                    "جرّبها هنا الآن — ملاحظة طبية جاهزة خلال ثوانٍ",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                  ),
-                ),
-                // Trust Badge (Moved from Hero)
-                Tooltip(
-                  message: "محسّن للهجات الإنجليزية للناطقين بالعربية",
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: MedColors.success.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: MedColors.success.withOpacity(0.3)),
-                    ),
-                    child: Row(
-                      children: [
-                         const Icon(Icons.verified, size: 14, color: MedColors.success),
-                         const SizedBox(width: 4),
-                         Text("دقة عالية", style: TextStyle(fontSize: 12, color: MedColors.success.withOpacity(0.9), fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-
-
-          // 3. Main Interaction Area
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 0),
-            child: _buildStageContent(),
-          ),
-          
-          const SizedBox(height: 24),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildChip(String label) {
-    final isSelected = _controller.selectedTemplate == label;
-    final isProcessing = _controller.state == DemoState.recording || _controller.state == DemoState.processing;
+    // Overlapping Mic requires a Stack with overflow visible (or ample padding)
+    // We'll use a Stack where the container has margin at the bottom to allow the Mic to overlap
     
-    return InkWell(
-      onTap: isProcessing ? null : () => _controller.selectTemplate(label),
-      borderRadius: BorderRadius.circular(20),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? MedColors.primary.withOpacity(0.15) : Colors.transparent,
-          border: Border.all(color: isSelected ? MedColors.primary : MedColors.divider),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? MedColors.primary : MedColors.textMuted,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            fontSize: 13,
+    return Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.bottomCenter,
+      children: [
+        // 1. Main Card
+        Container(
+          margin: const EdgeInsets.only(bottom: 30), // Space for Mic overlap
+          width: double.infinity,
+          constraints: const BoxConstraints(maxWidth: 800),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F172A), 
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 30, offset: const Offset(0, 10)),
+            ],
+          ),
+          child: ClipRRect(
+             borderRadius: BorderRadius.circular(24),
+             child: Stack(
+               children: [
+                 // Laser Border Effect (Animated Gradient Border)
+                 Positioned.fill(
+                    child: const LaserBorder(),
+                 ),
+                 
+                 // Inner Content
+                 Container(
+                   margin: const EdgeInsets.all(2), // To show the laser border
+                   decoration: BoxDecoration(
+                     color: const Color(0xFF0F172A),
+                     borderRadius: BorderRadius.circular(22),
+                   ),
+                   padding: const EdgeInsets.fromLTRB(32, 40, 32, 60), // Extra bottom padding for Mic area
+                   child: ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 100),
+                      child: Center(child: _buildMinimalContent()),
+                   ),
+                 ),
+               ],
+             ),
           ),
         ),
-      ),
+
+        // 2. Overlapping Mic
+        Positioned(
+          bottom: 0, // Overlapping the bottom margin
+          child: Transform.scale(
+            scale: 0.8, // 20% smaller
+            child: PulseMic(
+              isRecording: _controller.state == DemoState.recording,
+              onTap: () {
+                 if (_controller.state == DemoState.recording) {
+                   _controller.stopRecording();
+                 } else if (_controller.state == DemoState.finished) {
+                   _controller.reset();
+                 } else {
+                   _controller.startRecording();
+                 }
+              },
+            ),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildStageContent() {
+  Widget _buildMinimalContent() {
     switch (_controller.state) {
       case DemoState.idle:
-        return Column(
-          children: [
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 32),
-              child: TypewriterText(
-                "سجّل ملاحظتك الطبية... اختر القالب... ملاحظتك جاهزة.",
-                style: TextStyle(color: MedColors.textMuted, fontSize: 16, height: 1.5, fontFamily: 'monospace'),
-              ),
-            ),
-            // Visual Input Box Placeholder
-            Container(
-              height: 120,
-              width: double.infinity,
-              margin: const EdgeInsets.only(bottom: 24),
-              decoration: BoxDecoration(
-                color: MedColors.background,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: MedColors.divider),
-              ),
-              child: const Center(
-                child: Text("اضغط الميكروفون للبدء...", style: TextStyle(color: MedColors.textMuted)),
-              ),
-            ),
-            PulseMic(
-              isRecording: false,
-              onTap: _controller.startRecording,
-            ),
-            const SizedBox(height: 16),
-             TextButton(
-              onPressed: _controller.useSampleText,
-              child: const Text("أو جرّب بنص مثال جاهز", style: TextStyle(color: MedColors.primary, decoration: TextDecoration.underline)),
-            ),
-            const SizedBox(height: 16),
-          ],
+        return const TypewriterText(
+          "جرب الان ..اضعط المايك وسجل ملاحظتك الطبيه",
+          style: TextStyle(color: MedColors.textMuted, fontSize: 18, height: 1.6),
+          speed: Duration(milliseconds: 50),
         );
         
       case DemoState.recording:
         return Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-             const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Text("جاري الاستماع...", style: TextStyle(color: MedColors.error, fontWeight: FontWeight.bold)),
-            ),
-            // Active Recording Box
-            Container(
-              height: 120,
-              width: double.infinity,
-              margin: const EdgeInsets.only(bottom: 24),
-              decoration: BoxDecoration(
-                color: MedColors.background,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: MedColors.error.withOpacity(0.5)),
-                boxShadow: [BoxShadow(color: MedColors.error.withOpacity(0.1), blurRadius: 10)],
-              ),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Animate(
-                    onPlay: (c) => c.repeat(reverse: true),
-                    effects: [ScaleEffect(begin: const Offset(1,1), end: const Offset(1.02, 1.02), duration: 500.ms)],
-                    child: const Icon(Icons.mic, color: MedColors.error, size: 40),
-                  ),
-                ],
-              ),
-            ),
-            
-            PulseMic(
-              isRecording: true,
-              onTap: _controller.stopRecording,
-            ),
+            const Text("جاري الاستماع...", style: TextStyle(color: MedColors.error, fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             Text(
               "00:${_controller.recordSeconds.toString().padLeft(2, '0')}",
-              style: const TextStyle(fontSize: 24, fontFamily: 'monospace', color: Colors.white),
+              style: const TextStyle(fontSize: 32, fontFamily: 'monospace', color: Colors.white, fontWeight: FontWeight.w300),
             ),
-            const SizedBox(height: 24),
           ],
         );
 
       case DemoState.processing:
-        return SizedBox(
-           height: 300,
-           child: Stack(
-             children: [
-               _buildOutputBox("النص المستخرج", "جاري المعالجة...", false),
-               const LaserBeam(), // Processing Effect
-             ],
-           ),
-        );
-
       case DemoState.templateSelection:
+      case DemoState.generating:
          return Column(
+           mainAxisSize: MainAxisSize.min,
            children: [
-             _buildOutputBox("النص المستخرج", _controller.transcribedText, false),
-             const SizedBox(height: 24),
-             
-             const Text("اختر القالب للمتابعة", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
+             const Text("جاري المعالجة...", style: TextStyle(color: MedColors.primary, fontSize: 16)),
              const SizedBox(height: 16),
-             
-             // Template Chips (Now appearing here)
-             Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              alignment: WrapAlignment.center,
-              children: [
-                _buildChip("SOAP Note"),
-                _buildChip("Radiology Request"),
-                _buildChip("Progress Note"),
-                _buildChip("Discharge Summary"),
-              ],
-            ).animate().fade().slideY(begin: 0.2, end: 0),
-             
-             const SizedBox(height: 24),
+             SizedBox(
+               width: 200, height: 2,
+               child: const LinearProgressIndicator(backgroundColor: Colors.transparent).animate().fade(),
+             )
            ],
          );
 
-      case DemoState.generating:
-         return Column(
-          children: [
-            _buildOutputBox("النص المستخرج", _controller.transcribedText, false),
-            const SizedBox(height: 24),
-            SizedBox(
-              height: 100, // Space for laser
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  const Text("نولّد الملاحظة وفق القالب...", style: TextStyle(color: MedColors.textMuted)),
-                  const LaserBeam(),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-          ],
-        );
-
       case DemoState.finished:
         return Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            _buildOutputBox("الملاحظة النهائية (${_controller.selectedTemplate})", _controller.formattedText, true),
-            
-            if (_controller.demoCompleted)
-              _buildGatingBanner(),
-              
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                MedButton(
-                  label: "ابدأ من جديد", 
-                  onPressed: _controller.reset,
-                  type: ButtonType.text,
-                  icon: Icons.refresh,
-                ),
-              ],
-            ),
+             SelectableText(
+               _controller.formattedText,
+               textAlign: TextAlign.center,
+               style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.6),
+             ).animate().fade(),
+             const SizedBox(height: 16),
+             // Minimal Copy Hint
+             Container(
+               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+               decoration: BoxDecoration(
+                 color: MedColors.success.withOpacity(0.1),
+                 borderRadius: BorderRadius.circular(20),
+                 border: Border.all(color: MedColors.success.withOpacity(0.2)),
+               ),
+               child: Row(
+                 mainAxisSize: MainAxisSize.min,
+                 children: [
+                   const Icon(Icons.check, size: 14, color: MedColors.success),
+                   const SizedBox(width: 8),
+                   Text("تم إنشاء الملاحظة بنجاح", style: TextStyle(color: MedColors.success.withOpacity(0.9), fontSize: 12)),
+                 ],
+               ),
+             ),
           ],
         );
 
@@ -300,76 +177,53 @@ class _DemoSectionState extends State<DemoSection> {
         return const SizedBox();
     }
   }
+}
 
-  Widget _buildOutputBox(String title, String content, bool isFeatured) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: MedColors.background,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: isFeatured ? MedColors.success.withOpacity(0.5) : MedColors.divider),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(title, style: TextStyle(color: isFeatured ? MedColors.success : MedColors.textMuted, fontSize: 13, fontWeight: FontWeight.bold)),
-              IconButton(
-                icon: const Icon(Icons.copy, size: 16, color: MedColors.textMuted),
-                onPressed: () {
-                   Clipboard.setData(ClipboardData(text: content));
-                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم النسخ!")));
-                },
-              )
-            ],
-          ),
-          const SizedBox(height: 8),
-          SelectableText(
-            content, 
-            style: TextStyle(
-              fontSize: 14, 
-              height: 1.6, 
-              fontFamily: isFeatured ? 'monospace' : null,
-              color: Colors.white
-            ),
-            textDirection: TextDirection.ltr, // Medical notes usually English
-          ),
-        ],
-      ),
-    ).animate().fade().slideY(begin: 0.1, end: 0);
+// Simple Laser Border Animation
+class LaserBorder extends StatefulWidget {
+  const LaserBorder({super.key});
+
+  @override
+  State<LaserBorder> createState() => _LaserBorderState();
+}
+
+class _LaserBorderState extends State<LaserBorder> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(seconds: 3))..repeat();
   }
 
-  Widget _buildGatingBanner() {
-    return Container(
-      margin: const EdgeInsets.only(top: 24),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [MedColors.primary.withOpacity(0.1), MedColors.primary.withOpacity(0.05)]),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: MedColors.primary.withOpacity(0.3)),
-      ),
-      child: Column(
-        children: [
-          const Text("جاهز للمزيد؟", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          const SizedBox(height: 8),
-          const Text(
-            "سجّل الدخول لتجربة قوالب إضافية وحفظ إعداداتك وتشغيلها عبر الجوال/ويندوز/إضافة كروم.",
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13, color: MedColors.textMuted),
-          ),
-          const SizedBox(height: 16),
-           MedButton(
-              label: "سجّل الدخول وجرّب مرة أخرى",
-              onPressed: () {}, // Redirect logic
-              type: ButtonType.primary,
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Container(
+          decoration: BoxDecoration(
+            gradient: SweepGradient(
+              center: Alignment.center,
+              colors: [
+                Colors.transparent, 
+                MedColors.primary, 
+                Colors.white, 
+                MedColors.primary, 
+                Colors.transparent
+              ],
+              stops: const [0.0, 0.45, 0.5, 0.55, 1.0],
+              transform: GradientRotation(_controller.value * 6.28), // Rotate 360 deg
             ),
-           const SizedBox(height: 8),
-           const Text("يستغرق أقل من دقيقة.", style: TextStyle(fontSize: 11, color: MedColors.textMuted)),
-        ],
-      ),
-    ).animate().fade(duration: 800.ms);
+          ),
+        );
+      },
+    );
   }
 }

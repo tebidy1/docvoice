@@ -1,35 +1,29 @@
 {
-    "name": "scribeflow",
-    "short_name": "scribeflow",
-    "start_url": ".",
-    "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
-    "prefer_related_applications": false,
-    "icons": [
-        {
-            "src": "icons/Icon-192.png",
-            "sizes": "192x192",
-            "type": "image/png"
-        },
-        {
-            "src": "icons/Icon-512.png",
-            "sizes": "512x512",
-            "type": "image/png"
-        },
-        {
-            "src": "icons/Icon-maskable-192.png",
-            "sizes": "192x192",
-            "type": "image/png",
-            "purpose": "maskable"
-        },
-        {
-            "src": "icons/Icon-maskable-512.png",
-            "sizes": "512x512",
-            "type": "image/png",
-            "purpose": "maskable"
-        }
-    ]
+    "name": "ScribeFlow",
+    "description": "AI-Powered Medical Documentation",
+    "version": "1.0.0",
+    "manifest_version": 3,
+    "action": {
+        "default_icon": "icons/Icon-192.png"
+    },
+    "side_panel": {
+        "default_path": "index.html"
+    },
+    "background": {
+        "service_worker": "background.js"
+    },
+    "icons": {
+        "128": "icons/Icon-192.png"
+    },
+    "permissions": [
+        "storage",
+        "activeTab",
+        "sidePanel"
+    ],
+    "host_permissions": [
+        "https://docvoice.gumra-ai.com/*"
+    ],
+    "content_security_policy": {
+        "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+    }
 }
