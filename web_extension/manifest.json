@@ -1,0 +1,20 @@
+{
+    "name": "ScribeFlow",
+    "description": "AI-Powered Medical Documentation",
+    "version": "1.0.0",
+    "manifest_version": 3,
+    "action": {
+        "default_popup": "index.html",
+        "default_icon": "icons/Icon-192.png"
+    },
+    "icons": {
+        "128": "icons/Icon-192.png"
+    },
+    "permissions": [
+        "storage", 
+        "activeTab"
+    ],
+    "content_security_policy": {
+        "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+    }
+}

@@ -165,7 +165,10 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   }
 
   Future<void> _restoreWindow() async {
-    // Optional: restore to some default state if needed
+    // Restore to Mini-Bar / Pill dimensions (Floating Bar)
+    if (mounted) {
+       await WindowManagerHelper.collapseToPill(context);
+    }
   }
 
   Future<void> _applyTemplate(Macro macro) async {
@@ -519,7 +522,10 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
           children: [
             IconButton(
               icon: Icon(Icons.arrow_back, color: theme.colorScheme.onSurface),
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () async {
+                 await _restoreWindow();
+                 if (mounted) Navigator.of(context).pop();
+              },
               tooltip: 'Close',
             ),
             const SizedBox(width: 8),
@@ -546,10 +552,22 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
                 ],
               ),
             ),
+            // Minimize / Return to Bar
+            IconButton(
+              icon: Icon(Icons.close_fullscreen, color: Colors.grey[400]),
+              onPressed: () async {
+                 // await windowManager.hide(); // REMOVED: Don't hide, just return to mini mode
+                 await _restoreWindow(); // Reset size and position
+                 if (mounted) Navigator.of(context).pop();
+              },
+              tooltip: 'Return to List',
+            ),
             IconButton(
               icon: Icon(Icons.delete_outline, color: Colors.red[400]),
               onPressed: () async {
                 await _inboxService.deleteNote(widget.note.id);
+                // We also restore window on delete
+                await _restoreWindow();
                 if (mounted) Navigator.of(context).pop();
               },
               tooltip: 'Delete Note',

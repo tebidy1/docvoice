@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!-- Chrome Extension Index - No BASE HREF -->
+  
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="AI-Powered Medical Documentation">
+
+  <!-- Extensions handle icons via manifest, but good to keep -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>ScribeFlow</title>
+  <link rel="manifest" href="manifest.json">
+  
+  <script>
+    // This helps Flutter routing work within the extension context
+    window.flutterWebRenderer = "html";
+  </script>
+</head>
+<body>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

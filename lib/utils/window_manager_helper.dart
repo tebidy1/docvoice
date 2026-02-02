@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb; // Explicit import
 import 'window_manager_proxy.dart';
 import 'package:screen_retriever/screen_retriever.dart';
 
@@ -7,6 +8,7 @@ class WindowManagerHelper {
 
   /// Expands window to sidebar mode and docks to right with full height
   static Future<void> expandToSidebar(BuildContext context) async {
+    if (kIsWeb) return; // Web Guard
     try {
       final primaryDisplay = await screenRetriever.getPrimaryDisplay();
       final screenSize = primaryDisplay.size;
