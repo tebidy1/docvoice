@@ -245,7 +245,7 @@ class _EditorScreenState extends State<EditorScreen> {
                   
                   // Check if transcript is an error message
                   if (transcript.startsWith('Error:')) {
-                    _sourceController.text = "❌ Transcription failed. Please check your API key and try again.";
+                    _sourceController.text = "❌ $transcript";
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text(transcript), backgroundColor: Colors.red)
                     );

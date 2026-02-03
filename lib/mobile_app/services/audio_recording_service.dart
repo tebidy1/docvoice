@@ -9,14 +9,21 @@ class AudioRecordingService {
   String? _currentPath;
 
   Future<bool> hasPermission() async {
-    if (kIsWeb) return true; // Web manages permissions via browser prompt automatically on start
+    // if (kIsWeb) return true; // Removed: We need to actually check/request permission on Web too
     
+    _audioRecorder ??= AudioRecorder();
     // Check permission using permission_handler for broader compatibility
-    var status = await Permission.microphone.status;
-    if (status.isDenied) {
-      status = await Permission.microphone.request();
+    if (!kIsWeb) {
+      var status = await Permission.microphone.status;
+      if (status.isDenied) {
+        status = await Permission.microphone.request();
+      }
+      return status.isGranted;
+    } else {
+      // On Web, use the recorder's built-in check which triggers the prompt
+      return await _audioRecorder!.hasPermission();
     }
-    return status.isGranted;
+
   }
 
   Future<void> startRecording() async {

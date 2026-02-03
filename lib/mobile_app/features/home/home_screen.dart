@@ -11,6 +11,7 @@ import '../inbox/inbox_screen.dart';
 import '../settings/settings_screen.dart';
 import '../../services/audio_recording_service.dart';
 import 'package:uuid/uuid.dart';
+import '../../../utils/permission_fixer.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -49,7 +50,22 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!_isRecording) {
       final success = await _audioService.hasPermission();
       if (!success) {
-         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Microphone permission required")));
+         if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(
+             SnackBar(
+               content: const Text("Microphone permission required"),
+               backgroundColor: Colors.orange,
+               action: SnackBarAction(
+                 label: "FIX PERMISSION",
+                 textColor: Colors.white,
+                 onPressed: () {
+                   openPermissionFixPage();
+                 },
+               ),
+               duration: const Duration(seconds: 10),
+             ),
+           );
+         }
          return;
       }
       

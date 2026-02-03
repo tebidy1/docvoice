@@ -2,33 +2,52 @@
 <html>
 
 <head>
-  <!-- Chrome Extension Index - No BASE HREF -->
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+  -->
+  <base href="./">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="AI-Powered Medical Documentation">
 
-  <!-- Extensions handle icons via manifest, but good to keep -->
+  <!-- iOS meta tags & icons -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="scribeflow">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png" />
 
   <title>ScribeFlow</title>
   <link rel="manifest" href="manifest.json">
 
-  <!-- script removed to comply with CSP -->
+  <!-- CSS FIX: Ensure body takes full height -->
   <style>
     html,
     body {
-      width: 400px;
-      height: 600px;
+      height: 100vh;
+      /* Use viewport height */
+      width: 100vw;
       margin: 0;
       padding: 0;
       overflow: hidden;
+      background-color: #000000;
+      /* Black background to contrast with app */
     }
   </style>
+
+  <!-- This script adds the flutter initialization JS code -->
+  <script src="flutter.js" defer></script>
+  <!-- CSP Compliance: Load extension logic from external file -->
+  <script src="extension_loader.js" defer></script>
 </head>
 
 <body>
-  <script src="flutter_bootstrap.js" async></script>
+  <div id="loading" style="display:flex; justify-content:center; align-items:center; height:100vh; color: white;">
+    <p style="font-family:sans-serif;">Loading ScribeFlow Extension...</p>
+  </div>
 </body>
 
 </html>
