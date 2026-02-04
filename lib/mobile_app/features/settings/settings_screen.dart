@@ -4,9 +4,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/websocket_service.dart';
 import '../../core/theme.dart';
 import 'macro_manager_screen.dart';
-import 'package:scribe_brain/scribe_brain.dart';
 import '../../services/macro_service.dart';
-import '../../services/auth_service.dart';
+import '../../../services/auth_service.dart';
+import '../../../screens/secure_pairing_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -91,12 +91,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
+    
+    // Try to load from company settings first
+    try {
+      final companySettings = await AuthService().getCompanySettings();
+      if (companySettings != null) {
+        if (companySettings.containsKey('groq_api_key')) {
+          await prefs.setString('groq_api_key', companySettings['groq_api_key'] ?? '');
+        }
+        if (companySettings.containsKey('gemini_api_key')) {
+          await prefs.setString('gemini_api_key', companySettings['gemini_api_key'] ?? '');
+        }
+        if (companySettings.containsKey('groq_model_pref')) {
+          await prefs.setString('groq_model', companySettings['groq_model_pref'] ?? 'whisper-large-v3-turbo');
+        }
+      }
+    } catch (e) {
+      print("Failed to load company settings: $e");
+    }
+    
     setState(() {
       _ipController.text = prefs.getString('server_ip') ?? "192.168.1.100";
       _apiKeyController.text = prefs.getString('groq_api_key') ?? "";
       _geminiKeyController.text = prefs.getString('gemini_api_key') ?? "AIzaSyBy2cwuD7oisj_glDlm8ga1036iN_CsLsU";
       _specialtyController.text = prefs.getString('specialty') ?? "";
-      // Removed duplicate line
       _promptController.text = prefs.getString('global_ai_prompt') ?? "";
       _groqModel = prefs.getString('groq_model') ?? 'whisper-large-v3-turbo';
     });
@@ -153,11 +171,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _saveAIConfig() async {
     final prefs = await SharedPreferences.getInstance();
+    
+    // Save to local storage
     await prefs.setString('groq_api_key', _apiKeyController.text);
     await prefs.setString('gemini_api_key', _geminiKeyController.text);
     await prefs.setString('specialty', _specialtyController.text);
     await prefs.setString('global_ai_prompt', _promptController.text);
     await prefs.setString('groq_model', _groqModel);
+    
+    // Save API keys to company settings
+    try {
+      await AuthService().updateCompanySettings({
+        'groq_api_key': _apiKeyController.text,
+        'gemini_api_key': _geminiKeyController.text,
+        'groq_model_pref': _groqModel,
+      });
+    } catch (e) {
+      print("Failed to save company settings: $e");
+    }
     
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("AI Configuration Saved")));
@@ -199,6 +230,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     leading: const Icon(Icons.logout, color: Colors.redAccent, size: 20),
                     title: const Text("Log Out", style: TextStyle(color: Colors.redAccent, fontSize: 14)),
                     onTap: _handleLogout,
+                    dense: true,
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.devices, color: Colors.blueAccent, size: 20),
+                    title: const Text("Link New Device", style: TextStyle(color: Colors.blueAccent, fontSize: 14)),
+                    subtitle: const Text("Log in on another device using a QR code", style: TextStyle(fontSize: 11)),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const SecurePairingScreen()),
+                      );
+                    },
                     dense: true,
                   ),
                 ],
@@ -317,7 +361,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           RadioListTile<String>(
                             title: const Text("High Precision (Slower)", style: TextStyle(fontSize: 14)),
                             subtitle: const Text("whisper-large-v3", style: TextStyle(fontSize: 11, color: Colors.grey)),
-                            value: GroqModel.precise.modelId, // Use enum from scribe_brain
+                            value: 'whisper-large-v3', // High Precision
                             groupValue: _groqModel, 
                             onChanged: (val) => setState(() => _groqModel = val!),
                             activeColor: AppTheme.accent,
@@ -326,7 +370,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           RadioListTile<String>(
                             title: const Text("Turbo (Fastest)", style: TextStyle(fontSize: 14)),
                             subtitle: const Text("whisper-large-v3-turbo", style: TextStyle(fontSize: 11, color: Colors.grey)),
-                            value: GroqModel.turbo.modelId, // Use enum from scribe_brain
+                            value: 'whisper-large-v3-turbo', // Turbo
                             groupValue: _groqModel, 
                             onChanged: (val) => setState(() => _groqModel = val!),
                             activeColor: AppTheme.accent,

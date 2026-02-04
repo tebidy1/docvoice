@@ -6,7 +6,7 @@ import '../models/inbox_note.dart';
 import '../models/macro.dart';
 import '../models/smart_suggestion.dart';
 import '../services/inbox_service.dart';
-import '../services/gemini_service.dart';
+import '../services/api_service.dart';
 import '../services/keyboard_service.dart';
 import '../services/macro_service.dart';
 import 'macro_explorer_dialog.dart';
@@ -29,8 +29,6 @@ class InboxNoteDetailView extends StatefulWidget {
 }
 
 class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
-  final _geminiService =
-      GeminiService(apiKey: dotenv.env['GEMINI_API_KEY'] ?? "");
   final _keyboard = KeyboardService();
   final _inboxService = InboxService();
   final _macroService = MacroService();
@@ -200,74 +198,42 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
       final enableSuggestions =
           prefs.getBool('enable_smart_suggestions') ?? true;
 
-      print("DetailView: Generating... (Suggestions: $enableSuggestions)");
+      final apiService = ApiService();
+      
+      final response = await apiService.post('/audio/process', body: {
+        'transcript': widget.note.rawText,
+        'macro_context': macro.content,
+        'specialty': specialty,
+        'global_prompt': globalPrompt,
+        'mode': enableSuggestions ? 'smart' : 'fast',
+      });
 
-      // Use custom API key if available
-      final customApiKey = prefs.getString('gemini_api_key');
-      final effectiveApiKey = (customApiKey != null && customApiKey.isNotEmpty)
-          ? customApiKey
-          : (dotenv.env['GEMINI_API_KEY'] ?? "");
-
-      // DEBUG: Log API Key details
-      final source = (customApiKey != null && customApiKey.isNotEmpty) ? "Custom Settings" : "Environment (.env)";
-      final maskedKey = effectiveApiKey.length > 8 
-          ? "${effectiveApiKey.substring(0, 4)}...${effectiveApiKey.substring(effectiveApiKey.length - 4)}"
-          : (effectiveApiKey.isEmpty ? "[EMPTY]" : "[TOO SHORT]");
-      print("DetailView: API Key Source: $source");
-      print("DetailView: Key Used: $maskedKey");
-      print("DetailView: Raw Custom Key: '${customApiKey ?? "null"}'"); // Check for hidden chars
-          
-      final geminiService = GeminiService(apiKey: effectiveApiKey);
-
-      if (enableSuggestions) {
-        final response = await geminiService.formatTextWithSuggestions(
-          widget.note.rawText,
-          macroContext: macro.content,
-          specialty: specialty,
-          globalPrompt: globalPrompt,
-        );
-
-        if (response != null) {
+      if (response['status'] == true) {
+        final payload = response['payload'];
+        if (enableSuggestions) {
           setState(() {
-            _finalNoteController.text = response['final_note'] ?? '';
-            _suggestions = (response['missing_suggestions'] as List?)
+            _finalNoteController.text = payload['final_note'] ?? '';
+            _suggestions = (payload['missing_suggestions'] as List?)
                     ?.map((s) =>
                         SmartSuggestion.fromJson(s as Map<String, dynamic>))
                     .toList() ??
                 [];
           });
-          print("DetailView: Loaded ${_suggestions.length} suggestions");
-          
-          // AUTO-SAVE (Unified with Mobile)
-          _autoSaveGeneratedContent(response['final_note'] ?? '', macro);
-          
+          _autoSaveGeneratedContent(payload['final_note'] ?? '', macro);
         } else {
-          _showError("Failed to generate note");
+          final formattedText = payload['text'] ?? '';
+          setState(() {
+            _finalNoteController.text = formattedText;
+            _suggestions = [];
+          });
+          _autoSaveGeneratedContent(formattedText, macro);
         }
       } else {
-        final formattedText = await geminiService.formatText(
-          widget.note.rawText,
-          macroContext: macro.content,
-          specialty: specialty,
-          globalPrompt: globalPrompt,
-        );
-
-        setState(() {
-          _finalNoteController.text = formattedText;
-          _suggestions = [];
-        });
-        print("DetailView: Fast generation complete");
-        
-        // AUTO-SAVE (Unified with Mobile)
-        _autoSaveGeneratedContent(formattedText, macro);
+        _showError("Failed to generate note: ${response['message']}");
       }
     } catch (e) {
       print("DetailView: Error: $e");
-      if (e.toString().contains("leaked") || e.toString().contains("key")) {
-         _showError("⚠️ API Key Error: Please check Settings");
-      } else {
-         _showError("Generation failed: $e");
-      }
+      _showError("Generation failed: $e");
     } finally {
       _generationTimer?.cancel();
       setState(() => _isGenerating = false);

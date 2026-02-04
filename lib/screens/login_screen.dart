@@ -3,6 +3,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
 import '../widgets/window_controls.dart';
 import '../utils/window_manager_proxy.dart';
+import 'qr_login_screen.dart'; // Added for desktop QR login
+import '../mobile_app/features/auth/qr_scanner_screen.dart'; // Corrected import
+import 'package:google_fonts/google_fonts.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -80,6 +83,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final success = await _authService.login(
         _emailController.text.trim(),
         _passwordController.text,
+        deviceName: 'Desktop App',
       );
 
       if (success && mounted) {
@@ -104,6 +108,55 @@ class _LoginScreenState extends State<LoginScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  void _showSyncCodeDialog() {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Enter 6-Digit Sync Code'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Open "Settings > Link New Device" on your logged-in device to get the code.', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              maxLength: 6,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 32, letterSpacing: 8, fontWeight: FontWeight.bold),
+              decoration: const InputDecoration(hintText: '123456'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              final code = controller.text.trim();
+              if (code.length == 6) {
+                Navigator.pop(context);
+                setState(() => _isLoading = true);
+                final success = await _authService.claimPairing(code, deviceName: 'Desktop App');
+                if (mounted) {
+                  if (success) {
+                    Navigator.of(context).pushReplacementNamed('/');
+                  } else {
+                    setState(() {
+                      _isLoading = false;
+                      _errorMessage = "Invalid or expired sync code.";
+                    });
+                  }
+                }
+              }
+            },
+            child: const Text('Sync Now'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -303,6 +356,35 @@ class _LoginScreenState extends State<LoginScreen> {
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // QR Login Option - Opens Scanner
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        // Import QrScannerScreen at the top if not already imported
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const QrScannerScreen()),
+                        );
+                      },
+                      icon: const Icon(Icons.qr_code_scanner),
+                      label: const Text('Scan QR to Login'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Manual Claim Option (Sync from Mobile)
+                    TextButton.icon(
+                      onPressed: _showSyncCodeDialog,
+                      icon: const Icon(Icons.sync),
+                      label: const Text("Sync with another device"),
+                      style: TextButton.styleFrom(foregroundColor: Colors.blue),
                     ),
                     const SizedBox(height: 16),
 

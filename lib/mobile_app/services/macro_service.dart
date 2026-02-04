@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'api_service.dart';
+import '../../services/api_service.dart';
 
 class MacroModel {
   // ID can be String (local) or int (API) - we'll manage both

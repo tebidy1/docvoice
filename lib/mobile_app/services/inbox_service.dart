@@ -1,6 +1,6 @@
 import 'dart:async';
 import '../models/note_model.dart';
-import 'api_service.dart';
+import '../../services/api_service.dart';
 
 // Unified InboxService for Mobile (API Based)
 class InboxService {

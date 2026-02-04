@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:scribe_brain/scribe_brain.dart';
+import '../../../services/api_service.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme.dart';
 import '../../models/note_model.dart';
@@ -52,7 +52,8 @@ class _EditorScreenState extends State<EditorScreen> {
     
     // Initialize ID if opening existing draft
     if (widget.draftNote != null) {
-      _currentNoteId = int.tryParse(widget.draftNote!.uuid) ?? widget.draftNote!.id;
+      // Prefer server ID if valid (> 0), otherwise fallback to UUID parsing
+      _currentNoteId = (widget.draftNote!.id > 0) ? widget.draftNote!.id : int.tryParse(widget.draftNote!.uuid);
     }
 
     // Load Content
@@ -205,53 +206,24 @@ class _EditorScreenState extends State<EditorScreen> {
              }
          }
 
-        // --- Processing ---
-        if (bytes != null) {
-             final prefs = await SharedPreferences.getInstance();
-             final apiKey = prefs.getString('groq_api_key') ?? dotenv.env['GROQ_API_KEY'] ?? "";
-             
-             // Note: If empty, GroqService will use its default key
-
-             try {
-                // Initialize Engine
-                final engine = ProcessingEngine(
-                  groqApiKey: apiKey.isEmpty ? (dotenv.env['GROQ_API_KEY'] ?? "") : apiKey,
-                  geminiApiKey: dotenv.env['GEMINI_API_KEY'] ?? "",
-                );
-                
-                final groqPref = prefs.getString('groq_model') ?? GroqModel.precise.modelId;
-                final groqModel = GroqModel.values.firstWhere(
-                  (e) => e.modelId == groqPref, 
-                  orElse: () => GroqModel.precise
+         // --- Processing ---
+         if (bytes != null) {
+              try {
+                final apiService = ApiService();
+                final result = await apiService.multipartPost(
+                  '/audio/transcribe',
+                  fileBytes: bytes,
+                  filename: kIsWeb ? 'recording.webm' : 'recording.m4a',
                 );
 
-                final config = ProcessingConfig(
-                  groqModel: groqModel,
-                  geminiMode: GeminiMode.fast,
-                  userPreferences: {}
-                );
-
-                final result = await engine.processRequest(
-                  audioBytes: bytes, 
-                  config: config,
-                  skipAi: true, // Transcription Only
-                  audioFilename: kIsWeb ? 'recording.webm' : 'recording.m4a',
-                );
-                
-                final transcript = result.rawTranscript;
-                
-                if (mounted) {
-                  setState(() => _isLoading = false);
+                if (result['status'] == true) {
+                  final transcript = result['payload']['text'] ?? "";
                   
-                  // Check if transcript is an error message
-                  if (transcript.startsWith('Error:')) {
-                    _sourceController.text = "❌ $transcript";
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(transcript), backgroundColor: Colors.red)
-                    );
-                  } else {
+                  if (mounted) {
+                    setState(() => _isLoading = false);
+                    
                     final cleanText = transcript.trim();
-                    if (!cleanText.toLowerCase().contains("thank you") && cleanText.isNotEmpty) {
+                    if (cleanText.isNotEmpty) {
                         _sourceController.text = cleanText;
                         
                         // AUTO-SAVE: Create draft immediately after transcription
@@ -260,7 +232,6 @@ class _EditorScreenState extends State<EditorScreen> {
                           final noteId = await inboxService.addNote(
                             cleanText,
                             patientName: "Draft Note",
-                            // No formatted text yet - this is a draft
                           );
                           
                           setState(() => _currentNoteId = noteId);
@@ -276,19 +247,21 @@ class _EditorScreenState extends State<EditorScreen> {
                           }
                         } catch (e) {
                           debugPrint("Auto-save draft failed: $e");
-                          // Don't block user on save failure
                         }
                     }
                   }
+                } else {
+                  throw result['message'] ?? 'Transcription failed';
                 }
-             } catch (e) {
+              } catch (e) {
                 debugPrint("Transcription Error: $e");
                 if (mounted) {
                   setState(() => _isLoading = false);
-                  _sourceController.text = "❌ Transcription error: Network issue or invalid audio format";
+                  _sourceController.text = "❌ Transcription error: $e";
                 }
-             }
-        } else {
+              }
+         }
+ else {
              debugPrint("No audio bytes found/loaded.");
              if (mounted) setState(() => _isLoading = false);
         }
@@ -336,168 +309,68 @@ class _EditorScreenState extends State<EditorScreen> {
       return;
     }
 
-    setState(() => _isProcessing = true);
-    
     try {
       final prefs = await SharedPreferences.getInstance();
-      final apiKey = prefs.getString('groq_api_key') ?? dotenv.env['GROQ_API_KEY'] ?? "";
-      final geminiKey = prefs.getString('gemini_api_key') ?? dotenv.env['GEMINI_API_KEY'] ?? "";
-
-      // 1. Initialize Engine
-      final engine = ProcessingEngine(
-        groqApiKey: apiKey,
-        geminiApiKey: geminiKey,
-      );
-
-      // 2. Prepare Config
-      final groqPref = prefs.getString('groq_model') ?? GroqModel.turbo.modelId;
-      final groqModel = GroqModel.values.firstWhere(
-        (e) => e.modelId == groqPref, 
-        orElse: () => GroqModel.turbo
-      );
-
-      final config = ProcessingConfig(
-        groqModel: groqModel,
-        geminiMode: _useHighAccuracy ? GeminiMode.smart : GeminiMode.fast,
-        selectedMacroId: macro.id.toString(),
-        userPreferences: {
-          'specialty': prefs.getString('specialty') ?? 'General Practice',
-          'global_prompt': prefs.getString('global_ai_prompt') ?? '',
-        }
-      );
-
-      // 3. Process Request (Passing Raw Text from Editor to preserve edits)
-      final rawText = _sourceController.text;
+      final apiService = ApiService();
       
-      final result = await engine.processRequest(
-        rawTranscript: _sourceController.text, // Use edited text
-        config: config,
-        macroContent: macro.content,
-        // No audioFilename needed as we are passing rawTranscript
-      );
+      final response = await apiService.post('/audio/process', body: {
+        'transcript': _sourceController.text,
+        'macro_context': macro.content,
+        'specialty': prefs.getString('specialty') ?? 'General Practice',
+        'global_prompt': prefs.getString('global_ai_prompt') ?? '',
+        'mode': _useHighAccuracy ? 'smart' : 'fast',
+      });
 
-      // 4. Update UI
-      if (mounted) {
-        setState(() {
-          _finalController.text = result.formattedText;
-          _suggestions = result.suggestions.map((s) => s.toJson()).toList(); // Map back to existing UI logic
-        });
-
-
-        // 5. AUTO-SAVE: Update existing note or create new one
-        debugPrint('💾 Starting auto-save process...');
-        debugPrint('   Current Note ID: $_currentNoteId');
-
-        try {
-          final inboxService = InboxService();
-          
-          if (_currentNoteId != null) {
-            debugPrint('   Mode: UPDATE existing note');
-            
-            // Suspend auto-save listener to avoid double-trigger
-            _finalController.removeListener(_onManualEdit);
-            
-            final NoteModel? savedNote = await _retryOperation(
-              () async {
-                await inboxService.updateNote(
-                  _currentNoteId!,
-                  rawText: _sourceController.text,
-                  formattedText: result.formattedText,
-                  suggestedMacroId: int.tryParse(macro.id.toString()) ?? 0,
-                  patientName: macro.trigger,
-                );
-                // Explicitly fetch the note to verify, solving return type ambiguity
-                return await inboxService.getNoteById(_currentNoteId!);
-              },
-              maxRetries: 3, 
-            );
-            
-            // Re-enable listener
-             _finalController.addListener(_onManualEdit);
-
-            debugPrint('✅ UPDATE call complete');
-            
-            // Verify
-            if (savedNote?.formattedText == result.formattedText) {
-              debugPrint('✅ VERIFIED: Server returned correct data');
-              
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text("✅ Note saved and verified"),
-                  backgroundColor: Colors.green,
-                  duration: Duration(seconds: 2),
-                ),
-              );
+      if (response['status'] == true) {
+        final payload = response['payload'];
+        if (mounted) {
+          setState(() {
+            _finalController.text = payload['final_note'] ?? payload['text'] ?? '';
+            if (payload.containsKey('missing_suggestions')) {
+              _suggestions = (payload['missing_suggestions'] as List).cast<Map<String, dynamic>>();
             } else {
-              debugPrint('⚠️  WARNING: Server verification incomplete (Result was null or mismatch)');
-              // We rely on the fact the call succeeded, but warn if null
+              _suggestions = [];
             }
-            
-          } else {
-            debugPrint('   Mode: CREATE new note');
-            
-            final noteId = await inboxService.addNote(
-              result.rawTranscript,
-              formattedText: result.formattedText,
-              suggestedMacroId: int.tryParse(macro.id.toString()) ?? 0,
-              patientName: macro.trigger,
-            );
-            
-            setState(() => _currentNoteId = noteId);
-            debugPrint('✅ CREATE successful - New Note ID: $noteId');
-            
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text("✅ New note created (#$noteId)"),
-                backgroundColor: Colors.green,
-                duration: const Duration(seconds: 2),
-              ),
-            );
+          });
+
+          // 5. AUTO-SAVE: Update existing note or create new one
+          try {
+            final inboxService = InboxService();
+            if (_currentNoteId != null) {
+              await inboxService.updateNote(
+                _currentNoteId!,
+                rawText: _sourceController.text,
+                formattedText: _finalController.text,
+                suggestedMacroId: int.tryParse(macro.id.toString()) ?? 0,
+                patientName: macro.trigger,
+              );
+              
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("✅ Note saved and verified"), backgroundColor: Colors.green),
+                );
+              }
+            } else {
+              final noteId = await inboxService.addNote(
+                _sourceController.text,
+                formattedText: _finalController.text,
+                suggestedMacroId: int.tryParse(macro.id.toString()) ?? 0,
+                patientName: macro.trigger,
+              );
+              setState(() => _currentNoteId = noteId);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text("✅ New note created (#$noteId)"), backgroundColor: Colors.green),
+                );
+              }
+            }
+          } catch (e) {
+            debugPrint('❌ AUTO-SAVE FAILED: $e');
           }
-          
-        } catch (e, stackTrace) {
-          debugPrint('❌ AUTO-SAVE FAILED: $e');
-          debugPrint('   Stack trace:\n$stackTrace');
-          
-          // Determine if it's a network issue or API error
-          final errorStr = e.toString().toLowerCase();
-          final isNetworkError = errorStr.contains('socketexception') ||
-                                 errorStr.contains('timeout') ||
-                                 errorStr.contains('connection') ||
-                                 errorStr.contains('failed host lookup');
-          
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    isNetworkError ? '⚠️ Save Failed: Network Error' : '❌ Save Failed: Server Error',
-                    style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    isNetworkError
-                        ? 'Could not connect to server. Your result is visible locally but not synced.'
-                        : 'Server error occurred. Please try again.',
-                    style: GoogleFonts.inter(fontSize: 11),
-                  ),
-                ],
-              ),
-              backgroundColor: isNetworkError ? Colors.orange : Colors.red,
-              duration: const Duration(seconds: 6),
-              action: SnackBarAction(
-                label: 'Retry',
-                textColor: Colors.white,
-                onPressed: () => _applyMacroWithAI(macro),
-              ),
-            ),
-          );
         }
+      } else {
+        throw response['message'] ?? 'Processing failed';
       }
-
-
     } catch (e, stackTrace) {
       debugPrint('❌ FULL AI ERROR: $e');
       debugPrint('❌ STACK TRACE:\n$stackTrace');

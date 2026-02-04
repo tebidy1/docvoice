@@ -8,8 +8,9 @@ import '../services/theme_service.dart';
 import '../models/app_theme.dart';
 import '../services/connectivity_server.dart';
 import '../desktop/qr_pairing_dialog.dart';
-import 'package:scribe_brain/scribe_brain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/api_service.dart';
+import 'secure_pairing_screen.dart';
 
 class SettingsDialog extends StatefulWidget {
   const SettingsDialog({super.key});
@@ -20,7 +21,7 @@ class SettingsDialog extends StatefulWidget {
 
 class _SettingsDialogState extends State<SettingsDialog> {
   String _localIp = "Loading...";
-  String _groqModelPref = GroqModel.precise.modelId;
+  String _groqModelPref = "whisper-large-v3"; // Default
   final TextEditingController _geminiKeyController = TextEditingController();
   final TextEditingController _groqKeyController = TextEditingController();
   
@@ -55,11 +56,34 @@ class _SettingsDialogState extends State<SettingsDialog> {
     });
   }
 
+  final ApiService _apiService = ApiService();
+  final AuthService _authService = AuthService();
+
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
+    
+    // 1. Try to fetch from Company Settings (Backend)
+    try {
+      final companySettings = await _authService.getCompanySettings();
+      if (companySettings != null) {
+        // Update local SharedPreferences with company values
+        if (companySettings.containsKey('groq_model_pref')) {
+          await prefs.setString('groq_model_pref', companySettings['groq_model_pref']);
+        }
+        if (companySettings.containsKey('gemini_api_key')) {
+          await prefs.setString('gemini_api_key', companySettings['gemini_api_key']);
+        }
+        if (companySettings.containsKey('groq_api_key')) {
+          await prefs.setString('groq_api_key', companySettings['groq_api_key']);
+        }
+      }
+    } catch (e) {
+      print("Failed to fetch company settings: $e");
+    }
+
     if (mounted) {
       setState(() {
-        _groqModelPref = prefs.getString('groq_model_pref') ?? GroqModel.precise.modelId;
+        _groqModelPref = prefs.getString('groq_model_pref') ?? "whisper-large-v3";
         _geminiKeyController.text = prefs.getString('gemini_api_key') ?? "";
         _groqKeyController.text = prefs.getString('groq_api_key') ?? "";
         
@@ -69,6 +93,14 @@ class _SettingsDialogState extends State<SettingsDialog> {
         _isGeminiKeyChanged = false;
         _isGroqKeyChanged = false; 
       });
+    }
+  }
+
+  Future<void> _saveBackendSettings(Map<String, dynamic> newSettings) async {
+    try {
+      await _authService.updateCompanySettings(newSettings);
+    } catch (e) {
+      print("Failed to save company settings: $e");
     }
   }
 
@@ -221,6 +253,9 @@ class _SettingsDialogState extends State<SettingsDialog> {
                                 final newKey = _groqKeyController.text.trim();
                                 await prefs.setString('groq_api_key', newKey);
                                 
+                                // Sync to backend
+                                await _saveBackendSettings({'groq_api_key': newKey});
+
                                 setState(() {
                                     _initialGroqKey = newKey;
                                     _isGroqKeyChanged = false;
@@ -274,6 +309,9 @@ class _SettingsDialogState extends State<SettingsDialog> {
                                 final newKey = _geminiKeyController.text.trim();
                                 await prefs.setString('gemini_api_key', newKey);
                                 
+                                // Sync to backend
+                                await _saveBackendSettings({'gemini_api_key': newKey});
+
                                 setState(() {
                                     _initialGeminiKey = newKey;
                                     _isGeminiKeyChanged = false;
@@ -311,10 +349,12 @@ class _SettingsDialogState extends State<SettingsDialog> {
                             ),
                             onPressed: () async {
                               final prefs = await SharedPreferences.getInstance();
+                              final Map<String, dynamic> syncData = {};
                               
                               if (_isGroqKeyChanged) {
                                 final newGroqKey = _groqKeyController.text.trim();
                                 await prefs.setString('groq_api_key', newGroqKey);
+                                syncData['groq_api_key'] = newGroqKey;
                                 setState(() {
                                     _initialGroqKey = newGroqKey;
                                     _isGroqKeyChanged = false;
@@ -324,10 +364,15 @@ class _SettingsDialogState extends State<SettingsDialog> {
                               if (_isGeminiKeyChanged) {
                                 final newGeminiKey = _geminiKeyController.text.trim();
                                 await prefs.setString('gemini_api_key', newGeminiKey);
+                                syncData['gemini_api_key'] = newGeminiKey;
                                 setState(() {
                                     _initialGeminiKey = newGeminiKey;
                                     _isGeminiKeyChanged = false;
                                 });
+                              }
+
+                              if (syncData.isNotEmpty) {
+                                await _saveBackendSettings(syncData);
                               }
 
                               if (mounted) {
@@ -361,28 +406,42 @@ class _SettingsDialogState extends State<SettingsDialog> {
                     },
                     theme: currentTheme,
                   ),
+                  _buildMenuItem(
+                    icon: Icons.share,
+                    label: "Link New Device",
+                    subtitle: "Scan from another device to log in",
+                    onTap: () async {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const SecurePairingScreen()),
+                      );
+                    },
+                    theme: currentTheme,
+                  ),
 
                   const SizedBox(height: 16),
                   _buildSectionHeader("Transcription Precision", currentTheme),
                   _buildThemeItem(
                     icon: Icons.speed,
                     label: "Turbo (Fastest)",
-                    isSelected: _groqModelPref == GroqModel.turbo.modelId,
+                    isSelected: _groqModelPref == 'whisper-large-v3-turbo',
                     onTap: () async {
                       final prefs = await SharedPreferences.getInstance();
-                      await prefs.setString('groq_model_pref', GroqModel.turbo.modelId);
-                      setState(() => _groqModelPref = GroqModel.turbo.modelId);
+                      await prefs.setString('groq_model_pref', 'whisper-large-v3-turbo');
+                      await _saveBackendSettings({'groq_model_pref': 'whisper-large-v3-turbo'});
+                      setState(() => _groqModelPref = 'whisper-large-v3-turbo');
                     },
                     theme: currentTheme,
                   ),
                   _buildThemeItem(
                     icon: Icons.psychology_alt,
                     label: "High Precision (Slower)",
-                    isSelected: _groqModelPref == GroqModel.precise.modelId,
+                    isSelected: _groqModelPref == 'whisper-large-v3',
                     onTap: () async {
                       final prefs = await SharedPreferences.getInstance();
-                      await prefs.setString('groq_model_pref', GroqModel.precise.modelId);
-                      setState(() => _groqModelPref = GroqModel.precise.modelId);
+                      await prefs.setString('groq_model_pref', 'whisper-large-v3');
+                      await _saveBackendSettings({'groq_model_pref': 'whisper-large-v3'});
+                      setState(() => _groqModelPref = 'whisper-large-v3');
                     },
                     theme: currentTheme,
                   ),

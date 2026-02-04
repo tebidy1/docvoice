@@ -9,11 +9,12 @@ class AuthService {
   final ApiService _apiService = ApiService();
   Map<String, dynamic>? _currentUser;
 
-  Future<bool> login(String email, String password) async {
+  Future<bool> login(String email, String password, {String? deviceName}) async {
     try {
       final response = await _apiService.post('/auth/login', body: {
         'email': email,
         'password': password,
+        if (deviceName != null) 'device_name': deviceName,
       });
 
       // ... (Rest of successful logic is fine) ...
@@ -205,5 +206,91 @@ class AuthService {
   Future<void> _clearUser() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('current_user');
+  }
+
+  /// Authorize a desktop pairing session via QR or Code
+  Future<bool> authorizePairing(String pairingIdOrCode, {String? deviceName}) async {
+    try {
+      final response = await _apiService.post('/pairing/authorize', body: {
+        'pairing_id': pairingIdOrCode,
+        if (deviceName != null) 'device_name': deviceName,
+      });
+
+      return response['success'] == true;
+    } catch (e) {
+      print('Pairing authorization error: $e');
+      return false;
+    }
+  }
+
+  /// Initiate a secure pairing session (Source device already logged in)
+  Future<Map<String, dynamic>?> initiateSecurePairing() async {
+    try {
+      final response = await _apiService.get('/pairing/initiate-secure');
+      if (response['success'] == true) {
+        return response;
+      }
+      return null;
+    } catch (e) {
+      print('Secure pairing init error: $e');
+      return null;
+    }
+  }
+
+  /// Claim a secure pairing session (Target device logging in)
+  Future<bool> claimPairing(String pairingIdOrCode, {String? deviceName}) async {
+    try {
+      print('🔄 Claiming pairing with code: $pairingIdOrCode');
+      
+      final response = await _apiService.post('/pairing/claim', body: {
+        'pairing_id': pairingIdOrCode,
+        if (deviceName != null) 'device_name': deviceName,
+      });
+
+      print('📥 Claim response: $response');
+
+      if (response['success'] == true && response['token'] != null) {
+        final token = response['token'];
+        print('✅ Token received, saving...');
+        
+        await _apiService.setToken(token);
+        _currentUser = response['user'];
+        await _saveUser(_currentUser);
+        
+        print('✅ User saved: ${_currentUser?['email']}');
+        return true;
+      }
+      
+      print('❌ Claim failed: success=${response['success']}, has_token=${response['token'] != null}');
+      return false;
+    } catch (e) {
+      print('❌ Claim pairing error: $e');
+      return false;
+    }
+  }
+
+  /// Get company settings (API keys, etc.)
+  Future<Map<String, dynamic>?> getCompanySettings() async {
+    try {
+      final response = await _apiService.get('/company/settings');
+      if (response['success'] == true) {
+        return response['settings'];
+      }
+      return null;
+    } catch (e) {
+      print('Get company settings error: $e');
+      return null;
+    }
+  }
+
+  /// Update company settings
+  Future<bool> updateCompanySettings(Map<String, dynamic> settings) async {
+    try {
+      final response = await _apiService.put('/company/settings', body: settings);
+      return response['success'] == true;
+    } catch (e) {
+      print('Update company settings error: $e');
+      return false;
+    }
   }
 }

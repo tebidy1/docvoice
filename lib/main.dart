@@ -6,7 +6,9 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'desktop/desktop_app.dart' if (dart.library.html) 'desktop/desktop_app_stub.dart';
 import 'mobile_app/features/home/home_screen.dart' as unified_mobile;
 import 'mobile_app/features/auth/login_screen.dart' as unified_login;
+import 'mobile_app/features/auth/qr_scanner_screen.dart';
 import 'mobile_app/services/websocket_service.dart' as unified_ws;
+import 'screens/qr_login_screen.dart';
 import 'screens/login_screen.dart' if (dart.library.html) 'mobile_app/features/auth/login_screen.dart' as desktop_login;
 import 'screens/register_screen.dart' if (dart.library.html) 'desktop/desktop_app_stub.dart' as desktop_register;
 import 'screens/admin_dashboard_screen.dart' if (dart.library.html) 'desktop/desktop_app_stub.dart' as desktop_admin;
@@ -15,10 +17,19 @@ import 'widgets/auth_guard.dart';
 import 'widgets/admin_guard.dart';
 import 'services/theme_service.dart';
 import 'models/app_theme.dart';
+import 'core/di/service_locator.dart';
+import 'services/api_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
+
+  // Initialize API service first
+  final apiService = ApiService();
+  await apiService.init();
+
+  // Initialize dependency injection with backend integration
+  await ServiceLocator.initialize();
 
   // Only set up window manager on desktop platforms
   if (!kIsWeb) {
@@ -149,6 +160,10 @@ class _ScribeFlowAppState extends State<ScribeFlowApp> {
               return MaterialPageRoute(builder: (context) => const desktop_register.RegisterScreen());
             }
             
+            if (settings.name == '/qr-login') {
+              return MaterialPageRoute(builder: (context) => const QrLoginScreen());
+            }
+
             if (settings.name == '/admin') {
               return MaterialPageRoute(builder: (context) => AdminGuard(child: const desktop_admin.AdminDashboardScreen()));
             }

@@ -7,11 +7,11 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../utils/wav_utils.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:scribe_brain/scribe_brain.dart';
 import '../models/inbox_note.dart';
 import '../mobile_app/models/note_model.dart';
 import 'macro_service.dart';
 import 'inbox_service.dart';
+import 'api_service.dart';
 
 class ConnectivityServer {
   HttpServer? _server;
@@ -23,6 +23,7 @@ class ConnectivityServer {
 
   // Services
   final MacroService _macroService = MacroService();
+  final ApiService _apiService = ApiService();
 
   // Stream for received text (Transcription)
   final _textStreamController = StreamController<String>.broadcast();
@@ -139,39 +140,25 @@ class ConnectivityServer {
     _statusController.add("Transcribing...");
 
     try {
-      // 1. Setup Engine & Config
-      // 1. Setup Engine & Config
-      final prefs = await SharedPreferences.getInstance();
-      final customGeminiKey = prefs.getString('gemini_api_key');
-      final customGroqKey = prefs.getString('groq_api_key');
-
-      // Check for missing keys
-      if (customGroqKey == null || customGroqKey.isEmpty) {
-        throw Exception("Groq API Key is missing. Please configure it in Settings.");
-      }
-
-      final engine = ProcessingEngine(
-        groqApiKey: customGroqKey,
-        geminiApiKey: (customGeminiKey != null && customGeminiKey.isNotEmpty)
-            ? customGeminiKey
-            : (dotenv.env['GEMINI_API_KEY'] ?? ""), // Minimal fallback to .env if absolutely needed, but usually empty
+      // 1. Transcribe via Backend
+      final transcriptionResult = await _apiService.multipartPost(
+        '/audio/transcribe',
+        fileBytes: wavData,
+        filename: 'recording.wav',
+        fields: {
+          'model': 'whisper-large-v3',
+          'language': 'en',
+        },
       );
 
-      final groqPref =
-          prefs.getString('groq_model_pref') ?? GroqModel.precise.modelId;
-      final config = ProcessingConfig(
-          groqModel: GroqModel.values.firstWhere((e) => e.modelId == groqPref,
-              orElse: () => GroqModel.precise),
-          geminiMode: GeminiMode.fast,
-          userPreferences: {});
+      final rawText = transcriptionResult['payload']['text'] ?? "";
+      print("Backend Transcribed Text: $rawText");
 
-      // 2. Transcribe
-      final transcriptResult = await engine.processRequest(
-          audioBytes: wavData, config: config, skipAi: true);
-      final rawText = transcriptResult.rawTranscript;
-      print("Groq Transcribed Text: $rawText");
+      if (rawText.isEmpty) {
+        throw Exception("Transcription result is empty");
+      }
 
-      // 3. Detect Macro
+      // 2. Detect Macro (Still local for now, but we can move to backend if needed)
       final macroExpansion = await _macroService.findExpansion(rawText);
       if (macroExpansion != null) {
         _statusController.add("Macro Detected! Formatting...");
@@ -179,29 +166,29 @@ class ConnectivityServer {
         _statusController.add("Formatting (Gemini)...");
       }
 
-      // 4. Skip AI Formatting (Raw Text Only)
-      // We skip the second AI pass (`engine.processRequest`) to ensure only 
-      // the raw transcription is saved.
-      final formattedText = rawText;
-      _statusController.add("Saving Raw Text...");
+      // 3. Process via Backend (Gemini)
+      final processingResult = await _apiService.post('/audio/process', body: {
+        'transcript': rawText,
+        'macro_context': macroExpansion,
+        'mode': 'fast', // or 'smart'
+      });
+
+      final formattedText = processingResult['payload']['text'] ?? rawText;
+      _statusController.add("Saving...");
 
       // Broadcast to Desktop UI
       _textStreamController.add(formattedText);
       
-      // Auto-save to InboxService directly from Server (Ensures it appears in list)
+      // Auto-save to InboxService
       try {
           final inbox = InboxService();
-          // Attempt to extract patient name crudely or just "Untitled"
-          String patientName = "Untitled";
-          // If raw text has "patient", maybe extract? No, keep it simple for fallback.
-          
-          await inbox.addNote(formattedText, patientName: patientName, summary: "Audio Note");
+          await inbox.addNote(formattedText, patientName: "Untitled", summary: "Audio Note");
           print("✅ Automatically saved note to inbox");
       } catch (saveError) {
           print("❌ Failed to auto-save to inbox: $saveError");
       }
 
-      _statusController.add("Ready (Sent to Mobile)");
+      _statusController.add("Ready");
 
       // 🚀 SEND TO MOBILE CLIENT
       if (client != null) {
@@ -224,30 +211,23 @@ class ConnectivityServer {
 
     try {
       // Convert raw PCM to WAV
-      // Assuming 16kHz 1 channel 16bit PCM from mobile
-      // Check if we already have a RIFF header
       Uint8List audioData;
       String filename = 'recording.wav';
 
-      // Check for M4A/MP4 Header (ftyp)
-      // Usually starts with ....ftyp or 00 00 00 18 66 74 79 70
       if (_audioBuffer.length > 12 &&
-          _audioBuffer[4] == 0x66 && // f
-          _audioBuffer[5] == 0x74 && // t
-          _audioBuffer[6] == 0x79 && // y
+          _audioBuffer[4] == 0x66 && 
+          _audioBuffer[5] == 0x74 && 
+          _audioBuffer[6] == 0x79 && 
           _audioBuffer[7] == 0x70) {
-        // p
         print("M4A/AAC Header detected.");
         audioData = Uint8List.fromList(_audioBuffer);
         filename = 'recording.m4a';
       }
-      // Check for RIFF (WAV)
       else if (_audioBuffer.length > 44 &&
-          _audioBuffer[0] == 0x52 && // R
-          _audioBuffer[1] == 0x49 && // I
-          _audioBuffer[2] == 0x46 && // F
+          _audioBuffer[0] == 0x52 && 
+          _audioBuffer[1] == 0x49 && 
+          _audioBuffer[2] == 0x46 && 
           _audioBuffer[3] == 0x46) {
-        // F
         print("WAV Header detected.");
         audioData = Uint8List.fromList(_audioBuffer);
       } else {
@@ -256,41 +236,19 @@ class ConnectivityServer {
             WavUtils.addWavHeader(Uint8List.fromList(_audioBuffer), 16000, 1);
       }
 
-      // 1. Setup Engine & Config
-      // 1. Setup Engine & Config
-      final prefs = await SharedPreferences.getInstance();
-      final customGeminiKey = prefs.getString('gemini_api_key');
-      final customGroqKey = prefs.getString('groq_api_key');
+      _statusController.add("Transcribing...");
 
-      // Check for missing keys
-      if (customGroqKey == null || customGroqKey.isEmpty) {
-        throw Exception("Groq API Key is missing. Please configure it in Settings.");
-      }
-
-      final engine = ProcessingEngine(
-        groqApiKey: customGroqKey,
-        geminiApiKey: (customGeminiKey != null && customGeminiKey.isNotEmpty)
-            ? customGeminiKey
-            : (dotenv.env['GEMINI_API_KEY'] ?? ""),
+      // 1. Transcribe via Backend
+      final transcriptionResult = await _apiService.multipartPost(
+        '/audio/transcribe',
+        fileBytes: audioData,
+        filename: filename,
       );
 
-      final groqPref =
-          prefs.getString('groq_model_pref') ?? GroqModel.precise.modelId;
-      final config = ProcessingConfig(
-          groqModel: GroqModel.values.firstWhere((e) => e.modelId == groqPref,
-              orElse: () => GroqModel.precise),
-          geminiMode: GeminiMode.fast, // Desktop usually fast mode (text only)
-          userPreferences: {
-            // Can pass global prompt here if stored in desktop prefs (ToDo)
-          });
+      final rawText = transcriptionResult['payload']['text'] ?? "";
+      print("Backend Transcribed Text: $rawText");
 
-      // 2. Transcribe (Skip AI formatting first to allow macro detection)
-      final transcriptResult = await engine.processRequest(
-          audioBytes: audioData, config: config, skipAi: true);
-      var rawText = transcriptResult.rawTranscript;
-      print("Groq Transcribed Text: $rawText");
-
-      // 3. Detect Macro
+      // 2. Detect Macro
       final macroExpansion = await _macroService.findExpansion(rawText);
       if (macroExpansion != null) {
         _statusController.add("Macro Detected! Formatting...");
@@ -298,14 +256,17 @@ class ConnectivityServer {
         _statusController.add("Formatting (Gemini)...");
       }
 
-      // 4. Skip AI Formatting (Raw Text Only)
-      // We skip the second AI pass (`engine.processRequest`) to ensure only 
-      // the raw transcription is saved.
-      final formattedText = rawText;
+      // 3. Process via Backend
+      final processingResult = await _apiService.post('/audio/process', body: {
+        'transcript': rawText,
+        'macro_context': macroExpansion,
+      });
+
+      final formattedText = processingResult['payload']['text'] ?? rawText;
       
       // Broadcast to Desktop UI
       _textStreamController.add(formattedText);
-      _statusController.add("Ready (Raw Text Sent)");
+      _statusController.add("Ready");
 
       // 🚀 SEND TO MOBILE CLIENT
       client.sink.add("TRANSCRIPT:$formattedText");

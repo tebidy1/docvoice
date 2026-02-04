@@ -143,6 +143,45 @@ class ApiService {
     }
   }
 
+  /// Specialized method for multipart requests (e.g. audio upload)
+  Future<Map<String, dynamic>> multipartPost(
+    String endpoint, {
+    required List<int> fileBytes,
+    required String filename,
+    Map<String, String>? fields,
+  }) async {
+    try {
+      await init();
+      final uri = Uri.parse('$_baseUrl$endpoint');
+      final request = http.MultipartRequest('POST', uri);
+
+      // Add headers manually since request.headers is a Map<String, String>
+      request.headers.addAll({
+        'Accept': 'application/json',
+        if (_token != null) 'Authorization': 'Bearer $_token',
+      });
+
+      // Add fields
+      if (fields != null) {
+        request.fields.addAll(fields);
+      }
+
+      // Add file
+      request.files.add(http.MultipartFile.fromBytes(
+        'file',
+        fileBytes,
+        filename: filename,
+      ));
+
+      final streamedResponse = await request.send().timeout(Duration(milliseconds: _timeout));
+      final response = await http.Response.fromStream(streamedResponse);
+
+      return _handleResponse(response);
+    } catch (e) {
+      throw _handleError(e);
+    }
+  }
+
   Map<String, dynamic> _handleResponse(http.Response response) {
     final statusCode = response.statusCode;
     final responseBody = response.body;

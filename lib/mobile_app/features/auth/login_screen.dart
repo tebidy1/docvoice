@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../services/auth_service.dart';
+import '../../../services/auth_service.dart';
 import '../../features/home/home_screen.dart';
+import 'qr_scanner_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -34,7 +35,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     try {
-      final success = await AuthService().login(email, password);
+      final success = await AuthService().login(email, password, deviceName: 'Mobile Device');
       if (success) {
         if (mounted) {
            Navigator.pushReplacement(
@@ -151,11 +152,30 @@ class _LoginScreenState extends State<LoginScreen> {
                       )
                     : const Text("Login", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
+              const SizedBox(height: 16),
+              
+              // Mobile Scanner Entry
+              OutlinedButton.icon(
+                onPressed: () {
+                   Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const QrScannerScreen()),
+                  );
+                },
+                icon: const Icon(Icons.qr_code_scanner, color: Colors.white70),
+                label: const Text("Scan QR to Login / Link", style: TextStyle(color: Colors.white70)),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.white24),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
               
               const Spacer(),
               TextButton(
                 onPressed: () {
-                  // TODO: Register or Forgot Password
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text("Contact Admin for access.")),
                   );
