@@ -172,6 +172,79 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
               ),
+              const SizedBox(height: 16),
+
+              // Manual Sync Option
+              TextButton.icon(
+                onPressed: () {
+                  final controller = TextEditingController();
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      backgroundColor: const Color(0xFF1E1E1E),
+                      title: Text('Enter 6-Digit Code', style: GoogleFonts.inter(color: Colors.white)),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('Get code from Settings > Link New Device', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                          const SizedBox(height: 16),
+                          TextField(
+                            controller: controller,
+                            keyboardType: TextInputType.number,
+                            maxLength: 6,
+                            autofocus: true,
+                            style: const TextStyle(color: Colors.white, fontSize: 24, letterSpacing: 8),
+                            decoration: const InputDecoration(
+                              hintText: '123456',
+                              hintStyle: TextStyle(color: Colors.white24),
+                              counterStyle: TextStyle(color: Colors.white54),
+                            ),
+                          ),
+                        ],
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Cancel'),
+                        ),
+                        ElevatedButton(
+                          onPressed: () async {
+                            final code = controller.text.trim();
+                            if (code.length == 6) {
+                              Navigator.pop(context);
+                              setState(() => _isLoading = true);
+                              final success = await AuthService().claimPairing(
+                                code, 
+                                deviceName: 'Mobile Device (${DateTime.now().hour}:${DateTime.now().minute})'
+                              );
+                              if (mounted) {
+                                if (success) {
+                                  Navigator.pushAndRemoveUntil(
+                                    context,
+                                    MaterialPageRoute(builder: (_) => const HomeScreen()),
+                                    (route) => false,
+                                  );
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text("✅ Synced Successfully!")),
+                                  );
+                                } else {
+                                  setState(() {
+                                    _isLoading = false;
+                                    _errorMessage = "Invalid or expired sync code";
+                                  });
+                                }
+                              }
+                            }
+                          },
+                          child: const Text('Sync'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.sync, color: Colors.blueAccent),
+                label: const Text("Sync with another device", style: TextStyle(color: Colors.blueAccent)),
+              ),
               
               const Spacer(),
               TextButton(

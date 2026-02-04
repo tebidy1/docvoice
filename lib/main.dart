@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:io' show Platform;
 import 'utils/window_manager_proxy.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -85,7 +86,7 @@ class _ScribeFlowAppState extends State<ScribeFlowApp> {
   @override
   Widget build(BuildContext context) {
     // Desktop check (Windows/MacOS/Linux and NOT Web)
-    final bool isDesktop = !kIsWeb;
+    final bool isDesktop = !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
 
     return ValueListenableBuilder<AppTheme>(
       valueListenable: ThemeService(),
