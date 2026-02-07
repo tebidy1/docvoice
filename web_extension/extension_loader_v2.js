@@ -5,6 +5,19 @@ const serviceWorkerVersion = null;
 
 console.log("[ScribeFlow] Extension Loader Started");
 
+// Force HTML renderer at the global level for newer Flutter versions
+window.flutterWebRenderer = "html";
+window._flutter = window._flutter || {};
+window._flutter.loader = window._flutter.loader || {};
+window._flutter.buildConfig = {
+    renderer: "html"
+};
+
+// Also set the modern configuration object
+window.flutterConfiguration = {
+    renderer: "html"
+};
+
 window.addEventListener('load', function (ev) {
     console.log("[ScribeFlow] Window Loaded. Starting Flutter Loader...");
 
@@ -16,7 +29,7 @@ window.addEventListener('load', function (ev) {
 
             engineInitializer.initializeEngine({
                 hostElement: document.querySelector('body'),
-                renderer: 'html', // FORCE HTML renderer. Auto/CanvasKit often fails in extensions.
+                renderer: 'html', // FORCE HTML renderer.
                 assetBase: './'
             }).then(function (appRunner) {
                 console.log("[ScribeFlow] Engine Initialized. Running App...");
