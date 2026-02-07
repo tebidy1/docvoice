@@ -1,25 +1,33 @@
-import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io' show Platform;
-import 'utils/window_manager_proxy.dart';
-import 'package:provider/provider.dart';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'desktop/desktop_app.dart' if (dart.library.html) 'desktop/desktop_app_stub.dart';
-import 'mobile_app/features/home/home_screen.dart' as unified_mobile;
-import 'mobile_app/features/auth/login_screen.dart' as unified_login;
-import 'mobile_app/features/auth/qr_scanner_screen.dart';
-import 'mobile_app/services/websocket_service.dart' as unified_ws;
-import 'screens/qr_login_screen.dart';
-import 'screens/login_screen.dart' if (dart.library.html) 'mobile_app/features/auth/login_screen.dart' as desktop_login;
-import 'screens/register_screen.dart' if (dart.library.html) 'desktop/desktop_app_stub.dart' as desktop_register;
-import 'screens/admin_dashboard_screen.dart' if (dart.library.html) 'desktop/desktop_app_stub.dart' as desktop_admin;
-import 'services/auth_service.dart';
-import 'widgets/auth_guard.dart';
-import 'widgets/admin_guard.dart';
-import 'services/theme_service.dart';
-import 'models/app_theme.dart';
+import 'package:provider/provider.dart';
+
 import 'core/di/service_locator.dart';
+import 'desktop/desktop_app.dart'
+    if (dart.library.html) 'desktop/desktop_app_stub.dart';
+import 'landing_page/landing_page.dart';
+import 'landing_page/theme/app_theme.dart';
+import 'mobile_app/features/auth/login_screen.dart' as unified_login;
+import 'mobile_app/features/home/home_screen.dart' as unified_mobile;
+import 'mobile_app/services/websocket_service.dart' as unified_ws;
+import 'models/app_theme.dart';
+import 'screens/admin_dashboard_screen.dart'
+    if (dart.library.html) 'desktop/desktop_app_stub.dart' as desktop_admin;
+import 'screens/login_screen.dart'
+    if (dart.library.html) 'mobile_app/features/auth/login_screen.dart'
+    as desktop_login;
+import 'screens/qr_login_screen.dart';
+import 'screens/register_screen.dart'
+    if (dart.library.html) 'desktop/desktop_app_stub.dart' as desktop_register;
 import 'services/api_service.dart';
+import 'services/auth_service.dart';
+import 'services/theme_service.dart';
+import 'utils/window_manager_proxy.dart';
+import 'widgets/admin_guard.dart';
+import 'widgets/auth_guard.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,22 +44,23 @@ void main() async {
   if (!kIsWeb) {
     try {
       await windowManager.ensureInitialized();
-      
+
       // Check Auth State for Window Sizing
       final authService = AuthService();
       final bool isAuth = await authService.isAuthenticated();
 
-      final Size initialSize = isAuth ? const Size(280, 56) : const Size(400, 720);
-      
+      final Size initialSize =
+          isAuth ? const Size(280, 56) : const Size(400, 720);
+
       WindowOptions windowOptions = WindowOptions(
         size: initialSize,
-        center: true, 
-        backgroundColor: Colors.transparent, 
+        center: true,
+        backgroundColor: Colors.transparent,
         skipTaskbar: false,
         titleBarStyle: TitleBarStyle.hidden,
         alwaysOnTop: isAuth,
       );
-      
+
       windowManager.waitUntilReadyToShow(windowOptions, () async {
         await windowManager.setBackgroundColor(Colors.transparent);
         await windowManager.setResizable(!isAuth);
@@ -66,7 +75,8 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
-        Provider<unified_ws.WebSocketService>(create: (_) => unified_ws.WebSocketService()),
+        Provider<unified_ws.WebSocketService>(
+            create: (_) => unified_ws.WebSocketService()),
       ],
       child: const ScribeFlowApp(),
     ),
@@ -86,7 +96,8 @@ class _ScribeFlowAppState extends State<ScribeFlowApp> {
   @override
   Widget build(BuildContext context) {
     // Desktop check (Windows/MacOS/Linux and NOT Web)
-    final bool isDesktop = !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
+    final bool isDesktop =
+        !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
 
     return ValueListenableBuilder<AppTheme>(
       valueListenable: ThemeService(),
@@ -95,12 +106,14 @@ class _ScribeFlowAppState extends State<ScribeFlowApp> {
           title: 'ScribeFlow',
           debugShowCheckedModeBanner: false,
           theme: ThemeData(
-            brightness: currentTheme.isDark ? Brightness.dark : Brightness.light,
+            brightness:
+                currentTheme.isDark ? Brightness.dark : Brightness.light,
             scaffoldBackgroundColor: currentTheme.backgroundColor,
             fontFamily: 'Inter',
             colorScheme: ColorScheme.fromSeed(
               seedColor: currentTheme.micIdleIcon,
-              brightness: currentTheme.isDark ? Brightness.dark : Brightness.light,
+              brightness:
+                  currentTheme.isDark ? Brightness.dark : Brightness.light,
               surface: currentTheme.micIdleBackground,
               onSurface: currentTheme.iconColor,
               primary: currentTheme.micIdleIcon,
@@ -110,20 +123,25 @@ class _ScribeFlowAppState extends State<ScribeFlowApp> {
                 backgroundColor: currentTheme.micIdleIcon,
                 foregroundColor: Colors.white,
                 elevation: 2,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                textStyle:
+                    const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
               ),
             ),
             inputDecorationTheme: InputDecorationTheme(
               filled: true,
-              fillColor: currentTheme.isDark ? currentTheme.micIdleBackground : Colors.white,
+              fillColor: currentTheme.isDark
+                  ? currentTheme.micIdleBackground
+                  : Colors.white,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
               ),
               contentPadding: const EdgeInsets.all(16),
-              hintStyle: TextStyle(color: currentTheme.iconColor.withOpacity(0.5)),
+              hintStyle:
+                  TextStyle(color: currentTheme.iconColor.withOpacity(0.5)),
             ),
             useMaterial3: true,
           ),
@@ -135,58 +153,82 @@ class _ScribeFlowAppState extends State<ScribeFlowApp> {
                   future: _authService.isAuthenticated(),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+                      return const Scaffold(
+                          body: Center(child: CircularProgressIndicator()));
                     }
                     final isAuth = snapshot.data ?? false;
                     if (isAuth) {
                       return AuthGuard(
-                        child: isDesktop ? const DesktopApp() : const unified_mobile.HomeScreen(),
+                        child: isDesktop
+                            ? const DesktopApp()
+                            : const unified_mobile.HomeScreen(),
                       );
                     }
-                    return isDesktop ? const desktop_login.LoginScreen() : const unified_login.LoginScreen();
+                    return Theme(
+                      data: MedTheme.darkTheme,
+                      child: const Directionality(
+                        textDirection: TextDirection.rtl,
+                        child: LandingHomeScaffold(),
+                      ),
+                    );
                   },
                 ),
               );
             }
-            
+
             if (settings.name == '/home') {
               return MaterialPageRoute(
                 builder: (context) => AuthGuard(
-                  child: isDesktop ? const DesktopApp() : const unified_mobile.HomeScreen(),
+                  child: isDesktop
+                      ? const DesktopApp()
+                      : const unified_mobile.HomeScreen(),
                 ),
               );
             }
-            
+
             if (settings.name == '/register') {
-              return MaterialPageRoute(builder: (context) => const desktop_register.RegisterScreen());
+              return MaterialPageRoute(
+                  builder: (context) =>
+                      const desktop_register.RegisterScreen());
             }
-            
+
             if (settings.name == '/qr-login') {
-              return MaterialPageRoute(builder: (context) => const QrLoginScreen());
+              return MaterialPageRoute(
+                  builder: (context) => const QrLoginScreen());
             }
 
             if (settings.name == '/admin') {
-              return MaterialPageRoute(builder: (context) => AdminGuard(child: const desktop_admin.AdminDashboardScreen()));
+              return MaterialPageRoute(
+                  builder: (context) => const AdminGuard(
+                      child: desktop_admin.AdminDashboardScreen()));
             }
-            
+
             if (settings.name == '/login') {
               return MaterialPageRoute(
-                builder: (context) => isDesktop ? const desktop_login.LoginScreen() : const unified_login.LoginScreen(),
+                builder: (context) => isDesktop
+                    ? const desktop_login.LoginScreen()
+                    : const unified_login.LoginScreen(),
               );
             }
-            
+
             return MaterialPageRoute(
               builder: (context) => FutureBuilder<bool>(
                 future: _authService.isAuthenticated(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Scaffold(body: Center(child: CircularProgressIndicator()));
+                    return const Scaffold(
+                        body: Center(child: CircularProgressIndicator()));
                   }
                   final isAuth = snapshot.data ?? false;
                   if (isAuth) {
-                    return AuthGuard(child: isDesktop ? const DesktopApp() : const unified_mobile.HomeScreen());
+                    return AuthGuard(
+                        child: isDesktop
+                            ? const DesktopApp()
+                            : const unified_mobile.HomeScreen());
                   }
-                  return isDesktop ? const desktop_login.LoginScreen() : const unified_login.LoginScreen();
+                  return isDesktop
+                      ? const desktop_login.LoginScreen()
+                      : const unified_login.LoginScreen();
                 },
               ),
             );

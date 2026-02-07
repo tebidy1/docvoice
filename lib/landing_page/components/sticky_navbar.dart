@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../theme/app_colors.dart';
 
 class StickyNavbar extends StatefulWidget {
@@ -26,7 +27,8 @@ class _StickyNavbarState extends State<StickyNavbar> {
   }
 
   void _onScroll() {
-    final offset = widget.scrollController.hasClients ? widget.scrollController.offset : 0;
+    final offset =
+        widget.scrollController.hasClients ? widget.scrollController.offset : 0;
     final isScrolled = offset > 10;
     if (isScrolled != _isScrolled) {
       if (mounted) setState(() => _isScrolled = isScrolled);
@@ -83,12 +85,12 @@ class _StickyNavbarState extends State<StickyNavbar> {
               ),
             ],
           ),
-          
+
           const Spacer(),
-          
+
           // Desktop Links (Hidden on small screens - TODO: Responsive)
           if (MediaQuery.of(context).size.width > 900)
-            Row(
+            const Row(
               children: [
                 _NavLink(title: "كيف تعمل؟"),
                 _NavLink(title: "القوالب"),
@@ -97,19 +99,19 @@ class _StickyNavbarState extends State<StickyNavbar> {
                 _NavLink(title: "الأسعار"),
               ],
             ),
-          
+
           const Spacer(),
-          
+
           // Actions
           Row(
             children: [
               OutlinedButton(
-                onPressed: () {},
+                onPressed: () => Navigator.pushNamed(context, '/login'),
                 child: const Text("تسجيل الدخول"),
               ),
               const SizedBox(width: 12),
               ElevatedButton(
-                onPressed: () {},
+                onPressed: () => Navigator.pushNamed(context, '/login'),
                 child: const Text("جرّب الآن مجانًا"),
               ),
             ],

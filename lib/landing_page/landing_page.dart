@@ -1,19 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
-import 'theme/app_colors.dart';
-import 'theme/app_theme.dart';
+
 import 'components/sticky_navbar.dart';
+import 'sections/cinematic_slider_section.dart';
+import 'sections/final_cta_section.dart';
+import 'sections/footer_section.dart';
 import 'sections/hero_section.dart';
-import 'sections/comparison_section.dart';
 import 'sections/how_it_works_section.dart';
-import 'sections/demo_section.dart';
 import 'sections/mobile_showcase_section.dart';
-import 'sections/features_section.dart';
 import 'sections/platforms_section.dart';
 import 'sections/security_section.dart';
-import 'sections/final_cta_section.dart';
-import 'sections/cinematic_slider_section.dart';
-import 'sections/footer_section.dart';
+import 'theme/app_colors.dart';
+import 'theme/app_theme.dart';
 
 class LandingPage extends StatelessWidget {
   const LandingPage({super.key});
@@ -24,7 +21,7 @@ class LandingPage extends StatelessWidget {
       title: 'MedNote AI',
       debugShowCheckedModeBanner: false,
       theme: MedTheme.darkTheme,
-      
+
       // Force RTL and Arabic
       locale: const Locale('ar', 'AE'),
       supportedLocales: const [
@@ -62,11 +59,15 @@ class _LandingHomeScaffoldState extends State<LandingHomeScaffold> {
   void _scrollToDemo() {
     if (_demoKey.currentContext != null) {
       Scrollable.ensureVisible(
-        _demoKey.currentContext!, 
+        _demoKey.currentContext!,
         duration: const Duration(milliseconds: 800),
         curve: Curves.easeInOut,
       );
     }
+  }
+
+  void _navigateToLogin() {
+    Navigator.pushNamed(context, '/login');
   }
 
   @override
@@ -80,14 +81,14 @@ class _LandingHomeScaffoldState extends State<LandingHomeScaffold> {
             child: Column(
               children: [
                 const SizedBox(height: 80), // Navbar Spacer
-                
+
                 HeroSection(
-                  onTryLive: _scrollToDemo,
+                  onTryLive: _navigateToLogin,
                   onSeeExample: _scrollToDemo,
                 ),
-                
+
                 const HowItWorksSection(),
-                
+
                 const PlatformsSection(),
 
                 // ComparisonSection Removed per user request
@@ -95,16 +96,16 @@ class _LandingHomeScaffoldState extends State<LandingHomeScaffold> {
 
                 const MobileShowcaseSection(),
                 const SecuritySection(),
-                
-                FinalCTASection(onStartNow: _scrollToDemo),
-                
+
+                FinalCTASection(onStartNow: _navigateToLogin),
+
                 const CinematicSliderSection(),
 
                 const FooterSection(),
               ],
             ),
           ),
-          
+
           // Sticky Navbar overlay
           Positioned(
             top: 0,
