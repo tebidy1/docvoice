@@ -124,8 +124,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
               final code = controller.text.trim();
               if (code.length == 6) {
                 Navigator.pop(context);
-                // Default to claim mode for manual entry (most common use case)
-                _processPairing(code, isClaim: true);
+                // Use authorize mode - this user is AUTHORIZING another device (Extension/Desktop)
+                _processPairing(code, isClaim: false);
               }
             },
             child: const Text('Login'),

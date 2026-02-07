@@ -126,6 +126,40 @@ class ScribeFlowExtensionApp extends StatefulWidget {
 
 class _ScribeFlowExtensionAppState extends State<ScribeFlowExtensionApp> {
   final AuthService _authService = AuthService();
+  bool? _isAuthenticated; // Cached auth state
+  bool _isCheckingAuth = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAuth();
+  }
+
+  Future<void> _checkAuth() async {
+    try {
+      final isAuth = await _authService.isAuthenticated().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          print("Auth Check Timeout!");
+          return false;
+        },
+      );
+      if (mounted) {
+        setState(() {
+          _isAuthenticated = isAuth;
+          _isCheckingAuth = false;
+        });
+      }
+    } catch (e) {
+      print("Auth check error: $e");
+      if (mounted) {
+        setState(() {
+          _isAuthenticated = false;
+          _isCheckingAuth = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -148,39 +182,26 @@ class _ScribeFlowExtensionAppState extends State<ScribeFlowExtensionApp> {
             ),
             useMaterial3: true,
           ),
-          onGenerateRoute: (settings) {
-            return MaterialPageRoute(
-              builder: (context) => FutureBuilder<bool>(
-                future: _authService.isAuthenticated().timeout(
-                  const Duration(seconds: 5),
-                  onTimeout: () {
-                    print("Auth Check Timeout!"); 
-                    return false; // Default to login on timeout
-                  },
-                ),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Scaffold(body: Center(child: CircularProgressIndicator()));
-                  }
-                  
-                  if (snapshot.hasError) {
-                     return Scaffold(body: Center(child: Text("Auth Error: ${snapshot.error}")));
-                  }
-
-                  final isAuth = snapshot.data ?? false;
-                  
-                  if (isAuth) {
-                    return AuthGuard(child: const ExtensionHomeScreen());
-                  } else {
-                    return const ExtensionLoginScreen();
-                  }
-                },
-              ),
-            );
-          },
-          initialRoute: '/',
+          home: _buildHomeScreen(),
         );
       },
     );
   }
+
+  Widget _buildHomeScreen() {
+    // Still checking auth? Show loading
+    if (_isCheckingAuth) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    // Auth check complete - show appropriate screen
+    if (_isAuthenticated == true) {
+      return AuthGuard(child: const ExtensionHomeScreen());
+    } else {
+      return const ExtensionLoginScreen();
+    }
+  }
 }
+

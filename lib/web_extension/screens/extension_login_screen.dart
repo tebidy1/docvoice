@@ -38,6 +38,7 @@ class _ExtensionLoginScreenState extends State<ExtensionLoginScreen> {
   void dispose() {
     _wsSubscription?.cancel();
     _refreshTimer?.cancel();
+    _pollTimer?.cancel();
     super.dispose();
   }
 
@@ -72,10 +73,43 @@ class _ExtensionLoginScreenState extends State<ExtensionLoginScreen> {
     }
   }
 
+  Timer? _pollTimer;
+
   void _startRefreshTimer() {
     // Refresh QR code every 2 minutes to prevent expiration
     _refreshTimer = Timer.periodic(const Duration(minutes: 2), (_) {
       _initPairing();
+    });
+    
+    // Poll for pairing status every 3 seconds (fallback if WebSocket not connected)
+    _startPolling();
+  }
+
+  void _startPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
+      if (_pairingId == null) return;
+      
+      try {
+        final response = await _apiService.get('/pairing/status/$_pairingId');
+        
+        if (response['status'] == 'authorized' && response['token'] != null) {
+          _pollTimer?.cancel();
+          
+          final token = response['token'];
+          await _apiService.setToken(token);
+          
+          if (mounted) {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => const ExtensionHomeScreen()),
+              (route) => false,
+            );
+          }
+        }
+      } catch (e) {
+        // Silently ignore polling errors
+        debugPrint('Polling error: $e');
+      }
     });
   }
 
