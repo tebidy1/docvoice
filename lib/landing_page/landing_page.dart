@@ -88,12 +88,12 @@ class _LandingHomeScaffoldState extends State<LandingHomeScaffold> {
                 
                 const HowItWorksSection(),
                 
-                const MobileShowcaseSection(),
+                const PlatformsSection(),
 
                 // ComparisonSection Removed per user request
                 // const ComparisonSection(),
 
-                const PlatformsSection(),
+                const MobileShowcaseSection(),
                 const SecuritySection(),
                 
                 FinalCTASection(onStartNow: _scrollToDemo),

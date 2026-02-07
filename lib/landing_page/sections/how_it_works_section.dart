@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../theme/app_colors.dart';
 import '../components/hover_scale.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 class HowItWorksSection extends StatelessWidget {
   const HowItWorksSection({super.key});
@@ -15,11 +16,8 @@ class HowItWorksSection extends StatelessWidget {
       child: Column(
         children: [
           // Section Header
-          Text("كيف يعمل؟", style: Theme.of(context).textTheme.headlineMedium)
-              .animate().fade().slideY(begin: 0.2, end: 0),
-          const SizedBox(height: 16),
-          const Text("تدفق ذكي يحول صوتك إلى بيانات منظمة", style: TextStyle(color: MedColors.textMuted))
-              .animate(delay: 200.ms).fade().slideY(begin: 0.2, end: 0),
+          // QR Experience Section (Replaces old header)
+          _buildQrExperience(context),
           const SizedBox(height: 120),
 
           // The Steps Content
@@ -175,8 +173,8 @@ class HowItWorksSection extends StatelessWidget {
                             boxShadow: [BoxShadow(color: color.withOpacity(0.4), blurRadius: 8)]
                           ),
                           child: Text(
-                            "Step 0$index", 
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 1.5)
+                            "$index", 
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)
                           ),
                         ),
                       )
@@ -228,4 +226,93 @@ class HowItWorksSection extends StatelessWidget {
           : [cardSection, spacer, node, spacer, textSection], 
     );
   }
+  Widget _buildQrExperience(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 800;
+    
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+      decoration: BoxDecoration(
+        color: MedColors.surface.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: MedColors.primary.withOpacity(0.2)),
+        boxShadow: [
+           BoxShadow(color: MedColors.primary.withOpacity(0.05), blurRadius: 30, spreadRadius: 0)
+        ],
+      ),
+      child: isMobile 
+        ? Column(
+            children: [
+               _buildQrContent(),
+               const SizedBox(height: 24),
+               _buildQrText(context, isMobile: true),
+            ],
+          )
+        : Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _buildQrText(context, isMobile: false),
+              const SizedBox(width: 48),
+              Container(width: 1, height: 100, color: Colors.white10),
+              const SizedBox(width: 48),
+              _buildQrContent(),
+            ],
+          ),
+    ).animate().fade().slideY(begin: 0.2, end: 0);
+  }
+
+  Widget _buildQrText(BuildContext context, {required bool isMobile}) {
+    return Column(
+      crossAxisAlignment: isMobile ? CrossAxisAlignment.center : CrossAxisAlignment.end, // RTL: End is Left
+      children: [
+        Text(
+          "عش التجربة الاحترافية",
+          style: Theme.of(context).textTheme.headlineMedium!.copyWith(
+            color: MedColors.primary,
+            fontWeight: FontWeight.bold,
+          ),
+          textAlign: isMobile ? TextAlign.center : TextAlign.left,
+        ),
+        const SizedBox(height: 12),
+        Text(
+          "امسح الكود الان .. وجرب التطبيق",
+          style: const TextStyle(
+            fontSize: 20,
+            color: Colors.white,
+            fontWeight: FontWeight.w500,
+          ),
+           textAlign: isMobile ? TextAlign.center : TextAlign.left,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          "وتحكم في النظام بالكامل من هاتفك",
+          style: const TextStyle(
+            fontSize: 16,
+            color: MedColors.textMuted,
+          ),
+           textAlign: isMobile ? TextAlign.center : TextAlign.left,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQrContent() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(color: MedColors.primary.withOpacity(0.3), blurRadius: 20)
+        ]
+      ),
+      child: QrImageView(
+        data: 'https://docvoice.gumra-ai.com', // Link to landing page or app
+        version: QrVersions.auto,
+        size: 160.0,
+        backgroundColor: Colors.white,
+      ),
+    );
+  }
 }
+

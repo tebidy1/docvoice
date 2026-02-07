@@ -7,6 +7,7 @@ import 'macro_manager_screen.dart';
 import '../../services/macro_service.dart';
 import '../../../services/auth_service.dart';
 import '../../../screens/secure_pairing_screen.dart';
+import '../auth/qr_scanner_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -236,11 +237,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ListTile(
                     leading: const Icon(Icons.devices, color: Colors.blueAccent, size: 20),
                     title: const Text("Link New Device", style: TextStyle(color: Colors.blueAccent, fontSize: 14)),
-                    subtitle: const Text("Log in on another device using a QR code", style: TextStyle(fontSize: 11)),
+                    subtitle: const Text("Generate QR for another phone to scan", style: TextStyle(fontSize: 11)),
                     onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(builder: (_) => const SecurePairingScreen()),
+                      );
+                    },
+                    dense: true,
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.qr_code_scanner, color: Colors.greenAccent, size: 20),
+                    title: const Text("Scan QR to Authorize", style: TextStyle(color: Colors.greenAccent, fontSize: 14)),
+                    subtitle: const Text("Authorize Chrome Extension or Desktop login", style: TextStyle(fontSize: 11)),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const QrScannerScreen()),
                       );
                     },
                     dense: true,
