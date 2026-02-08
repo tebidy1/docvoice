@@ -67,6 +67,8 @@ dependencies:
   
   # Web compatibility
   web: ^1.0.0
+  url_strategy: ^0.3.0
+  flutter_riverpod: ^2.6.1
 
 dev_dependencies:
   flutter_test:

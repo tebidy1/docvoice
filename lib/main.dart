@@ -3,7 +3,9 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' hide Provider;
 import 'package:provider/provider.dart';
+import 'package:url_strategy/url_strategy.dart';
 
 import 'core/di/service_locator.dart';
 import 'desktop/desktop_app.dart'
@@ -30,6 +32,7 @@ import 'widgets/admin_guard.dart';
 import 'widgets/auth_guard.dart';
 
 void main() async {
+  setPathUrlStrategy();
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
 
@@ -73,12 +76,14 @@ void main() async {
   }
 
   runApp(
-    MultiProvider(
-      providers: [
-        Provider<unified_ws.WebSocketService>(
-            create: (_) => unified_ws.WebSocketService()),
-      ],
-      child: const ScribeFlowApp(),
+    ProviderScope(
+      child: MultiProvider(
+        providers: [
+          Provider<unified_ws.WebSocketService>(
+              create: (_) => unified_ws.WebSocketService()),
+        ],
+        child: const ScribeFlowApp(),
+      ),
     ),
   );
 }

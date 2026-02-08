@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../screens/qr_login_screen.dart';
 import '../../../services/auth_service.dart';
 import '../../features/home/home_screen.dart';
-import 'qr_scanner_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -176,16 +176,16 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Mobile Scanner Entry
+              // Mobile QR Show Entry
               OutlinedButton.icon(
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const QrScannerScreen()),
+                    MaterialPageRoute(builder: (_) => const QrLoginScreen()),
                   );
                 },
-                icon: const Icon(Icons.qr_code_scanner, color: Colors.white70),
-                label: const Text("Scan QR to Login / Link",
+                icon: const Icon(Icons.qr_code, color: Colors.white70),
+                label: const Text("Show QR to Login",
                     style: TextStyle(color: Colors.white70)),
                 style: OutlinedButton.styleFrom(
                   side: const BorderSide(color: Colors.white24),
