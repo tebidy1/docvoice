@@ -79,7 +79,7 @@ class InboxNoteDtoMapper extends EnhancedDtoMapper<InboxNote, InboxNoteDto> with
     note.formattedText = MappingUtils.getNestedValue<String>(data, 'formatted_text') ?? '';
     note.summary = MappingUtils.getNestedValue<String>(data, 'summary');
     note.audioPath = MappingUtils.getNestedValue<String>(data, 'audio_path');
-    note.appliedMacroId = MappingUtils.getNestedValue<String>(data, 'applied_macro_id');
+    note.appliedMacroId = MappingUtils.getNestedValue<int>(data, 'applied_macro_id');
     note.suggestedMacroId = MappingUtils.getNestedValue<int>(data, 'suggested_macro_id');
     
     // Parse status with enhanced enum transformer

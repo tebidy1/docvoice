@@ -4,7 +4,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'core/theme.dart';
 import 'features/home/home_screen.dart';
 import 'features/auth/login_screen.dart';
-import 'services/auth_service.dart';
+import '../services/auth_service.dart';
 import 'services/websocket_service.dart';
 import 'services/macro_service.dart';
 

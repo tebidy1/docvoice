@@ -20,7 +20,7 @@ const NoteModelSchema = CollectionSchema(
     r'appliedMacroId': PropertySchema(
       id: 0,
       name: r'appliedMacroId',
-      type: IsarType.string,
+      type: IsarType.long,
     ),
     r'audioPath': PropertySchema(
       id: 1,
@@ -124,12 +124,6 @@ int _noteModelEstimateSize(
 ) {
   var bytesCount = offsets.last;
   {
-    final value = object.appliedMacroId;
-    if (value != null) {
-      bytesCount += 3 + value.length * 3;
-    }
-  }
-  {
     final value = object.audioPath;
     if (value != null) {
       bytesCount += 3 + value.length * 3;
@@ -158,7 +152,7 @@ void _noteModelSerialize(
   List<int> offsets,
   Map<Type, List<int>> allOffsets,
 ) {
-  writer.writeString(offsets[0], object.appliedMacroId);
+  writer.writeLong(offsets[0], object.appliedMacroId);
   writer.writeString(offsets[1], object.audioPath);
   writer.writeString(offsets[2], object.content);
   writer.writeDateTime(offsets[3], object.createdAt);
@@ -181,7 +175,7 @@ NoteModel _noteModelDeserialize(
   Map<Type, List<int>> allOffsets,
 ) {
   final object = NoteModel();
-  object.appliedMacroId = reader.readStringOrNull(offsets[0]);
+  object.appliedMacroId = reader.readLongOrNull(offsets[0]);
   object.audioPath = reader.readStringOrNull(offsets[1]);
   object.content = reader.readString(offsets[2]);
   object.createdAt = reader.readDateTime(offsets[3]);
@@ -209,7 +203,7 @@ P _noteModelDeserializeProp<P>(
 ) {
   switch (propertyId) {
     case 0:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readLongOrNull(offset)) as P;
     case 1:
       return (reader.readStringOrNull(offset)) as P;
     case 2:
@@ -246,12 +240,14 @@ const _NoteModelstatusEnumValueMap = {
   r'draft': r'draft',
   r'processed': r'processed',
   r'ready': r'ready',
+  r'copied': r'copied',
   r'archived': r'archived',
 };
 const _NoteModelstatusValueEnumMap = {
   r'draft': NoteStatus.draft,
   r'processed': NoteStatus.processed,
   r'ready': NoteStatus.ready,
+  r'copied': NoteStatus.copied,
   r'archived': NoteStatus.archived,
 };
 
@@ -410,58 +406,49 @@ extension NoteModelQueryFilter
   }
 
   QueryBuilder<NoteModel, NoteModel, QAfterFilterCondition>
-      appliedMacroIdEqualTo(
-    String? value, {
-    bool caseSensitive = true,
-  }) {
+      appliedMacroIdEqualTo(int? value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
         property: r'appliedMacroId',
         value: value,
-        caseSensitive: caseSensitive,
       ));
     });
   }
 
   QueryBuilder<NoteModel, NoteModel, QAfterFilterCondition>
       appliedMacroIdGreaterThan(
-    String? value, {
+    int? value, {
     bool include = false,
-    bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.greaterThan(
         include: include,
         property: r'appliedMacroId',
         value: value,
-        caseSensitive: caseSensitive,
       ));
     });
   }
 
   QueryBuilder<NoteModel, NoteModel, QAfterFilterCondition>
       appliedMacroIdLessThan(
-    String? value, {
+    int? value, {
     bool include = false,
-    bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.lessThan(
         include: include,
         property: r'appliedMacroId',
         value: value,
-        caseSensitive: caseSensitive,
       ));
     });
   }
 
   QueryBuilder<NoteModel, NoteModel, QAfterFilterCondition>
       appliedMacroIdBetween(
-    String? lower,
-    String? upper, {
+    int? lower,
+    int? upper, {
     bool includeLower = true,
     bool includeUpper = true,
-    bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.between(
@@ -470,77 +457,6 @@ extension NoteModelQueryFilter
         includeLower: includeLower,
         upper: upper,
         includeUpper: includeUpper,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<NoteModel, NoteModel, QAfterFilterCondition>
-      appliedMacroIdStartsWith(
-    String value, {
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.startsWith(
-        property: r'appliedMacroId',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<NoteModel, NoteModel, QAfterFilterCondition>
-      appliedMacroIdEndsWith(
-    String value, {
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.endsWith(
-        property: r'appliedMacroId',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<NoteModel, NoteModel, QAfterFilterCondition>
-      appliedMacroIdContains(String value, {bool caseSensitive = true}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.contains(
-        property: r'appliedMacroId',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<NoteModel, NoteModel, QAfterFilterCondition>
-      appliedMacroIdMatches(String pattern, {bool caseSensitive = true}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.matches(
-        property: r'appliedMacroId',
-        wildcard: pattern,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<NoteModel, NoteModel, QAfterFilterCondition>
-      appliedMacroIdIsEmpty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'appliedMacroId',
-        value: '',
-      ));
-    });
-  }
-
-  QueryBuilder<NoteModel, NoteModel, QAfterFilterCondition>
-      appliedMacroIdIsNotEmpty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        property: r'appliedMacroId',
-        value: '',
       ));
     });
   }
@@ -2497,11 +2413,9 @@ extension NoteModelQuerySortThenBy
 
 extension NoteModelQueryWhereDistinct
     on QueryBuilder<NoteModel, NoteModel, QDistinct> {
-  QueryBuilder<NoteModel, NoteModel, QDistinct> distinctByAppliedMacroId(
-      {bool caseSensitive = true}) {
+  QueryBuilder<NoteModel, NoteModel, QDistinct> distinctByAppliedMacroId() {
     return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'appliedMacroId',
-          caseSensitive: caseSensitive);
+      return query.addDistinctBy(r'appliedMacroId');
     });
   }
 
@@ -2603,7 +2517,7 @@ extension NoteModelQueryProperty
     });
   }
 
-  QueryBuilder<NoteModel, String?, QQueryOperations> appliedMacroIdProperty() {
+  QueryBuilder<NoteModel, int?, QQueryOperations> appliedMacroIdProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'appliedMacroId');
     });

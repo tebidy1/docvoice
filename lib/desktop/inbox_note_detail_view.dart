@@ -109,10 +109,39 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   Future<void> _refreshNoteContent() async {
     try {
       final freshNote = await _inboxService.getNoteById(widget.note.id);
-      if (freshNote != null && freshNote.formattedText.isNotEmpty) {
-        if (mounted && _finalNoteController.text.isEmpty) {
+      if (freshNote != null) {
+        if (mounted) {
            setState(() {
-             _finalNoteController.text = freshNote.formattedText;
+             // 1. Update Text if empty (or force update if needed, but usually we trust local if user is typing)
+             if (_finalNoteController.text.isEmpty && freshNote.formattedText.isNotEmpty) {
+                 _finalNoteController.text = freshNote.formattedText;
+             }
+             
+             // 2. Restore Selected Macro
+             if (_selectedMacro == null && freshNote.appliedMacroId != null) {
+                 // Try to find in quick macros first
+                 final found = _quickMacros.firstWhere(
+                     (m) => m.id == freshNote.appliedMacroId, 
+                     orElse: () => Macro()..id = -1 // Dummy
+                 );
+                 
+                 if (found.id != -1) {
+                     _selectedMacro = found;
+                 } else {
+                     // If not in quick macros, we might need to fetch it?
+                     // For now, let's just leave it or try to fetch from service if we want to be perfect.
+                     // But _quickMacros usually has popular ones.
+                     // Let's rely on _loadQuickMacros logic too, but this refreshes it.
+                     
+                     // Optimization: If we really want to show it, we should fetch it.
+                     _macroService.getAllMacros().then((all) {
+                         final exact = all.where((m) => m.id == freshNote.appliedMacroId).firstOrNull;
+                         if (exact != null && mounted) {
+                             setState(() => _selectedMacro = exact);
+                         }
+                     });
+                 }
+             }
            });
         }
       }

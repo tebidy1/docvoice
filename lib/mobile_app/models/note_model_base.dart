@@ -26,7 +26,7 @@ class NoteModelBase {
   late DateTime updatedAt;
 
   // Metadata for AI
-  String? appliedMacroId;
+  int? appliedMacroId;
   int? suggestedMacroId; // Desktop compatibility
 
   // API Sync Fields
@@ -75,7 +75,10 @@ class NoteModelBase {
         ? DateTime.parse(json['updated_at'])
         : (note.createdAt);
 
-    note.appliedMacroId = json['applied_macro_id']?.toString();
+    note.appliedMacroId = json['applied_macro_id'] is int
+        ? json['applied_macro_id']
+        : int.tryParse(json['applied_macro_id']?.toString() ?? '');
+        
     note.suggestedMacroId = json['suggested_macro_id'] is int
         ? json['suggested_macro_id']
         : int.tryParse(json['suggested_macro_id']?.toString() ?? '');
