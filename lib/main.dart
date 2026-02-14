@@ -43,6 +43,8 @@ void main() async {
   // Initialize dependency injection with backend integration
   await ServiceLocator.initialize();
 
+
+
   // Only set up window manager on desktop platforms
   if (!kIsWeb) {
     try {

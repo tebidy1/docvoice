@@ -349,11 +349,6 @@ SICK LEAVE RECOMMENDATION
 
 To: Employer / School Administrators
 
-PATIENT DETAILS:
-• Name: [Patient Name]
-• ID / Iqama: [Number]
-• Date of Visit: [Date]
-
 CLINICAL STATUS:
 • Diagnosis: [Condition]
 
@@ -378,11 +373,6 @@ MEDICAL REPORT
 Date: [Date]
 
 TO WHOM IT MAY CONCERN,
-
-PATIENT IDENTIFICATION:
-• Name: [Name]
-• MRN: [ID]
-• DOB: [Date]
 
 HISTORY & COURSE:
 [Detailed Clinical History and Progression]
@@ -415,7 +405,6 @@ AT: [Receiving Hospital Name]
 FROM: [Referring Doctor Name]
 DATE: [Date]
 
-PATIENT: [Name] | ID: [Number]
 
 REASON FOR REFERRAL:
 [Specific Clinical Question or Service Needed]
@@ -441,7 +430,6 @@ PENDING RESULTS:
 RADIOLOGY REQUEST
 Priority: [Routine / Urgent]
 
-PATIENT: [Name] | ID: [Number]
 
 STUDY REQUESTED:
 [Modality: X-Ray/CT/MRI] of [Body Part]
@@ -468,7 +456,6 @@ SAFETY CHECKLIST:
         category: 'Internal Medicine',
         content: '''
 DIABETES FOLLOW-UP
-Patient: [Name] | ID: [ID]
 
 SUBJECTIVE:
 • Home Glucose Readings: [Range / Control]
@@ -498,7 +485,6 @@ PLAN:
         category: 'Neurology',
         content: '''
 NEUROLOGICAL EXAMINATION
-Patient: [Name] | ID: [ID]
 
 MENTAL STATUS:
 • GCS: [Score / 15]

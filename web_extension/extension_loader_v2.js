@@ -47,3 +47,75 @@ window.addEventListener('load', function (ev) {
         console.error("[ScribeFlow] Error loading entrypoint:", err);
     });
 });
+
+// --- Smart Inject Helper ---
+// Expose functions to Flutter via window
+window.scribeflow = {
+    injectTextToActiveTab: async function (text) {
+        console.log("[ScribeFlow] Attempting Smart Inject...");
+        try {
+            // Get active tab using API
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+            if (!tab) {
+                console.warn("[ScribeFlow] No active tab found.");
+                return false;
+            }
+
+            // Scripting API Injection
+            // Requires 'scripting' permission in V3 manifest
+            const results = await chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                func: (textToInject) => {
+                    const activeEl = document.activeElement;
+
+                    // Helper to insert at cursor
+                    const insertAtCursor = (field, value) => {
+                        if (field.selectionStart || field.selectionStart === 0) {
+                            var startPos = field.selectionStart;
+                            var endPos = field.selectionEnd;
+                            field.value = field.value.substring(0, startPos)
+                                + value
+                                + field.value.substring(endPos, field.value.length);
+                            field.selectionStart = startPos + value.length;
+                            field.selectionEnd = startPos + value.length;
+                        } else {
+                            field.value += value;
+                        }
+                        // Trigger input event for React/Angular/Vue etc
+                        field.dispatchEvent(new Event('input', { bubbles: true }));
+                        field.dispatchEvent(new Event('change', { bubbles: true }));
+                    };
+
+                    if (activeEl && (activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'INPUT')) {
+                        insertAtCursor(activeEl, textToInject);
+                        return true;
+                    }
+                    else if (activeEl && activeEl.isContentEditable) {
+                        // Standard ContentEditable (e.g. Gmail, some EMRs)
+                        // document.execCommand is deprecated but still the most reliable way 
+                        // to handle complex editors that respect undo stack
+                        document.execCommand('insertText', false, textToInject);
+                        return true;
+                    }
+
+                    return false; // No valid field focused
+                },
+                args: [text]
+            });
+
+            // Check results from injection frame
+            if (results && results[0] && results[0].result === true) {
+                console.log("[ScribeFlow] Injection successful!");
+                return true;
+            } else {
+                console.log("[ScribeFlow] No focused field detected on page.");
+                return false;
+            }
+
+        } catch (e) {
+            console.error("[ScribeFlow] Injection Error:", e);
+            return false;
+        }
+    }
+};

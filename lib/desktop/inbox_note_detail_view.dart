@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui'; // For PointerDeviceKind
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
@@ -14,7 +15,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/window_manager_helper.dart';
 
-import 'widgets/markdown_controller.dart';
+import '../widgets/pattern_highlight_controller.dart';
 
 class InboxNoteDetailView extends StatefulWidget {
   final NoteModel note;
@@ -33,7 +34,13 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   final _inboxService = InboxService();
   final _macroService = MacroService();
 
-  final _finalNoteController = MarkdownSyntaxTextEditingController();
+  final _finalNoteController = PatternHighlightController(
+    text: "",
+    patternStyles: {
+      RegExp(r'\[(.*?)\]'): const TextStyle(color: Colors.orange, backgroundColor: Color(0x33FF9800)),
+      // RegExp(r'Not Reported', caseSensitive: false): const TextStyle(color: Colors.white24, decoration: TextDecoration.lineThrough),
+    },
+  );
   Macro? _selectedMacro;
   bool _isGenerating = false;
   bool _isArchiveExpanded = false;
@@ -143,7 +150,16 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     }
 
     if (mounted) {
-      setState(() => _quickMacros = combinedMap.values.toList());
+      setState(() {
+         _quickMacros = combinedMap.values.toList();
+         
+         // Restore selected macro if we have one saved in the note
+         if (_selectedMacro == null && widget.note.appliedMacroId != null) {
+             if (combinedMap.containsKey(widget.note.appliedMacroId)) {
+                 _selectedMacro = combinedMap[widget.note.appliedMacroId];
+             }
+         }
+      });
     }
   }
 
@@ -292,20 +308,46 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     }
   }
 
-  Future<void> _injectToEMR() async {
-    final text = _finalNoteController.text;
-    if (text.isEmpty) {
+  String _getCleanText() {
+      final text = _finalNoteController.text;
+      if (text.isEmpty) return "";
+
+      final List<String> lines = text.split('\n');
+      final List<String> cleanLines = [];
+
+      for (var line in lines) {
+          bool isDirty = false;
+          // Check for [Not Reported] or Not Reported
+          if (line.contains('[Not Reported]')) isDirty = true;
+          if (line.contains('Not Reported')) isDirty = true; 
+
+          if (!isDirty) {
+               cleanLines.add(line);
+          }
+      }
+
+      return cleanLines.join('\n');
+  }
+
+  Future<void> _smartCopyAndInject() async {
+    final cleanText = _getCleanText();
+    if (cleanText.isEmpty) {
       _showError("No content to inject");
       return;
     }
 
     try {
-      await Clipboard.setData(ClipboardData(text: text));
+      // 1. Copy Clean Text
+      await Clipboard.setData(ClipboardData(text: cleanText));
+      
+      // 2. Inject Process (Desktop specific: Hide -> Paste -> Show)
       await windowManager.hide();
       await Future.delayed(const Duration(milliseconds: 200));
-      await _keyboard.pasteText(text);
+      await _keyboard.pasteText(cleanText); // Paste Clean Text
       await Future.delayed(const Duration(milliseconds: 100));
-      await _inboxService.archiveNote(widget.note.id);
+      
+      // SET STATUS TO COPIED
+      await _inboxService.updateStatus(widget.note.id, NoteStatus.copied);
 
       if (mounted) {
         Navigator.of(context).pop();
@@ -318,30 +360,46 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     }
   }
 
-  void _handleTextFieldTap() {
-    final textPosition = _finalNoteController.selection.baseOffset;
-    if (textPosition < 0) return;
-
-    final text = _finalNoteController.text;
-    if (text.isEmpty) return;
-
-    int start = textPosition;
-    int end = textPosition;
-
-    while (start > 0 && !_isWordBoundary(text[start - 1])) {
-      start--;
-    }
-
-    while (end < text.length && !_isWordBoundary(text[end])) {
-      end++;
-    }
-
-    if (start < end && !text.substring(start, end).trim().isEmpty) {
-      _finalNoteController.selection = TextSelection(
-        baseOffset: start,
-        extentOffset: end,
-      );
-    }
+  void _handleEditorTap() {
+      // Delay to allow the system to place the cursor first.
+      Future.delayed(const Duration(milliseconds: 100), () {
+          if (!mounted) return;
+          
+          final text = _finalNoteController.text;
+          final selection = _finalNoteController.selection;
+          
+          if (!selection.isValid || !selection.isCollapsed) return;
+          
+          final cursor = selection.baseOffset;
+          
+          // 1. Check for [Brackets]
+          final bracketRegex = RegExp(r'\[(.*?)\]');
+          final bracketMatches = bracketRegex.allMatches(text);
+          
+          for (final match in bracketMatches) {
+              if (cursor >= match.start && cursor <= match.end) {
+                  _finalNoteController.selection = TextSelection(
+                      baseOffset: match.start,
+                      extentOffset: match.end,
+                  );
+                  return; 
+              }
+          }
+          
+          // 2. Check for "Not Reported" (Case Insensitive)
+          final nrRegex = RegExp(r'Not Reported', caseSensitive: false);
+          final nrMatches = nrRegex.allMatches(text);
+          
+          for (final match in nrMatches) {
+               if (cursor >= match.start && cursor <= match.end) {
+                  _finalNoteController.selection = TextSelection(
+                      baseOffset: match.start,
+                      extentOffset: match.end,
+                  );
+                  return;
+              }
+          }
+      });
   }
 
   bool _isWordBoundary(String char) {
@@ -425,7 +483,7 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
       backgroundColor: theme.scaffoldBackgroundColor,
       body: MouseRegion(
         onEnter: (_) => WindowManagerHelper.setOpacity(1.0),
-        onExit: (_) => WindowManagerHelper.setOpacity(0.7),
+        onExit: (_) => WindowManagerHelper.setOpacity(0.95), // Less transparent
         child: Container(
           width: double.infinity,
           height: double.infinity,
@@ -437,38 +495,39 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
           ),
           child: Column(
             children: [
-              _buildHeader(theme),
-              // 1. Raw Text / Safety Archive
-              // Behavior:
-              // - Initial: Takes 3/4 of space (Flex 3 vs 1 below)
-              // - Processing: Takes fixed small height (~2 lines)
-              if (_isRawTextExpanded)
-                Expanded(
-                  flex: 3,
-                  child: _buildSafetyArchive(theme),
-                )
-              else
-                 SizedBox(
-                   height: 140, // Fixed height for "2 lines" look + padding
-                   child: _buildSafetyArchive(theme),
-                 ),
+              _buildSmartHeader(theme),
+              
+              // 1. Source Text Accordion
+              _buildSourceAccordion(theme),
 
-              // 2. Templates / Macros
-              // Always visible in the middle
-              _buildContextStrip(theme),
-
-              // 3. AI Editor (White Paper)
-              // Behavior:
-              // - Initial: Takes 1/4 of space (Flex 1)
-              // - Processing: Takes ALL remaining space (Expanded)
+              // 2. Editor Area (Toolbar + WhitePaper)
               Expanded(
-                flex: _isRawTextExpanded ? 1 : 1,
-                child: _buildWhitePaperEditor(theme),
+                child: Container(
+                    margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    decoration: BoxDecoration(
+                        color: theme.colorScheme.surface, // Match Source Accordion
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(8)), // Match radius 8
+                        border: Border.all(color: Colors.white.withOpacity(0.05)), // Match border
+                        boxShadow: [
+                            BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 2, offset: const Offset(0, 1)),
+                        ],
+                    ),
+                    // Removed inner generic Container decoration to rely on parent or new unification
+                    child: ClipRRect( // Clip to give rounded corners to the whole block (Toolbar + Editor)
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                        child: Column(
+                            children: [
+                                _buildEditorToolbar(theme),
+                                // Removed Divider or made it invisible/matching to unify
+                                Expanded(child: _buildWhitePaperEditor(theme)),
+                            ],
+                        ),
+                    ),
+                ),
               ),
               
-              // 4. Footer Controls
-              _buildBottomControlBar(theme),
-              _buildInjectButton(theme),
+              // 3. Action Dock
+              _buildActionDock(theme),
             ],
           ),
         ),
@@ -476,16 +535,17 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     );
   }
 
-  Widget _buildHeader(ThemeData theme) {
+  Widget _buildSmartHeader(ThemeData theme) {
     return GestureDetector(
       onPanStart: (details) {
         windowManager.startDragging();
       },
       child: Container(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
         color: theme.scaffoldBackgroundColor,
         child: Row(
           children: [
+            // 1. Back / Close
             IconButton(
               icon: Icon(Icons.arrow_back, color: theme.colorScheme.onSurface),
               onPressed: () async {
@@ -493,8 +553,12 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
                  if (mounted) Navigator.of(context).pop();
               },
               tooltip: 'Close',
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 16),
+
+            // 2. Patient Info & Metadata
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -505,459 +569,286 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
                         : 'Unknown Patient',
                     style: theme.textTheme.titleMedium?.copyWith(
                       color: theme.colorScheme.onSurface,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.bold,
                       fontSize: 16,
                     ),
                   ),
-                  Text(
-                    '${widget.note.createdAt.toString().substring(0, 16)}',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: Colors.grey[400],
-                    ),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      Text(
+                        '${widget.note.createdAt.toString().substring(0, 16)}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: Colors.grey[500],
+                          fontSize: 11,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _buildStatusBadge(theme),
+                    ],
                   ),
                 ],
               ),
             ),
-            // Minimize / Return to Bar
+
+            // 3. Window Controls
             IconButton(
-              icon: Icon(Icons.close_fullscreen, color: Colors.grey[400]),
+              icon: Icon(Icons.close_fullscreen, color: Colors.grey[400], size: 20),
               onPressed: () async {
-                 // await windowManager.hide(); // REMOVED: Don't hide, just return to mini mode
-                 await _restoreWindow(); // Reset size and position
+                 await _restoreWindow(); 
                  if (mounted) Navigator.of(context).pop();
               },
               tooltip: 'Return to List',
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
             ),
-            IconButton(
-              icon: Icon(Icons.delete_outline, color: Colors.red[400]),
+             const SizedBox(width: 16),
+             IconButton(
+              icon: Icon(Icons.delete_outline, color: Colors.red[300], size: 20),
               onPressed: () async {
                 await _inboxService.deleteNote(widget.note.id);
-                // We also restore window on delete
                 await _restoreWindow();
                 if (mounted) Navigator.of(context).pop();
               },
               tooltip: 'Delete Note',
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
             ),
+            const SizedBox(width: 8),
+            // 4. Mark Ready (Moved to Header)
+             IconButton(
+              icon: Icon(Icons.check_circle_outline, color: Colors.green[300], size: 20),
+              onPressed: _markAsReady,
+              tooltip: 'Mark as Ready',
+             ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSafetyArchive(ThemeData theme) {
+  Widget _buildStatusBadge(ThemeData theme) {
+      Color color;
+      String label;
+      
+      switch(widget.note.status) {
+          case NoteStatus.ready:
+            color = Colors.green;
+            label = "READY";
+            break;
+          case NoteStatus.copied:
+            color = Colors.blue;
+            label = "COPIED";
+            break;
+          case NoteStatus.archived:
+            color = Colors.grey;
+            label = "ARCHIVED";
+            break;
+          case NoteStatus.processed:
+          case NoteStatus.draft:
+          default:
+             color = Colors.orange;
+             label = "DRAFT";
+             break;
+      }
+      
+      return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: color.withOpacity(0.3)),
+          ),
+          child: Text(
+              label,
+      style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold),
+          ),
+      );
+  }
+
+  Widget _buildSourceAccordion(ThemeData theme) {
+    // Logic: Hidden if we have formatted text, unless explicitly expanded
+    // But we reuse _isRawTextExpanded state variable differently now.
+    // Let's invert the variable logic or just use it as "Is Source Visible".
+    // Default: If formattedText exists, _isRawTextExpanded should be FALSE.
+    
     final lines = widget.note.rawText.split('\n');
-    final previewLines = lines.take(4).join('\n');
-    final hasMore = lines.length > 4;
+    final preview = lines.take(1).join(' ') + (lines.length > 1 ? '...' : '');
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
       ),
       child: Column(
         children: [
+          // Header / Toggle
           InkWell(
-            onTap: hasMore
-                ? () => setState(() => _isArchiveExpanded = !_isArchiveExpanded)
-                : null,
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            onTap: () => setState(() => _isRawTextExpanded = !_isRawTextExpanded),
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
                 children: [
-                  Row(
-                    children: [
-                      Icon(Icons.speaker_notes,
-                          color: theme.colorScheme.primary, size: 16),
-                      const SizedBox(width: 8),
-                      Text(
-                        widget.note.patientName.isNotEmpty
-                            ? widget.note.patientName
-                            : 'Unknown Patient',
-                        style: TextStyle(
-                          color: theme.colorScheme.primary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      // Direct Inject / Copy Raw Action
-                      InkWell(
+                   Icon(Icons.mic_none, size: 14, color: Colors.grey[500]),
+                   const SizedBox(width: 8),
+                   Text("Source Text", style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                   const SizedBox(width: 8),
+                   Expanded(
+                       child: !_isRawTextExpanded
+                       ? Text(preview, 
+                           style: TextStyle(color: Colors.grey[700], fontSize: 11, fontStyle: FontStyle.italic),
+                           overflow: TextOverflow.ellipsis,
+                           maxLines: 1,
+                       )
+                       : const SizedBox.shrink()
+                   ),
+                   if (_isRawTextExpanded)
+                       InkWell(
                         onTap: () {
-                          setState(() {
-                            _finalNoteController.text = widget.note.rawText;
-                            _selectedMacro = null;
-                            _suggestions = [];
-                          });
+                           Clipboard.setData(ClipboardData(text: widget.note.rawText));
+                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Raw Text Copied!"), duration: Duration(seconds: 1)));
                         },
-                        borderRadius: BorderRadius.circular(8),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.primary,
-                            borderRadius: BorderRadius.circular(8),
-                            boxShadow: [
-                              BoxShadow(
-                                color:
-                                    theme.colorScheme.primary.withOpacity(0.3),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.copy_all,
-                                  color: Colors.white, size: 14),
-                              const SizedBox(width: 6),
-                              Text(
-                                "Use Raw Text",
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
+                        child: Padding(
+                            padding: const EdgeInsets.all(4),
+                            child: Icon(Icons.copy, size: 14, color: theme.colorScheme.primary),
                         ),
-                      ),
-                      const Spacer(),
-                      if (hasMore)
-                        Icon(
-                          _isArchiveExpanded
-                              ? Icons.expand_less
-                              : Icons.expand_more,
-                          color: Colors.grey[500],
-                          size: 20,
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  
-                  // LOADING STATE for Instant Review
-                  if (_isLoadingText) 
-                    Center(
-                      child: Column(
-                        children: [
-                          const SizedBox(height: 20),
-                          CircularProgressIndicator(color: theme.colorScheme.primary),
-                          const SizedBox(height: 12),
-                          const Text("Consulting Groq...", style: TextStyle(color: Colors.grey)),
-                          const SizedBox(height: 20),
-                        ],
-                      ),
-                    )
-                  else 
-                    // NORMAL TEXT CONTENT
-                     SelectableText(
-                      _isRawTextExpanded ? widget.note.rawText : previewLines,
-                      style: TextStyle(
-                        color: Colors.grey[300],
-                        fontSize: 13,
-                        height: 1.5,
-                      ),
-                    ),
-
+                       ),
+                   const SizedBox(width: 8),
+                   Icon(
+                     _isRawTextExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                     size: 16, color: Colors.grey[600]
+                   ),
                 ],
               ),
             ),
           ),
           
-            // Archive Expanion (Only show if NOT in expanded mode, effectively)
-            if (_isArchiveExpanded && hasMore && !_isRawTextExpanded) // Logic tweaking
-              Container(
-                width: double.infinity,
-                constraints: const BoxConstraints(maxHeight: 250),
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: SingleChildScrollView(
-                  child: SelectableText(
-                    lines.skip(4).join('\n'),
-                    style: TextStyle(
-                      color: Colors.grey[300],
-                      fontSize: 13,
-                      height: 1.5,
-                    ),
-                  ),
-                ),
-              ),
+          // Expanded Content
+          if (_isRawTextExpanded)
+             Container(
+                 width: double.infinity,
+                 padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                 constraints: const BoxConstraints(maxHeight: 150), // Limited height
+                 child: SingleChildScrollView(
+                     child: SelectableText(
+                         widget.note.rawText,
+                         style: TextStyle(color: Colors.grey[400], fontSize: 13, height: 1.4),
+                     ),
+                 ),
+             ),
         ],
       ),
     );
   }
 
-  Widget _buildContextStrip(ThemeData theme) {
-    // Smart Count Strategy:
-    // Collapsed: Show top 8 macros.
-    // Expanded: Show top 30 macros (scrollable).
+  Widget _buildEditorToolbar(ThemeData theme) {
+    final List<Macro> displayedMacros = _quickMacros.take(10).toList(); // Show top 10
 
-    final int collapsedCount = 8;
-    final bool showMoreButton =
-        !_isTemplatesExpanded && _quickMacros.length > collapsedCount;
-    final List<Macro> displayedMacros = _isTemplatesExpanded
-        ? _quickMacros
-        : _quickMacros.take(collapsedCount).toList();
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-      // Constraints:
-      // Collapsed: ~86px (enough for 2 lines)
-      // Expanded: ~250px (approx 6 lines, scrollable)
-      constraints: BoxConstraints(
-        maxHeight: _isTemplatesExpanded ? 250.0 : 86.0,
-      ),
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: SingleChildScrollView(
-        physics: const ClampingScrollPhysics(),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                  Flexible(
-                    child: Text(
-                      'TEMPLATES',
-                      style: TextStyle(
-                        color: theme.colorScheme.primary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                ...displayedMacros.map((macro) {
-                  final isSelected = _selectedMacro?.id == macro.id;
-                  return InkWell(
-                    onTap: () => _applyTemplate(macro),
-                    borderRadius: BorderRadius.circular(20),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? theme.colorScheme.primary.withOpacity(0.15)
-                            : theme.colorScheme.primary.withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: isSelected
-                              ? theme.colorScheme.primary.withOpacity(0.5)
-                              : theme.colorScheme.primary.withOpacity(0.2),
-                        ),
-                      ),
-                      child: Text(
-                        macro.trigger,
-                        style: TextStyle(
-                          color: isSelected
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.onSurface.withOpacity(0.8),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-
-                // "MORE" Button (Expands List)
-                if (showMoreButton)
-                  InkWell(
-                    onTap: () {
-                      setState(() {
-                        _isTemplatesExpanded = true;
-                      });
-                    },
-                    borderRadius: BorderRadius.circular(20),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surface,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: Colors.grey[300]!,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            "More",
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(width: 2),
-                          Icon(Icons.keyboard_arrow_down,
-                              size: 14, color: Colors.grey[600]),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                // "ALL MANAGERS" Button (Opens Manager - Only visible when expanded)
-                if (_isTemplatesExpanded)
-                  InkWell(
-                    onTap: () async {
-                      await WindowManagerHelper.centerDialog();
-                      final macro = await showDialog<Macro>(
-                        context: context,
-                        builder: (context) => const MacroExplorerDialog(),
-                      );
-                      if (mounted) await WindowManagerHelper.expandToSidebar(context);
-                      if (macro != null) _applyTemplate(macro);
-                    },
-                    borderRadius: BorderRadius.circular(20),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.primary.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: theme.colorScheme.primary.withOpacity(0.5),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            "All Managers",
-                            style: TextStyle(
-                              color: theme.colorScheme.primary,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Icon(Icons.arrow_forward,
-                              size: 10, color: theme.colorScheme.primary),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBottomControlBar(ThemeData theme) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: theme.scaffoldBackgroundColor,
-      child: FutureBuilder<bool>(
-        future: SharedPreferences.getInstance()
-            .then((prefs) => prefs.getBool('enable_smart_suggestions') ?? true),
-        builder: (context, snapshot) {
-          final enableSuggestions = snapshot.data ?? true;
-          return Row(
-            children: [
-              SizedBox(
-                height: 24,
-                child: Switch(
-                  value: enableSuggestions,
-                  activeColor: theme.colorScheme.primary,
-                  onChanged: (value) async {
-                    final prefs = await SharedPreferences.getInstance();
-                    await prefs.setBool('enable_smart_suggestions', value);
-                    setState(() {});
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      // Use the same color as the editor background to make it look like one piece
+      color: theme.colorScheme.surface, 
+      child: Row(
+        children: [
+            // 1. Templates List
+            Expanded(
+              child: ScrollConfiguration(
+                behavior: ScrollConfiguration.of(context).copyWith(
+                  dragDevices: {
+                    PointerDeviceKind.touch,
+                    PointerDeviceKind.mouse,
                   },
                 ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                enableSuggestions ? 'Smart Mode' : 'Fast Mode',
-                style: TextStyle(
-                  color: enableSuggestions
-                      ? theme.colorScheme.primary
-                      : Colors.grey[500],
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: enableSuggestions
-                    ? (_suggestions.isNotEmpty
-                        ? SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              children: _suggestions.map((suggestion) {
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                        children: [
+                            Text("TEMPLATES:", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey[400])),
+                            const SizedBox(width: 8),
+                            ...displayedMacros.map((macro) {
+                                final isSelected = _selectedMacro?.id == macro.id;
                                 return Padding(
-                                  padding: const EdgeInsets.only(right: 8),
-                                  child: InkWell(
-                                    onTap: () => _insertSuggestion(suggestion),
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: theme.colorScheme.primary
-                                            .withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(
-                                            color: theme.colorScheme.primary
-                                                .withOpacity(0.3)),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Icon(Icons.add,
-                                              size: 12,
-                                              color: theme.colorScheme.primary),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            suggestion.label,
-                                            style: TextStyle(
-                                              color: theme.colorScheme.primary,
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w500,
+                                    padding: const EdgeInsets.only(right: 6),
+                                    child: InkWell(
+                                        onTap: () => _applyTemplate(macro),
+                                        borderRadius: BorderRadius.circular(4),
+                                        child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                            decoration: BoxDecoration(
+                                                color: isSelected ? theme.colorScheme.primary : Colors.white,
+                                                borderRadius: BorderRadius.circular(4),
+                                                border: Border.all(color: isSelected ? theme.colorScheme.primary : Colors.grey[300]!)
                                             ),
-                                          ),
-                                        ],
-                                      ),
+                                            child: Text(
+                                                macro.trigger,
+                                                style: TextStyle(
+                                                    fontSize: 11, 
+                                                    fontWeight: FontWeight.w500,
+                                                    color: isSelected ? Colors.white : Colors.grey[700]
+                                                ),
+                                            ),
+                                        ),
                                     ),
-                                  ),
                                 );
-                              }).toList(),
-                            ),
-                          )
-                        : Text(
-                            'AI Suggestions...',
-                            style: TextStyle(
-                                color: Colors.grey[600],
-                                fontSize: 11,
-                                fontStyle: FontStyle.italic),
-                          ))
-                    : Container(),
-              ),
-            ],
-          );
-        },
+                            }).toList(),
+                            
+                            // More Button
+                            IconButton(
+                                icon: Icon(Icons.more_horiz, size: 16, color: Colors.grey[500]),
+                                onPressed: () async {
+                                    await WindowManagerHelper.centerDialog();
+                                    final macro = await showDialog<Macro>(
+                                      context: context,
+                                      builder: (context) => const MacroExplorerDialog(),
+                                    );
+                                    if (mounted) await WindowManagerHelper.expandToSidebar(context);
+                                    if (macro != null) _applyTemplate(macro);
+                                },
+                                tooltip: "All Templates",
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                            )
+                        ],
+                    ),
+                ),
+            ),
+            ),
+            
+            // 2. Smart Mode Toggle
+            Container(height: 20, width: 1, color: Colors.grey[300], margin: const EdgeInsets.symmetric(horizontal: 8)),
+            FutureBuilder<bool>(
+                future: SharedPreferences.getInstance().then((prefs) => prefs.getBool('enable_smart_suggestions') ?? true),
+                builder: (context, snapshot) {
+                  final enable = snapshot.data ?? true;
+                  return InkWell(
+                      onTap: () async {
+                         final prefs = await SharedPreferences.getInstance();
+                         await prefs.setBool('enable_smart_suggestions', !enable);
+                         setState(() {});
+                      },
+                      child: Row(
+                          children: [
+                              Icon(enable ? Icons.auto_awesome : Icons.flash_on, size: 14, color: enable ? theme.colorScheme.primary : Colors.grey),
+                              const SizedBox(width: 4),
+                              Text(enable ? "SMART" : "FAST", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: enable ? theme.colorScheme.primary : Colors.grey)),
+                          ],
+                      ),
+                  );
+                }
+            )
+        ],
       ),
     );
   }
 
+
+
   Widget _buildWhitePaperEditor(ThemeData theme) {
+    // Note: Container styling moved to parent to allow toolbar integration
     return RawKeyboardListener(
       focusNode: FocusNode()..requestFocus(),
       onKey: (event) {
@@ -969,21 +860,8 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
           }
         }
       },
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
+      child: ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(0), bottom: Radius.circular(0)),
           child: Stack(
             children: [
               Padding(
@@ -995,9 +873,9 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
                           children: [
                             // AI Processing Ring with continuous rotation
                             TweenAnimationBuilder<double>(
-                              key: ValueKey(_isGenerating),
-                              tween: Tween(begin: 0.0, end: 1.0),
-                              duration: const Duration(seconds: 2),
+                                key: ValueKey(_isGenerating),
+                                tween: Tween(begin: 0.0, end: 1.0),
+                                duration: const Duration(seconds: 2),
                               onEnd: () {
                                 // Restart animation when complete
                                 if (_isGenerating && mounted) {
@@ -1082,12 +960,12 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(Icons.edit_note,
-                                    size: 64, color: Colors.grey[200]),
+                                    size: 64, color: Colors.white10),
                                 const SizedBox(height: 16),
                                 Text(
                                   'Select a template to start',
                                   style: TextStyle(
-                                      color: Colors.grey[400], fontSize: 14),
+                                      color: Colors.white24, fontSize: 14),
                                 ),
                               ],
                             ),
@@ -1096,18 +974,18 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
                             controller: _finalNoteController,
                             maxLines: null,
                             expands: true,
-                            onTap: _handleTextFieldTap,
+                            onTap: _handleEditorTap,
                             style: const TextStyle(
-                              color: Color(0xFF1E293B),
-                              fontSize: 16, // Increased from 14 to match Mobile standard
-                              height: 1.6,   // Increased from 1.5 to 1.6 for better spacing
+                              color: Colors.white,
+                              fontSize: 16,
+                              height: 1.6,
                               fontFamily: 'Inter',
                             ),
                             decoration: const InputDecoration(
-                              filled: false, // Ensure transparent background
+                              filled: false, 
                               border: InputBorder.none,
                               hintText: 'Type your note here...',
-                              hintStyle: TextStyle(color: Colors.black26),
+                              hintStyle: TextStyle(color: Colors.white24),
                               contentPadding: EdgeInsets.zero,
                             ),
                           ),
@@ -1115,7 +993,6 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
             ],
           ),
         ),
-      ),
     );
   }
 
@@ -1126,8 +1003,9 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
       await _inboxService.updateNote(
         widget.note.id,
         formattedText: _finalNoteController.text,
-        // Status implicitly set to 'processed' by backend logic when formattedText is present
       );
+      // EXPLICITLY SET STATUS TO READY
+      await _inboxService.updateStatus(widget.note.id, NoteStatus.ready);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -1146,82 +1024,40 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     }
   }
 
-  Widget _buildInjectButton(ThemeData theme) {
+  Widget _buildActionDock(ThemeData theme) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      color: theme.scaffoldBackgroundColor,
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E1E), // Dark surface
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10, offset: const Offset(0, -5))
+        ]
+      ),
       child: Row(
         children: [
-          // 1. Mark Ready Button (Flexible)
-          Expanded(
-            child: OutlinedButton(
-              onPressed:
-                  _finalNoteController.text.isEmpty ? null : _markAsReady,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: theme.colorScheme.secondary,
-                side: BorderSide(color: theme.colorScheme.secondary),
-                elevation: 0,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8), // Reduce padding
-                minimumSize: const Size(double.infinity, 48),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min, // Shrink to fit
-                children: [
-                  Icon(Icons.save_outlined, size: 18),
-                  SizedBox(width: 4),
-                  Flexible(
-                    child: Text(
-                      'Mark Ready',
-                      style:
-                          TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                      overflow: TextOverflow.ellipsis,
-                    ),
+            // Unified Button
+            Expanded(
+                child: ElevatedButton(
+                  onPressed: _finalNoteController.text.isEmpty ? null : _smartCopyAndInject,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: theme.colorScheme.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shadowColor: theme.colorScheme.primary.withOpacity(0.4),
+                    elevation: 4,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(width: 12),
-
-          // 2. Inject Button (Flexible)
-          Expanded(
-            child: ElevatedButton(
-              onPressed:
-                  _finalNoteController.text.isEmpty ? null : _injectToEMR,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: theme.colorScheme.secondary,
-                foregroundColor: Colors.white,
-                elevation: 4,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8), // Reduce padding
-                shadowColor: theme.colorScheme.secondary.withOpacity(0.4),
-                minimumSize: const Size(double.infinity, 48),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min, // Shrink to fit
-                children: [
-                  Icon(Icons.check_circle_outline, size: 18),
-                  SizedBox(width: 4),
-                  Flexible(
-                    child: Text(
-                      'Inject & Archive',
-                      style:
-                          TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.input, size: 20),
+                      SizedBox(width: 8),
+                      Text("SMART COPY / INJECT", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    ],
                   ),
-                ],
-              ),
+                ),
             ),
-          ),
         ],
       ),
     );

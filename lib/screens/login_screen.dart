@@ -170,6 +170,8 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFF1E1E1E), // Force opaque dark background
+
       body: Column(
         children: [
           // Window Controls (Draggable Header)

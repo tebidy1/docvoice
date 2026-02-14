@@ -1,21 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../core/theme.dart';
+import '../../mobile_app/core/theme.dart';
 import 'package:flutter/services.dart';
-import '../../models/note_model.dart';
-import '../../services/inbox_service.dart';
-import '../editor/editor_screen.dart';
-import 'archive_screen.dart';
-import '../../core/utils/date_helper.dart';
+import '../../mobile_app/models/note_model.dart';
+import '../../mobile_app/services/inbox_service.dart';
+import 'extension_editor_screen.dart'; // Correct Import
+import '../../mobile_app/features/inbox/archive_screen.dart'; // Reuse Mobile Archive
+import '../../mobile_app/core/utils/date_helper.dart';
 
-class InboxScreen extends StatefulWidget {
-  const InboxScreen({super.key});
+class ExtensionInboxScreen extends StatefulWidget {
+  const ExtensionInboxScreen({super.key});
 
   @override
-  State<InboxScreen> createState() => InboxScreenState();
+  State<ExtensionInboxScreen> createState() => ExtensionInboxScreenState();
 }
 
-class InboxScreenState extends State<InboxScreen> {
+class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
   final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
   final List<NoteModel> _notes = []; // Active Notes
   final List<NoteModel> _archivedNotes = []; // Archived Notes
@@ -59,8 +59,6 @@ class InboxScreenState extends State<InboxScreen> {
     }
   }
 
-
-
   void _clearArchive() {
     setState(() {
       _archivedNotes.clear();
@@ -102,7 +100,7 @@ class InboxScreenState extends State<InboxScreen> {
             child: StreamBuilder<List<NoteModel>>(
               stream: InboxService().watchPendingNotes(),
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting && _archivedNotes.isEmpty) { // Changed _notes.isEmpty to _archivedNotes.isEmpty as _notes is no longer a state variable
+                if (snapshot.connectionState == ConnectionState.waiting && _archivedNotes.isEmpty) { 
                    return const Center(child: CircularProgressIndicator()); 
                 }
                 
@@ -117,18 +115,10 @@ class InboxScreenState extends State<InboxScreen> {
                 }
 
                 return AnimatedList(
-                  key: _listKey, // Note: Key usage with StreamBuilder might be tricky if list changes drastically. 
-                  // For simplicity in this iteration, we use ListView.builder inside the Stream
-                  // or we manually manage diffs. 
-                  // Let's swap to ListView.builder for reliability with Streams, or just populate _notes.
-                  // Real proper AnimatedList with Stream requires DiffUtil.
-                  // Let's use simple ListView for the V1 Cloud Sync to ensure correctness.
-                  
+                  key: _listKey,
                   initialItemCount: notes.length,
                   itemBuilder: (context, index, animation) {
-                     // Since we can't easily animate item insertion from Stream without diffing,
-                     // we will lose the slide animation on load, but gain Real-time Sync.
-                     // A fair trade-off for Phase 9.
+                     // Simple list builder logic from mobile
                      
                     bool showHeader = true;
                     if (index > 0) {
@@ -158,9 +148,7 @@ class InboxScreenState extends State<InboxScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         header,
-                        // The _buildAnimatedItem wrapper is removed as per instruction.
-                        // The _archiveNote call needs to be updated to use the note from the stream.
-                        _buildNoteCard(context, notes[index], index: index), // Removed animation wrapper for now
+                        _buildNoteCard(context, notes[index], index: index), 
                       ],
                     );
                   },
@@ -169,24 +157,6 @@ class InboxScreenState extends State<InboxScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  // Modified to accept index for Copy action
-  Widget _buildAnimatedItem(BuildContext context, NoteModel note, Animation<double> animation, {int? index}) {
-    return SizeTransition(
-      sizeFactor: animation,
-      axisAlignment: 0.0, 
-      child: FadeTransition(
-        opacity: animation,
-        child: SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0, -0.2), 
-            end: Offset.zero,
-          ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutBack)),
-          child: _buildNoteCard(context, note, index: index),
-        ),
       ),
     );
   }
@@ -204,7 +174,7 @@ class InboxScreenState extends State<InboxScreen> {
         break;
       case NoteStatus.copied:
         statusColor = Colors.blue;
-        statusIcon = Icons.copy_all; // or Icons.done_all
+        statusIcon = Icons.copy_all; 
         statusText = "Copied";
         break;
       case NoteStatus.processed:
@@ -223,9 +193,10 @@ class InboxScreenState extends State<InboxScreen> {
       shadowColor: Colors.black45,
       child: InkWell(
         onTap: () {
+          // NAVIGATE TO EXTENSION EDITOR
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => EditorScreen(draftNote: note)),
+            MaterialPageRoute(builder: (_) => ExtensionEditorScreen(draftNote: note)),
           );
         },
         child: Padding(
@@ -244,7 +215,7 @@ class InboxScreenState extends State<InboxScreen> {
                   Expanded(
                     child: Text(note.title, style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 16)),
                   ),
-                  if (index != null) // Only show Copy button if index is known (active list)
+                  if (index != null) 
                     IconButton(
                       icon: const Icon(Icons.copy, color: Colors.white70, size: 20),
                       tooltip: 'Copy & Archive',

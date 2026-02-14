@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/inbox_note.dart';
 import '../models/macro.dart';
 import '../services/windows_injector.dart'; // Desktop Injector
+import '../services/inbox_service.dart';
 import 'inbox_note_detail_view.dart';
 
 class InboxCard extends StatelessWidget {
@@ -19,9 +20,25 @@ class InboxCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Determine status icon/color
-    final isProcessed = note.status == NoteStatus.processed ||
-        note.status == NoteStatus.archived;
-    final statusColor = isProcessed ? Colors.blue : Colors.grey;
+    Color statusColor;
+    IconData statusIcon;
+
+    switch (note.status) {
+      case NoteStatus.ready:
+        statusColor = Colors.greenAccent;
+        statusIcon = Icons.check_circle;
+        break;
+      case NoteStatus.copied:
+        statusColor = Colors.blueAccent;
+        statusIcon = Icons.copy_all;
+        break;
+      case NoteStatus.processed:
+      case NoteStatus.draft:
+      default:
+        statusColor = Colors.grey;
+        statusIcon = Icons.edit_note;
+        break;
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12, left: 16, right: 16),
@@ -57,7 +74,7 @@ class InboxCard extends StatelessWidget {
                   children: [
                     // Status Icon (Double Check)
                     Icon(
-                      Icons.done_all,
+                      statusIcon,
                       size: 18,
                       color: statusColor,
                     ),
@@ -242,6 +259,13 @@ class InboxCard extends StatelessWidget {
     // For now, simple injection.
 
     await WindowsInjector().injectViaPaste(note.rawText);
+    
+    // 3. Mark as Copied
+    try {
+      await InboxService().updateStatus(note.id, NoteStatus.copied);
+    } catch (e) {
+      print("Error updating status to copied: $e");
+    }
   }
 
   Future<void> _openDetailView(BuildContext context,

@@ -61,6 +61,7 @@ class InboxService {
     String? patientName,
     String? summary,
     int? suggestedMacroId,
+    String? status, // Added status update support
   }) async {
     try {
       await init();
@@ -71,9 +72,10 @@ class InboxService {
       if (patientName != null) body['patient_name'] = patientName;
       if (summary != null) body['summary'] = summary;
       if (suggestedMacroId != null) body['suggested_macro_id'] = suggestedMacroId;
+      if (status != null) body['status'] = status;
       
       // Update status to processed if formatted text is provided
-      if (formattedText != null && formattedText.isNotEmpty) {
+      if (formattedText != null && formattedText.isNotEmpty && status == null) {
         body['status'] = 'processed';
       }
 
@@ -86,6 +88,11 @@ class InboxService {
       print('Error updating note: $e');
       rethrow;
     }
+  }
+
+  /// Update just the status
+  Future<void> updateStatus(int noteId, NoteStatus status) async {
+      await updateNote(noteId, status: status.name);
   }
 
   Future<List<NoteModel>> getPendingNotes() async {
@@ -156,6 +163,14 @@ class InboxService {
     note.updatedAt = json['updated_at'] != null 
         ? DateTime.parse(json['updated_at']) 
         : note.createdAt;
+    
+    // Map suggested/applied macro ID
+    if (json['suggested_macro_id'] != null) {
+      note.appliedMacroId = json['suggested_macro_id'] is int 
+          ? json['suggested_macro_id'] 
+          : int.tryParse(json['suggested_macro_id'].toString());
+    }
+    
     return note;
   }
 
@@ -165,6 +180,10 @@ class InboxService {
         return NoteStatus.draft; // Map 'pending' to 'draft'
       case 'processed':
         return NoteStatus.processed;
+      case 'ready':
+        return NoteStatus.ready;
+      case 'copied':
+        return NoteStatus.copied;
       case 'archived':
         return NoteStatus.archived;
       default:

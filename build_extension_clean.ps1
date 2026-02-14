@@ -35,6 +35,9 @@ Copy-Item "$extDir/manifest.json" "$buildDir/manifest.json" -Force
 # Add background.js (Service Worker)
 Copy-Item "$extDir/background.js" "$buildDir/background.js" -Force
 
+# Add extension_loader_v2.js
+Copy-Item "$extDir/extension_loader_v2.js" "$buildDir/extension_loader_v2.js" -Force
+
 # Add icons if missing (Flutter usually copies what's in web/icons, but extension might need generic ones)
 if (Test-Path "$extDir/icons") {
     Copy-Item "$extDir/icons" "$buildDir" -Recurse -Force

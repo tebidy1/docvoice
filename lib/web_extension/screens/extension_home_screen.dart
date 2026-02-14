@@ -4,8 +4,9 @@ import '../../mobile_app/features/inbox/inbox_screen.dart';
 import '../../mobile_app/services/audio_recording_service.dart';
 import 'package:record/record.dart'; // For Amplitude
 import 'package:flutter_animate/flutter_animate.dart';
-import 'profile_screen.dart';
-import '../../mobile_app/features/editor/editor_screen.dart';
+import 'extension_settings_screen.dart';
+import 'extension_inbox_screen.dart'; // New Extension Inbox
+import 'extension_editor_screen.dart';
 import '../../mobile_app/models/note_model.dart';
 import 'package:uuid/uuid.dart';
 
@@ -20,7 +21,7 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
   int _selectedIndex = 0; // 0: Inbox, 1: Profile
   bool _isRecording = false;
   final AudioRecordingService _audioService = AudioRecordingService();
-  final GlobalKey<InboxScreenState> _inboxKey = GlobalKey<InboxScreenState>();
+  final GlobalKey<ExtensionInboxScreenState> _inboxKey = GlobalKey<ExtensionInboxScreenState>();
 
   late final List<Widget> _screens;
 
@@ -28,8 +29,8 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
   void initState() {
     super.initState();
     _screens = [
-      InboxScreen(key: _inboxKey),
-      const ProfileScreen(),
+      ExtensionInboxScreen(key: _inboxKey), // Use Extension Version
+      const ExtensionSettingsScreen(),
     ];
   }
 
@@ -67,9 +68,10 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
           ..createdAt = DateTime.now()
           ..updatedAt = DateTime.now();
 
+        
          final result = await Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => EditorScreen(draftNote: draft)),
+            MaterialPageRoute(builder: (_) => ExtensionEditorScreen(draftNote: draft)),
           );
 
           if (result != null && result is String) {
@@ -143,10 +145,10 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
               ),
               const SizedBox(width: 32),
               IconButton(
-                icon: const Icon(Icons.person),
+                icon: const Icon(Icons.settings),
                 color: _selectedIndex == 1 ? const Color(0xFF4A90E2) : const Color(0xFF757575),
                 onPressed: () => _onItemTapped(1),
-                tooltip: 'Profile',
+                tooltip: 'Settings',
               ),
             ],
           ),

@@ -2,6 +2,7 @@ import 'package:isar/isar.dart';
 import '../models/macro.dart';
 import 'database_service.dart';
 import 'dart:async';
+import 'dart:convert';
 
 class MacroService {
   // Singleton pattern
@@ -55,23 +56,257 @@ class MacroService {
     try {
       print("MacroService: Seeding default macros...");
       
-      await addMacro("Normal Cardio", "Regular rate and rhythm. No murmurs, rubs, or gallops. S1 and S2 normal.", category: "Cardiology");
-      print("MacroService: ✓ Added 'Normal Cardio'");
-      
-      await addMacro("Normal Lung", "Lungs clear to auscultation bilaterally. No wheezes, rales, or rhonchi.", category: "Pulmonology");
-      print("MacroService: ✓ Added 'Normal Lung'");
-      
-      await addMacro("Normal Abdomen", "Soft, non-tender, non-distended. Bowel sounds present. No organomegaly.", category: "Gastroenterology");
-      print("MacroService: ✓ Added 'Normal Abdomen'");
-      
-      await addMacro("Insert Normal BP", "Blood Pressure: 120/80 mmHg, Heart Rate: 72 bpm, Regular rhythm, SPO2: 98% on room air.", category: "General");
-      print("MacroService: ✓ Added 'Insert Normal BP'");
-      
-      await addMacro("Normal Neuro", "Alert and oriented x3. Cranial nerves II-XII intact. Motor strength 5/5 in all extremities. Sensory intact to light touch.", category: "Neurology");
-      print("MacroService: ✓ Added 'Normal Neuro'");
-      
-      await addMacro("Plan Diabetes", "1. Continue Metformin 500mg BID\n2. Check HbA1c in 3 months\n3. Self-monitoring blood glucose\n4. Diet and exercise counseling", category: "General");
-      print("MacroService: ✓ Added 'Plan Diabetes'");
+      // 1. SOAP Note
+      await addMacro(
+        "📝 SOAP Note", 
+        '''
+SOAP NOTE
+
+SUBJECTIVE:
+• Chief Complaint: [Complaint]
+• HPI: [History of Present Illness]
+• ROS: [Relevant Systems / Negatives]
+
+OBJECTIVE:
+• Vitals: BP: [Value / mmHg] | HR: [Value / bpm] | Temp: [Value / °C]
+• General Appearance: [Description]
+• Systemic Exam: [Key Findings]
+
+ASSESSMENT:
+• Primary Diagnosis: [Dx]
+• Differential: [DDx]
+
+PLAN:
+• Pharmacotherapy: [Medication Name] [Dose] [Freq] [Duration]
+• Investigations: [Labs / Imaging]
+• Follow-up: [Timeframe]
+
+"Patient educated regarding diagnosis, plan, and red flags for ER return."
+''', 
+        category: "General"
+      );
+      print("MacroService: ✓ Added 'SOAP Note'");
+
+      // 2. Sick Leave
+      await addMacro(
+        "🤒 Sick Leave", 
+        '''
+SICK LEAVE RECOMMENDATION
+
+To: Employer / School Administrators
+
+CLINICAL STATUS:
+• Diagnosis: [Condition]
+
+RECOMMENDATION:
+"Based on the medical examination performed today, the above-named patient is found to be unfit for work/school."
+
+• Duration: [Number] Days
+• Starting From: [Start Date]
+• Ending On: [End Date]
+
+TREATING PHYSICIAN:
+[Dr. Name]
+[S.C.F.H.S License Number]
+''', 
+        category: "Admin"
+      );
+      print("MacroService: ✓ Added 'Sick Leave'");
+
+      // 3. Medical Report
+      await addMacro(
+        "📄 Medical Report", 
+        '''
+MEDICAL REPORT
+Date: [Date]
+
+TO WHOM IT MAY CONCERN,
+
+HISTORY & COURSE:
+[Detailed Clinical History and Progression]
+
+CLINICAL FINDINGS:
+[Examination Findings]
+
+INVESTIGATIONS:
+[Significant Lab/Radiology Results]
+
+FINAL DIAGNOSIS:
+[Diagnosis]
+
+PLAN & RECOMMENDATIONS:
+[Current Management Plan]
+
+"This report is issued upon the request of the patient for administrative purposes."
+''', 
+        category: "Reports"
+      );
+      print("MacroService: ✓ Added 'Medical Report'");
+
+      // 4. Referral
+      await addMacro(
+        "🏥 Referral", 
+        '''
+REFERRAL LETTER
+
+TO: [Specialty Department]
+AT: [Receiving Hospital Name]
+
+FROM: [Referring Doctor Name]
+DATE: [Date]
+
+
+REASON FOR REFERRAL:
+[Specific Clinical Question or Service Needed]
+
+CLINICAL SUMMARY:
+[Brief History of Present Illness]
+[Relevant Past Medical History]
+
+CURRENT MEDICATIONS:
+[List]
+
+PENDING RESULTS:
+[Outstanding Labs/Images]
+
+"Thank you for accepting this patient for further management."
+''', 
+        category: "Referral"
+      );
+      print("MacroService: ✓ Added 'Referral'");
+
+      // 5. Radiology Req
+      await addMacro(
+        "☢️ Radiology Req", 
+        '''
+RADIOLOGY REQUEST
+Priority: [Routine / Urgent]
+
+
+STUDY REQUESTED:
+[Modality: X-Ray/CT/MRI] of [Body Part]
+[Side: Left / Right / Bilateral]
+
+CLINICAL INDICATION:
+[Symptoms / Rule Out Diagnosis]
+
+SPECIFIC QUERY TO RADIOLOGIST:
+[What exactly are we looking for?]
+
+SAFETY CHECKLIST:
+• Pregnancy Status: [Yes / No / N/A]
+• Renal Function (eGFR/Cr): [Value / Not Indicated]
+• Contrast Allergy: [Denied / Present]
+
+"I certify that this examination is clinically indicated."
+''', 
+        category: "Orders"
+      );
+      print("MacroService: ✓ Added 'Radiology Req'");
+
+      // 6. Diabetic Follow-up
+      await addMacro(
+        "🩸 Diabetic Follow-up", 
+        '''
+DIABETES FOLLOW-UP
+
+SUBJECTIVE:
+• Home Glucose Readings: [Range / Control]
+• Hypoglycemia Episodes: [Yes / No]
+• Compliance: [Good / Poor]
+• Symptoms: [Polydipsia, Polyuria, Blurring Vision]
+
+OBJECTIVE:
+• Vitals: BP: [BP] | BMI: [Value]
+• Exam: [Foot Exam / Neuro / CV]
+• Labs: HbA1c: [Value]% | Kidney Function: [Value]
+
+ASSESSMENT:
+• Diabetes Type [1/2]: [Control Status]
+• Complications: [None / Neuropathy / etc]
+
+PLAN:
+• Medications: [Adjustments]
+• Lifestyle: [Diet / Exercise]
+• Follow-up: [Interval]
+''', 
+        category: "Internal Medicine"
+      );
+      print("MacroService: ✓ Added 'Diabetic Follow-up'");
+
+      // 7. Neuro Exam
+      await addMacro(
+        "🧠 Neuro Exam", 
+        '''
+NEUROLOGICAL EXAMINATION
+
+MENTAL STATUS:
+• GCS: [Score / 15]
+• Orientation: [Time, Place, Person]
+• Speech: [Normal / Dysarthric / Aphasic]
+
+CRANIAL NERVES:
+• Pupils: [Size / Reactivity]
+• Face: [Symmetry]
+• Other: [Deficits]
+
+MOTOR SYSTEM:
+• Tone: [Normal / Increased / Decreased]
+• Power (Upper): R:[Grade/5] L:[Grade/5]
+• Power (Lower): R:[Grade/5] L:[Grade/5] 
+• Reflexes: [Run-down]
+
+SENSORY:
+• Light Touch/Pinprick: [Intact / Deficit Level]
+• Proprioception: [Intact / Impaired]
+
+COORDINATION & GAIT:
+• Finger-Nose: [Normal / Dysmetria]
+• Gait: [Normal / Ataxic / Hemiplegic]
+
+IMPRESSION:
+[Localization of Lesion]
+''', 
+        category: "Neurology"
+      );
+      print("MacroService: ✓ Added 'Neuro Exam'");
+
+      // 8. Joint Exam
+      await addMacro(
+        "🦴 Joint Exam", 
+        '''
+ORTHOPEDIC JOINT EXAMINATION
+Joint: [Shoulder / Knee / Hip / etc]
+Side: [Right / Left]
+
+INSPECTION:
+• Swelling: [Yes / No]
+• Deformity: [Description]
+• Skin: [Scars / Erythema]
+
+PALPATION:
+• Tenderness: [Specific Landmark]
+• Temperature: [Normal / Warm]
+• Effusion: [Present / Absent]
+
+RANGE OF MOTION (ROM):
+• Active: [Degree]
+• Passive: [Degree]
+• Pain on Motion: [Yes / No]
+
+SPECIAL TESTS:
+[Test Name]: [Positive / Negative]
+
+NEUROVASCULAR:
+• Pulses: [Palpable]
+• Sensation: [Intact]
+
+PLAN:
+[Imaging / Conservative / Surgical]
+''', 
+        category: "Orthopedics"
+      );
+      print("MacroService: ✓ Added 'Joint Exam'");
       
       final isar = await _dbService.isar;
       final finalCount = await isar.macros.count();
@@ -214,5 +449,21 @@ class MacroService {
     }
     
     return null;
+  }
+  /// Returns macros as JSON string (for ConnectivityServer)
+  Future<String> getMacrosAsJson() async {
+    try {
+      final macros = await getAllMacros();
+      final List<Map<String, dynamic>> jsonList = macros.map((m) => {
+        'id': m.id,
+        'trigger': m.trigger,
+        'content': m.content,
+        'category': m.category,
+      }).toList();
+      return jsonEncode(jsonList);
+    } catch (e) {
+      print('Error getting macros as JSON: $e');
+      return "[]";
+    }
   }
 }

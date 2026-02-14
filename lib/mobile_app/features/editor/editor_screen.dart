@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // For Clipboard
+import '../../../widgets/pattern_highlight_controller.dart';
 import '../../../services/api_service.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme.dart';
@@ -61,7 +63,14 @@ class _EditorScreenState extends State<EditorScreen> {
     _sourceController = TextEditingController(text: widget.draftNote?.originalText ?? widget.draftNote?.content ?? "");
     
     // Final: Formatted text if exists
-    _finalController = TextEditingController(text: widget.draftNote?.formattedText ?? ""); 
+    // Use PatternHighlightController to highlight [brackets] or "Not Reported"
+    _finalController = PatternHighlightController(
+      text: widget.draftNote?.formattedText ?? "",
+      patternStyles: {
+        RegExp(r'\[(.*?)\]'): const TextStyle(color: Colors.orange, backgroundColor: Color(0x33FF9800)),
+        RegExp(r'Not Reported', caseSensitive: false): const TextStyle(color: Colors.white24, decoration: TextDecoration.lineThrough),
+      },
+    ); 
     
     // Auto-save on manual edits
     _finalController.addListener(_onManualEdit);
@@ -445,6 +454,61 @@ class _EditorScreenState extends State<EditorScreen> {
     }
   }
 
+  void _copyCleanText() {
+    final text = _finalController.text;
+    if (text.isEmpty) return;
+
+    // 1. Split into lines
+    final List<String> lines = text.split('\n');
+    final List<String> cleanLines = [];
+
+    // 2. Filter lines
+    for (var line in lines) {
+      // Logic: If line contains [Not Reported] or just [...], skip it.
+      // We can be aggressive or specific.
+      // User requested: "remove lines with [Not Reported]"
+      
+      bool isDirty = false;
+      
+      if (line.contains('[Not Reported]')) isDirty = true;
+      if (line.contains('Not Reported')) isDirty = true;
+      // if (line.trim() == '[]') isDirty = true; 
+
+      if (!isDirty) {
+        cleanLines.add(line);
+      }
+    }
+
+    final cleanText = cleanLines.join('\n');
+
+    // 3. Copy to Clipboard
+    Clipboard.setData(ClipboardData(text: cleanText));
+
+    // 4. Feedback
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.cleaning_services, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text("✅ Text Cleaned & Copied!", style: TextStyle(fontWeight: FontWeight.bold)),
+                  Text("Removed ${lines.length - cleanLines.length} lines with missing info.", style: const TextStyle(fontSize: 12)),
+                ],
+              ),
+            ],
+          ),
+          backgroundColor: Colors.green[700],
+          duration: const Duration(seconds: 3),
+        )
+      );
+    }
+  }
+
 
 
   // ... inside _EditorScreenState
@@ -529,6 +593,14 @@ class _EditorScreenState extends State<EditorScreen> {
         title: Text("Pocket Editor", style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
         actions: [
           Container(
+            margin: const EdgeInsets.only(right: 8),
+            child: IconButton(
+              icon: const Icon(Icons.copy_all_rounded, color: Colors.white70),
+              tooltip: "Smart Copy (Clean)",
+              onPressed: _copyCleanText,
+            ),
+          ),
+          Container(
             margin: const EdgeInsets.only(right: 16),
             child: SizedBox(
               height: 32,
@@ -538,8 +610,16 @@ class _EditorScreenState extends State<EditorScreen> {
                   
                   // Note is already saved via auto-save, just notify user and close
                   if (_currentNoteId != null) {
+                    // EXPLICITLY SET STATUS TO READY
+                    try {
+                       final inboxService = InboxService();
+                       await inboxService.updateStatus(_currentNoteId!, NoteStatus.ready);
+                    } catch (e) {
+                       debugPrint("Error setting status to ready: $e");
+                    }
+
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("✅ Work saved to Cloud"), backgroundColor: AppTheme.successGreen)
+                      const SnackBar(content: Text("✅ Note marked as Ready!"), backgroundColor: AppTheme.successGreen)
                     );
                   } else {
                     // Fallback: save if somehow auto-save didn't work

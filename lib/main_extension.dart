@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'mobile_app/features/auth/login_screen.dart' as unified_login;
 // Mobile features (compatible with Web)
 import 'mobile_app/features/home/home_screen.dart' as unified_mobile;
+import 'web_extension/screens/extension_home_screen.dart'; // New Entry Point
 import 'mobile_app/services/websocket_service.dart' as unified_ws;
 import 'models/app_theme.dart';
 import 'services/auth_service.dart';
@@ -231,7 +232,7 @@ class _ScribeFlowExtensionAppState extends State<ScribeFlowExtensionApp> {
                   final isAuth = snapshot.data ?? false;
 
                   if (isAuth) {
-                    return const AuthGuard(child: unified_mobile.HomeScreen());
+                    return const AuthGuard(child: ExtensionHomeScreen());
                   } else {
                     return const unified_login.LoginScreen();
                   }

@@ -4,6 +4,7 @@ enum NoteStatus {
   draft, // Initial recording or raw text
   processed, // AI macro applied
   ready, // Confirmed by user, waiting to sync
+  copied, // Copied to clipboard/injected (New 3rd State)
   archived // Synced/Completed
 }
 
@@ -115,6 +116,8 @@ class NoteModelBase {
         return NoteStatus.processed;
       case 'ready':
         return NoteStatus.ready;
+      case 'copied':
+        return NoteStatus.copied;
       case 'archived':
         return NoteStatus.archived;
       default:
