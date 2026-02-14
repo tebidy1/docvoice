@@ -1,30 +1,22 @@
-import 'package:flutter/material.dart';
-import 'package:window_manager/window_manager.dart';
 import 'dart:async';
-
-import '../services/connectivity_server.dart';
-
-import '../services/audio_recorder_service.dart';
-import '../services/inbox_service.dart';
-import '../services/gemini_service.dart';
-import '../services/auth_service.dart';
 import 'dart:io';
+
+import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
-
-import 'qr_pairing_dialog.dart';
-import 'macro_manager_dialog.dart';
-import 'inbox_manager_dialog.dart';
-import '../screens/settings_dialog.dart'; // Import Settings Dialog
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:screen_retriever/screen_retriever.dart';
-import '../models/inbox_note.dart'; // Import NoteModel and NoteStatus
-import 'inbox_note_detail_view.dart'; // Import Detail View for instant open
+import 'package:window_manager/window_manager.dart';
 
-import '../utils/window_manager_helper.dart';
-import '../widgets/user_profile_header.dart';
-import '../screens/admin_dashboard_screen.dart';
-import '../services/theme_service.dart';
 import '../models/app_theme.dart';
+import '../models/inbox_note.dart'; // Import NoteModel and NoteStatus
+import '../screens/settings_dialog.dart'; // Import Settings Dialog
+import '../services/audio_recorder_service.dart';
+import '../services/connectivity_server.dart';
+import '../services/inbox_service.dart';
+import '../services/theme_service.dart';
+import '../utils/window_manager_helper.dart';
+import 'inbox_manager_dialog.dart';
+import 'inbox_note_detail_view.dart'; // Import Detail View for instant open
+import 'macro_manager_dialog.dart';
 
 class DesktopApp extends StatefulWidget {
   const DesktopApp({super.key});
@@ -38,51 +30,28 @@ class _DesktopAppState extends State<DesktopApp> {
 
   final AudioRecorderService _recorder = AudioRecorderService();
   final InboxService _inboxService = InboxService();
-  final AuthService _authService = AuthService();
-  late final GeminiService _geminiService;
-  
-  String _status = "Initializing...";
-  String _ipAddress = "Loading...";
+
   bool _isRecording = false;
   bool _isProcessing = false; // Visual feedback for processing
-  bool _isMinimizeHovered = false;
-  bool _isMaximizeHovered = false;
-  bool _isCloseHovered = false;
-  bool _isAdmin = false;
   int _lastViewedCount = 0; // For Smart Badge logic
 
   @override
   void initState() {
     super.initState();
-    _geminiService = GeminiService(apiKey: dotenv.env['GEMINI_API_KEY'] ?? "AIzaSyCytBIf72AhxeTpy-RA1pqMf8fSykJbqes");
     _startServer();
     _listInputDevices();
-    _checkAdminStatus();
-    
+
     // Position window after first frame and set appropriate size
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _setInitialWindowSize();
       await _positionWindowToRightCenter();
-      
+
       // Initialize last viewed count to current count (assume initially read)
       final notes = await _inboxService.getPendingNotes();
       setState(() {
         _lastViewedCount = notes.length;
       });
     });
-  }
-
-  Future<void> _checkAdminStatus() async {
-    try {
-      final user = await _authService.getCurrentUser();
-      if (user != null && (user['role'] == 'admin' || user['role'] == 'Admin')) {
-        setState(() {
-          _isAdmin = true;
-        });
-      }
-    } catch (e) {
-      print('Error checking admin status: $e');
-    }
   }
 
   Future<void> _setInitialWindowSize() async {
@@ -103,33 +72,19 @@ class _DesktopAppState extends State<DesktopApp> {
       final primaryDisplay = await screenRetriever.getPrimaryDisplay();
       final screenSize = primaryDisplay.size;
       final windowSize = await windowManager.getSize();
-      
+
       // Calculate position: far right, centered vertically
-      final x = screenSize.width - windowSize.width - 10; // 10px margin from edge
+      final x =
+          screenSize.width - windowSize.width - 10; // 10px margin from edge
       final y = (screenSize.height - windowSize.height) / 2;
-      
+
       await windowManager.setPosition(Offset(x, y));
-      
+
       print("Window positioned at: ($x, $y)");
       print("Screen size: ${screenSize.width}x${screenSize.height}");
       print("Window size: ${windowSize.width}x${windowSize.height}");
     } catch (e) {
       print("Error positioning window: $e");
-    }
-  }
-
-
-
-  Future<void> _minimizeWindow() async {
-    await windowManager.minimize();
-  }
-
-  Future<void> _maximizeWindow() async {
-    final isMaximized = await windowManager.isMaximized();
-    if (isMaximized) {
-      await windowManager.restore();
-    } else {
-      await windowManager.maximize();
     }
   }
 
@@ -151,18 +106,13 @@ class _DesktopAppState extends State<DesktopApp> {
 
   Future<void> _startServer() async {
     await _server.startServer();
-    final ip = await ConnectivityServer.getLocalIpAddress();
-    setState(() {
-      _ipAddress = ip;
-    });
-    
+
     _server.statusStream.listen((status) {
-      setState(() {
-        _status = status;
-        if (status.startsWith("Error")) {
+      if (status.startsWith("Error")) {
+        setState(() {
           _isProcessing = false;
-        }
-      });
+        });
+      }
     });
 
     _server.audioStream.listen((audioChunk) {
@@ -176,9 +126,9 @@ class _DesktopAppState extends State<DesktopApp> {
         print("Skipping: Text is empty");
         return;
       }
-      
+
       print("Received transcription: '$text'");
-      
+
       try {
         // Save raw text directly without analysis
         await _inboxService.addNote(
@@ -186,9 +136,9 @@ class _DesktopAppState extends State<DesktopApp> {
           patientName: 'Untitled', // Will be updated later by Macro
           summary: null,
         );
-        
+
         print("Added to Inbox (Raw)");
-        
+
         // Show confirmation
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -203,47 +153,44 @@ class _DesktopAppState extends State<DesktopApp> {
       } catch (e) {
         print('Error adding valid note to inbox: $e');
         if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text("⚠️ Failed to save: $e"),
-                backgroundColor: Colors.orange,
-              ),
-            );
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("⚠️ Failed to save: $e"),
+              backgroundColor: Colors.orange,
+            ),
+          );
         }
       }
     });
   }
 
   Timer? _amplitudeTimer;
-  double _currentVolume = 0.0;
 
   Future<void> _toggleRecording() async {
     print("Mic Button Tapped. Current State: Recording=$_isRecording");
-    
+
     if (_isRecording) {
       // Stop
       _amplitudeTimer?.cancel();
-      setState(() => _currentVolume = 0.0);
-      
+
       print("Stopping recording...");
       try {
         final path = await _recorder.stop();
         setState(() {
           _isRecording = false;
           _isProcessing = true; // Start processing spinner
-          _status = "Processing...";
         });
-        
+
         if (path != null) {
           print("Recording saved to: $path");
           final file = File(path);
-          
+
           // Check if file exists
           if (!await file.exists()) {
-             // ... error handling ...
-             return;
+            // ... error handling ...
+            return;
           }
-          
+
           final bytes = await file.readAsBytes();
           print("Read ${bytes.length} bytes from recording file");
 
@@ -252,83 +199,83 @@ class _DesktopAppState extends State<DesktopApp> {
           // ---------------------------------------------------------
           // 1. Create a StreamController for this specific session
           final instantTextController = StreamController<String>.broadcast();
-          
+
           // Use cascade operator since NoteModel has no named constructor
           final tempNote = NoteModel()
             ..id = 0 // Temporary ID
             ..uuid = 'temp_${DateTime.now().millisecondsSinceEpoch}'
-            ..content = '' 
+            ..content = ''
             ..rawText = ''
             ..createdAt = DateTime.now()
             ..updatedAt = DateTime.now()
-            ..status = NoteStatus.draft // Use 'draft' as 'processing' does not exist
+            ..status =
+                NoteStatus.draft // Use 'draft' as 'processing' does not exist
             ..patientName = 'Untitled';
 
           // 2. Open the View IMMEDIATELY (Do not await yet)
           // We use a disjoint async block to show dialog so we can continue execution
-          final dialogFuture = showDialog(
+          showDialog(
             context: context,
             barrierDismissible: false, // Prevent closing while loading
             builder: (context) => InboxNoteDetailView(
               note: tempNote,
               pendingTextStream: instantTextController.stream,
-           ),
+            ),
           );
 
           // 3. Start Processing in background
           // We attach a specific listener for THIS recording session
           StreamSubscription? serverSub;
           serverSub = _server.textStream.listen((text) async {
-             // A. Pipe text to the open dialog
-             instantTextController.add(text); // This updates the UI via Stream
-             
-             // B. Save to Database (Real Persistence)
-             try {
-                // Determine Patient Name logic here if needed, or keep "Untitled"
-                // The Detail View handles the "final" version
-                await _inboxService.addNote(
-                  text,
-                  patientName: 'Untitled',
-                  summary: null,
-                );
-                print("✅ Persisted to Inbox");
-             } catch (e) {
-                print("❌ Save failed: $e");
-             }
+            // A. Pipe text to the open dialog
+            instantTextController.add(text); // This updates the UI via Stream
 
-             // C. Cleanup
-             serverSub?.cancel();
-             instantTextController.close();
-             setState(() => _isProcessing = false);
+            // B. Save to Database (Real Persistence)
+            try {
+              // Determine Patient Name logic here if needed, or keep "Untitled"
+              // The Detail View handles the "final" version
+              await _inboxService.addNote(
+                text,
+                patientName: 'Untitled',
+                summary: null,
+              );
+              print("✅ Persisted to Inbox");
+            } catch (e) {
+              print("❌ Save failed: $e");
+            }
+
+            // C. Cleanup
+            serverSub?.cancel();
+            instantTextController.close();
+            setState(() => _isProcessing = false);
           });
-          
+
           // 4. Trigger the actual heavy lifting
           try {
-             await _server.transcribeWav(bytes); 
-             // when transcribeWav finishes, it emits to textStream, triggers above logic
-          } catch(e) {
-             instantTextController.addError(e);
-             setState(() => _isProcessing = false);
-             serverSub?.cancel();
+            await _server.transcribeWav(bytes);
+            // when transcribeWav finishes, it emits to textStream, triggers above logic
+          } catch (e) {
+            instantTextController.addError(e);
+            setState(() => _isProcessing = false);
+            serverSub.cancel();
           }
-          
+
           // Cleanup File
           await file.delete();
-          
+
           // Wait for dialog to close (optional, if we want to track it)
-          // await dialogFuture; 
-          
+          // await dialogFuture;
         } else {
           print("ERROR: Recorder returned null path");
           setState(() {
-            _status = "Error: No file";
+            print("Error: No file");
             _isProcessing = false;
           });
         }
       } catch (e) {
         print("Error stopping: $e");
         setState(() {
-          _status = "Error: $e";
+          print("Error: $e");
           _isProcessing = false;
         });
       }
@@ -338,39 +285,23 @@ class _DesktopAppState extends State<DesktopApp> {
       try {
         if (!await _recorder.hasPermission()) {
           print("Permission denied");
-          setState(() => _status = "Permission Denied");
+          print("Permission Denied");
           return;
         }
-        
+
         // Get temp path
         final dir = await getTemporaryDirectory();
         final path = '${dir.path}/temp_recording.wav';
-        
+
         await _recorder.startRecordingToFile(path);
-        
-        // Start Visualizer Timer
-        _amplitudeTimer = Timer.periodic(const Duration(milliseconds: 50), (timer) async {
-          final amp = await _recorder.getAmplitude();
-          final db = amp.current;
-          double vol = (db + 60) / 60;
-          if (vol < 0) vol = 0;
-          if (vol > 1) vol = 1;
-          
-          if (mounted) {
-            setState(() => _currentVolume = vol);
-          }
-        });
 
         print("Recording started successfully to $path");
         setState(() {
           _isRecording = true;
-          _status = "Recording...";
         });
       } catch (e) {
         print("Error recording: $e");
-        setState(() {
-          _status = "Mic Error";
-        });
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -392,228 +323,264 @@ class _DesktopAppState extends State<DesktopApp> {
 
   @override
   Widget build(BuildContext context) {
-    final isConnected = _status.contains("Client Connected");
-    
     return ValueListenableBuilder<AppTheme>(
-      valueListenable: ThemeService(),
-      builder: (context, theme, child) {
-        return GestureDetector(
-          onPanStart: (details) {
-            windowManager.startDragging();
-          },
-          child: MouseRegion(
-            onEnter: (_) => WindowManagerHelper.setOpacity(1.0),
-            onExit: (_) => WindowManagerHelper.setOpacity(0.7),
-            child: Scaffold(
-            backgroundColor: Colors.transparent, // Transparent for frameless mode
-            body: Stack(
-              children: [
-                // Top bar removed for capsule mode
-                // Main floating bar
-                Center(
-                  child: Padding(
-                    padding: EdgeInsets.zero, // No padding needed
-                    child: GestureDetector(
-                      onPanStart: (details) {
-                        windowManager.startDragging();
-                      },
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(theme.borderRadius), // From Theme
-                        child: Container(
-                          width: double.infinity, // Fill the window explicitly
-                          padding: const EdgeInsets.symmetric(horizontal: 4), // Spec: Dense padding
-                          height: 56, // Spec: 56px
-                        decoration: BoxDecoration(
-                          color: theme.backgroundColor, // From Theme
-                          borderRadius: BorderRadius.circular(theme.borderRadius),
-                          border: Border.all(color: theme.borderColor, width: 1), // From Theme
-                          boxShadow: theme.shadows, // From Theme
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          mainAxisSize: MainAxisSize.max,
-                          children: [
-                         // 1. Close Button (Far Left / End)
-                         _buildIconButton(
-                           icon: Icons.close,
-                           onTap: _closeWindow,
-                           tooltip: "Close",
-                           color: theme.iconColor,
-                           theme: theme,
-                         ),
-                         
-                         const SizedBox(width: 4), // Spec: 4px gap
-
-                         // 0. Admin/Settings Button (Before Last)
-                         _buildIconButton(
-                           icon: Icons.settings,
-                           onTap: () async {
-                             await showDialog(
-                               context: context,
-                               barrierDismissible: true,
-                               barrierColor: Colors.transparent, // Or semi-transparent if centered
-                               builder: (context) => const SettingsDialog(),
-                             );
-                           },
-                           tooltip: "Settings",
-                           color: theme.iconColor,
-                           theme: theme,
-                         ),
-                         
-                         const SizedBox(width: 4), // Spec: 4px gap
-                        
-                         // 2. Lightning Icon (Macros)
-                         _buildIconButton(
-                           icon: Icons.flash_on,
-                           onTap: () async {
-                               await showDialog(
-                                 context: context,
-                                 barrierDismissible: true,
-                                 barrierColor: Colors.transparent,
-                                 builder: (context) => const MacroManagerDialog(),
-                               );
-                           },
-                           tooltip: "Macros",
-                           color: theme.iconColor,
-                           theme: theme,
-                         ),
-
-                         const SizedBox(width: 4), // Spec: 4px gap
-                         
-                         // 3. Messages Icon (Inbox)
-                         StreamBuilder<List>(
-                             stream: _inboxService.watchPendingNotes(),
-                             builder: (context, snapshot) {
-                               final count = snapshot.data?.length ?? 0;
-                               final hasNew = count > _lastViewedCount;
-                               
-                               return Stack(
-                                 clipBehavior: Clip.none,
-                                 children: [
-                                    _buildIconButton(
-                                      icon: hasNew ? Icons.mark_chat_unread_outlined : Icons.chat_bubble_outline, 
-                                      onTap: () async {
-                                         // Update last viewed logic
-                                         setState(() => _lastViewedCount = count);
-                                         
-                                         await WindowManagerHelper.expandToSidebar(context);
-                                         await showDialog(
-                                           context: context,
-                                           barrierDismissible: true,
-                                           barrierColor: Colors.transparent,
-                                           builder: (context) => const InboxManagerDialog(),
-                                         );
-                                         await WindowManagerHelper.collapseToPill(context);
-                                         
-                                         // Update again after closing in case changes happened
-                                         final freshNotes = await _inboxService.getPendingNotes();
-                                         setState(() => _lastViewedCount = freshNotes.length);
-                                      },
-                                      tooltip: "Inbox",
-                                      color: hasNew ? Colors.orange : theme.iconColor, 
-                                      theme: theme,
-                                   ),
-                                   if (hasNew)
-                                     Positioned(
-                                       right: 0,
-                                       top: 0,
-                                       child: Container(
-                                         width: 10,
-                                         height: 10,
-                                         decoration: const BoxDecoration(
-                                           color: Colors.orange,
-                                           shape: BoxShape.circle,
-                                         ),
-                                       ),
-                                     ),
-                                 ],
-                               );
-                             },
-                         ),
-
-                         const SizedBox(width: 4), // Spec: 4px gap
-
-                         // Divider
-                         Container(
-                           width: 1,
-                           height: 20, // Spec: 20px
-                           color: theme.dividerColor, // From Theme
-                         ),
-                         
-                         const SizedBox(width: 4), // Spec: 4px gap
-
-                          // 4. Microphone Button (Hero - Rounded Square)
-                          MouseRegion(
-                            cursor: SystemMouseCursors.click,
-                            child: GestureDetector(
-                              onTap: _isProcessing ? null : _toggleRecording, // Disable tap when processing
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 200),
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: _isRecording ? theme.micRecordingBackground : theme.micIdleBackground, // From Theme
-                                  borderRadius: BorderRadius.circular(4), // Spec: 4px radius
-                                  border: Border.all(
-                                    color: _isRecording ? theme.micRecordingBorder : theme.micIdleBorder, // From Theme
-                                    width: 1
+        valueListenable: ThemeService(),
+        builder: (context, theme, child) {
+          return GestureDetector(
+            onPanStart: (details) {
+              windowManager.startDragging();
+            },
+            child: MouseRegion(
+              onEnter: (_) => WindowManagerHelper.setOpacity(1.0),
+              onExit: (_) => WindowManagerHelper.setOpacity(0.7),
+              child: Scaffold(
+                backgroundColor:
+                    Colors.transparent, // Transparent for frameless mode
+                body: Stack(
+                  children: [
+                    // Top bar removed for capsule mode
+                    // Main floating bar
+                    Center(
+                      child: Padding(
+                        padding: EdgeInsets.zero, // No padding needed
+                        child: GestureDetector(
+                          onPanStart: (details) {
+                            windowManager.startDragging();
+                          },
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(
+                                theme.borderRadius), // From Theme
+                            child: Container(
+                              width:
+                                  double.infinity, // Fill the window explicitly
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 4), // Spec: Dense padding
+                              height: 56, // Spec: 56px
+                              decoration: BoxDecoration(
+                                color: theme.backgroundColor, // From Theme
+                                borderRadius:
+                                    BorderRadius.circular(theme.borderRadius),
+                                border: Border.all(
+                                    color: theme.borderColor,
+                                    width: 1), // From Theme
+                                boxShadow: theme.shadows, // From Theme
+                              ),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceEvenly,
+                                mainAxisSize: MainAxisSize.max,
+                                children: [
+                                  // 1. Close Button (Far Left / End)
+                                  _buildIconButton(
+                                    icon: Icons.close,
+                                    onTap: _closeWindow,
+                                    tooltip: "Close",
+                                    color: theme.iconColor,
+                                    theme: theme,
                                   ),
-                                ),
-                                child: _isProcessing 
-                                  ? Padding(
-                                      padding: const EdgeInsets.all(10.0),
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2, 
-                                        color: theme.micIdleIcon,
+
+                                  const SizedBox(width: 4), // Spec: 4px gap
+
+                                  // 0. Admin/Settings Button (Before Last)
+                                  _buildIconButton(
+                                    icon: Icons.settings,
+                                    onTap: () async {
+                                      await showDialog(
+                                        context: context,
+                                        barrierDismissible: true,
+                                        barrierColor: Colors
+                                            .transparent, // Or semi-transparent if centered
+                                        builder: (context) =>
+                                            const SettingsDialog(),
+                                      );
+                                    },
+                                    tooltip: "Settings",
+                                    color: theme.iconColor,
+                                    theme: theme,
+                                  ),
+
+                                  const SizedBox(width: 4), // Spec: 4px gap
+
+                                  // 2. Lightning Icon (Macros)
+                                  _buildIconButton(
+                                    icon: Icons.flash_on,
+                                    onTap: () async {
+                                      await showDialog(
+                                        context: context,
+                                        barrierDismissible: true,
+                                        barrierColor: Colors.transparent,
+                                        builder: (context) =>
+                                            const MacroManagerDialog(),
+                                      );
+                                    },
+                                    tooltip: "Macros",
+                                    color: theme.iconColor,
+                                    theme: theme,
+                                  ),
+
+                                  const SizedBox(width: 4), // Spec: 4px gap
+
+                                  // 3. Messages Icon (Inbox)
+                                  StreamBuilder<List>(
+                                    stream: _inboxService.watchPendingNotes(),
+                                    builder: (context, snapshot) {
+                                      final count = snapshot.data?.length ?? 0;
+                                      final hasNew = count > _lastViewedCount;
+
+                                      return Stack(
+                                        clipBehavior: Clip.none,
+                                        children: [
+                                          _buildIconButton(
+                                            icon: hasNew
+                                                ? Icons
+                                                    .mark_chat_unread_outlined
+                                                : Icons.chat_bubble_outline,
+                                            onTap: () async {
+                                              // Update last viewed logic
+                                              setState(() =>
+                                                  _lastViewedCount = count);
+
+                                              await WindowManagerHelper
+                                                  .expandToSidebar(context);
+                                              await showDialog(
+                                                context: context,
+                                                barrierDismissible: true,
+                                                barrierColor:
+                                                    Colors.transparent,
+                                                builder: (context) =>
+                                                    const InboxManagerDialog(),
+                                              );
+                                              await WindowManagerHelper
+                                                  .collapseToPill(context);
+
+                                              // Update again after closing in case changes happened
+                                              final freshNotes =
+                                                  await _inboxService
+                                                      .getPendingNotes();
+                                              setState(() => _lastViewedCount =
+                                                  freshNotes.length);
+                                            },
+                                            tooltip: "Inbox",
+                                            color: hasNew
+                                                ? Colors.orange
+                                                : theme.iconColor,
+                                            theme: theme,
+                                          ),
+                                          if (hasNew)
+                                            Positioned(
+                                              right: 0,
+                                              top: 0,
+                                              child: Container(
+                                                width: 10,
+                                                height: 10,
+                                                decoration: const BoxDecoration(
+                                                  color: Colors.orange,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+
+                                  const SizedBox(width: 4), // Spec: 4px gap
+
+                                  // Divider
+                                  Container(
+                                    width: 1,
+                                    height: 20, // Spec: 20px
+                                    color: theme.dividerColor, // From Theme
+                                  ),
+
+                                  const SizedBox(width: 4), // Spec: 4px gap
+
+                                  // 4. Microphone Button (Hero - Rounded Square)
+                                  MouseRegion(
+                                    cursor: SystemMouseCursors.click,
+                                    child: GestureDetector(
+                                      onTap: _isProcessing
+                                          ? null
+                                          : _toggleRecording, // Disable tap when processing
+                                      child: AnimatedContainer(
+                                        duration:
+                                            const Duration(milliseconds: 200),
+                                        width: 40,
+                                        height: 40,
+                                        decoration: BoxDecoration(
+                                          color: _isRecording
+                                              ? theme.micRecordingBackground
+                                              : theme
+                                                  .micIdleBackground, // From Theme
+                                          borderRadius: BorderRadius.circular(
+                                              4), // Spec: 4px radius
+                                          border: Border.all(
+                                              color: _isRecording
+                                                  ? theme.micRecordingBorder
+                                                  : theme
+                                                      .micIdleBorder, // From Theme
+                                              width: 1),
+                                        ),
+                                        child: _isProcessing
+                                            ? Padding(
+                                                padding:
+                                                    const EdgeInsets.all(10.0),
+                                                child:
+                                                    CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  color: theme.micIdleIcon,
+                                                ),
+                                              )
+                                            : Icon(
+                                                _isRecording
+                                                    ? Icons.stop
+                                                    : Icons.mic,
+                                                color: _isRecording
+                                                    ? theme.micRecordingIcon
+                                                    : theme
+                                                        .micIdleIcon, // From Theme
+                                                size: 20,
+                                              ),
                                       ),
-                                    )
-                                  : Icon(
-                                    _isRecording ? Icons.stop : Icons.mic,
-                                    color: _isRecording ? theme.micRecordingIcon : theme.micIdleIcon, // From Theme
-                                    size: 20,
+                                    ),
                                   ),
+
+                                  const SizedBox(width: 4), // Spec: 4px gap
+
+                                  // 5. Drag Handle (Far Right - Grid Pattern)
+                                  MouseRegion(
+                                    cursor: SystemMouseCursors.grab,
+                                    child: GestureDetector(
+                                      onPanStart: (details) {
+                                        windowManager.startDragging();
+                                      },
+                                      child: Container(
+                                        width: 32,
+                                        height: 40,
+                                        color: Colors.transparent,
+                                        alignment: Alignment.center,
+                                        child: Icon(
+                                          Icons.grid_view, // Grid dots look
+                                          color: theme
+                                              .dragHandleColor, // From Theme
+                                          size: 18,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
-
-                         const SizedBox(width: 4), // Spec: 4px gap
-
-
-
-                         // 5. Drag Handle (Far Right - Grid Pattern)
-                         MouseRegion(
-                           cursor: SystemMouseCursors.grab,
-                           child: GestureDetector(
-                             onPanStart: (details) {
-                               windowManager.startDragging();
-                             },
-                             child: Container(
-                               width: 32, 
-                               height: 40,
-                               color: Colors.transparent,
-                               alignment: Alignment.center,
-                               child: Icon(
-                                 Icons.grid_view, // Grid dots look
-                                 color: theme.dragHandleColor, // From Theme
-                                 size: 18,
-                               ),
-                             ),
-                           ),
-                         ),
-                      ],
+                        ),
+                      ),
                     ),
-                  ),
-                  ),
-                  ),
+                  ],
                 ),
               ),
-          ],
-        ),
-      ),
-    ), // MouseRegion
-    ); // Method
-  }
-  ); // ValueListenableBuilder
+            ), // MouseRegion
+          ); // Method
+        }); // ValueListenableBuilder
   }
 
   Widget _buildIconButton({
@@ -638,7 +605,8 @@ class _DesktopAppState extends State<DesktopApp> {
             child: Icon(
               icon,
               size: 20,
-              color: color, // Using passed color (which is likely theme.iconColor)
+              color:
+                  color, // Using passed color (which is likely theme.iconColor)
             ),
           ),
         ),

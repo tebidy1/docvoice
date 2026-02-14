@@ -31,6 +31,7 @@ migrate_working_dir/
 .pub/
 /build/
 *.exe
+*.apk
 *.zip
 # Symbolication related
 app.*.symbols

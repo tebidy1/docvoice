@@ -30,17 +30,43 @@ subprojects {
 }
 
 subprojects {
-    plugins.withId("com.android.library") {
-        val android = extensions.findByName("android")
+    val project = this
+    
+    fun applyAndroidFixes(proj: Project) {
+        val android = proj.extensions.findByName("android")
         if (android != null) {
             try {
-                val getNamespace = android.javaClass.getMethod("getNamespace")
-                if (getNamespace.invoke(android) == null) {
+                // Fix for isar_flutter_libs namespace if missing
+                try {
+                    val getNamespace = android.javaClass.getMethod("getNamespace")
                     val setNamespace = android.javaClass.getMethod("setNamespace", String::class.java)
-                    setNamespace.invoke(android, "dev.isar.isar_flutter_libs")
+                    if (getNamespace.invoke(android) == null) {
+                        setNamespace.invoke(android, "dev.isar.isar_flutter_libs")
+                    }
+                } catch (e: Exception) {}
+
+                // Force compileSdk to 36 to fix lStar error
+                try {
+                    val setCompileSdk = android.javaClass.getMethod("setCompileSdk", Int::class.javaPrimitiveType ?: Int::class.java)
+                    setCompileSdk.invoke(android, 36)
+                } catch (e: Exception) {
+                    try {
+                        val compileSdkVersion = android.javaClass.getMethod("compileSdkVersion", Int::class.javaPrimitiveType ?: Int::class.java)
+                        compileSdkVersion.invoke(android, 36)
+                    } catch (e2: Exception) {
+                    }
                 }
             } catch (e: Exception) {
+                println("ERROR: Failed in applyAndroidFixes for ${proj.name}: $e")
             }
+        }
+    }
+
+    if (project.state.executed) {
+        applyAndroidFixes(project)
+    } else {
+        project.afterEvaluate {
+            applyAndroidFixes(this)
         }
     }
 }

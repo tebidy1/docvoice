@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+
+import '../../utils/platform_utils.dart' as platform_utils;
 import '../theme/app_colors.dart';
-import '../components/med_button.dart';
 
 class PlatformsSection extends StatelessWidget {
   const PlatformsSection({super.key});
@@ -17,43 +18,51 @@ class PlatformsSection extends StatelessWidget {
             children: [
               Text(
                 "منظومة متكاملة لعيادتك",
-                style: Theme.of(context).textTheme.headlineMedium!.copyWith(color: Colors.white),
+                style: Theme.of(context)
+                    .textTheme
+                    .headlineMedium!
+                    .copyWith(color: Colors.white),
               ),
               const SizedBox(height: 48),
-              
               Wrap(
                 spacing: 24,
                 runSpacing: 24,
                 alignment: WrapAlignment.center,
                 children: [
-                   _buildCard(
-                     context,
-                     icon: Icons.web,
-                     title: "إضافة كروم",
-                     desc: "بجانب نظامك اليومي",
-                     btnLabel: "إضافة إلى Chrome",
-                     btnColor: Colors.grey[800]!,
-                     glowColor: Colors.cyan,
-                   ),
-                   _buildCard(
-                     context,
-                     icon: Icons.desktop_windows,
-                     title: "Windows Desktop",
-                     desc: "الأسرع للعيادة والمكتب",
-                     btnLabel: "نسخة Windows",
-                     btnColor: MedColors.primary,
-                     glowColor: MedColors.primary,
-                     isPrimary: true,
-                   ),
-                   _buildCard(
-                     context,
-                     icon: Icons.phone_android,
-                     title: "تطبيق الجوال",
-                     desc: "سجّل أثناء الحركة",
-                     btnLabel: "قريبًا على Play",
-                     btnColor: Colors.black,
-                     glowColor: Colors.green,
-                   ),
+                  _buildCard(
+                    context,
+                    icon: Icons.web,
+                    title: "إضافة المتصفح",
+                    desc: "بجانب نظامك اليومي",
+                    btnLabel: "تحميل الإضافة (ZIP)",
+                    btnColor: Colors.grey[800]!,
+                    glowColor: Colors.cyan,
+                    onTap: () => platform_utils.downloadFile(
+                        'apps/ScribeFlow_Extension.zip',
+                        'ScribeFlow_Extension.zip'),
+                  ),
+                  _buildCard(
+                    context,
+                    icon: Icons.desktop_windows,
+                    title: "Windows Desktop",
+                    desc: "الأسرع للعيادة والمكتب",
+                    btnLabel: "نسخة Windows",
+                    btnColor: MedColors.primary,
+                    glowColor: MedColors.primary,
+                    isPrimary: true,
+                    onTap: () {}, // Handled by default navigation or setup
+                  ),
+                  _buildCard(
+                    context,
+                    icon: Icons.phone_android,
+                    title: "تطبيق الأندرويد",
+                    desc: "سجّل أثناء الحركة",
+                    btnLabel: "تحميل تطبيق APK",
+                    btnColor: Colors.black,
+                    glowColor: Colors.green,
+                    onTap: () => platform_utils.downloadFile(
+                        'apps/ScribeFlow.apk', 'ScribeFlow.apk'),
+                  ),
                 ],
               ),
             ],
@@ -63,13 +72,15 @@ class PlatformsSection extends StatelessWidget {
     );
   }
 
-  Widget _buildCard(BuildContext context, {
+  Widget _buildCard(
+    BuildContext context, {
     required IconData icon,
     required String title,
     required String desc,
     required String btnLabel,
     required Color btnColor,
     required Color glowColor,
+    required VoidCallback onTap,
     bool isPrimary = false,
   }) {
     return Container(
@@ -79,12 +90,18 @@ class PlatformsSection extends StatelessWidget {
         color: MedColors.surface,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: isPrimary ? glowColor.withOpacity(0.5) : MedColors.divider,
+          color:
+              isPrimary ? glowColor.withValues(alpha: 0.5) : MedColors.divider,
           width: isPrimary ? 2 : 1,
         ),
-        boxShadow: isPrimary ? [
-           BoxShadow(color: glowColor.withOpacity(0.2), blurRadius: 24, offset: const Offset(0,8))
-        ] : [],
+        boxShadow: isPrimary
+            ? [
+                BoxShadow(
+                    color: glowColor.withValues(alpha: 0.2),
+                    blurRadius: 24,
+                    offset: const Offset(0, 8))
+              ]
+            : [],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -93,24 +110,30 @@ class PlatformsSection extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: glowColor.withOpacity(0.1),
+              color: glowColor.withValues(alpha: 0.1),
             ),
             child: Icon(icon, color: glowColor, size: 32),
           ),
           const SizedBox(height: 24),
-          Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+          Text(title,
+              style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white)),
           const SizedBox(height: 8),
-          Text(desc, style: const TextStyle(fontSize: 14, color: MedColors.textMuted)),
+          Text(desc,
+              style: const TextStyle(fontSize: 14, color: MedColors.textMuted)),
           const SizedBox(height: 32),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () {},
+              onPressed: onTap,
               style: ElevatedButton.styleFrom(
                 backgroundColor: btnColor,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
               child: Text(btnLabel),
             ),
