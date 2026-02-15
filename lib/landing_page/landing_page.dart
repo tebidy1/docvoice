@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'components/pwa_install_banner.dart';
 import 'components/sticky_navbar.dart';
 import 'sections/cinematic_slider_section.dart';
 import 'sections/final_cta_section.dart';
@@ -113,6 +114,9 @@ class _LandingHomeScaffoldState extends State<LandingHomeScaffold> {
             right: 0,
             child: StickyNavbar(scrollController: _scrollController),
           ),
+
+          // PWA Install Banner
+          const PwaInstallBanner(),
         ],
       ),
     );
