@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
+
 import '../services/auth_service.dart';
-import '../screens/login_screen.dart';
 
 class AdminGuard extends StatefulWidget {
   final Widget child;
-  
+
   const AdminGuard({
     super.key,
     required this.child,
@@ -18,7 +18,7 @@ class _AdminGuardState extends State<AdminGuard> {
   @override
   Widget build(BuildContext context) {
     final authService = AuthService();
-    
+
     return FutureBuilder<Map<String, dynamic>?>(
       future: authService.getCurrentUser(),
       builder: (context, snapshot) {
@@ -27,10 +27,11 @@ class _AdminGuardState extends State<AdminGuard> {
             body: Center(child: CircularProgressIndicator()),
           );
         }
-        
+
         final user = snapshot.data;
-        final isAdmin = user != null && (user['role'] == 'admin' || user['role'] == 'Admin');
-        
+        final isAdmin =
+            user != null && user['role']?.toString().toLowerCase() == 'admin';
+
         if (!isAdmin) {
           // Redirect to login after frame is built
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -41,7 +42,8 @@ class _AdminGuardState extends State<AdminGuard> {
                   backgroundColor: Colors.red,
                 ),
               );
-              Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil(
+              Navigator.of(context, rootNavigator: true)
+                  .pushNamedAndRemoveUntil(
                 '/',
                 (route) => false,
               );
@@ -57,10 +59,9 @@ class _AdminGuardState extends State<AdminGuard> {
             ),
           );
         }
-        
+
         return widget.child;
       },
     );
   }
 }
-

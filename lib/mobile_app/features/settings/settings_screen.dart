@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../screens/admin_dashboard_screen.dart';
 import '../../../screens/secure_pairing_screen.dart';
 import '../../../services/auth_service.dart';
 import '../../core/theme.dart';
@@ -264,8 +265,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           },
                           dense: true,
                         ),
-                        if (_currentUser?['role'] == 'admin' ||
-                            _currentUser?['role'] == 'company_manager') ...[
+                        if (_currentUser?['role']?.toString().toLowerCase() ==
+                                'admin' ||
+                            _currentUser?['role']?.toString().toLowerCase() ==
+                                'company_manager') ...[
                           const Divider(height: 1),
                           ListTile(
                             leading: const Icon(Icons.business,
@@ -286,6 +289,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             },
                             dense: true,
                           ),
+                          if (_currentUser?['role']?.toString().toLowerCase() ==
+                              'admin') ...[
+                            const Divider(height: 1),
+                            ListTile(
+                              leading: const Icon(Icons.admin_panel_settings,
+                                  color: Colors.purpleAccent, size: 20),
+                              title: const Text("Admin Dashboard",
+                                  style: TextStyle(
+                                      color: Colors.purpleAccent,
+                                      fontSize: 14)),
+                              subtitle: const Text("Access advanced controls",
+                                  style: TextStyle(fontSize: 11)),
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) =>
+                                          const AdminDashboardScreen()),
+                                );
+                              },
+                              dense: true,
+                            ),
+                          ],
                         ],
                       ],
                     ),

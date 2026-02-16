@@ -30,6 +30,9 @@ class _SettingsDialogState extends State<SettingsDialog> {
     WindowManagerHelper.setTransparencyLocked(true);
     _fetchIp();
     _loadSettings();
+    _authService.getCurrentUser().then((_) {
+      if (mounted) setState(() {});
+    });
     _resizeWindow(true);
   }
 
@@ -247,46 +250,44 @@ class _SettingsDialogState extends State<SettingsDialog> {
                               theme: currentTheme,
                             ),
 
-                            const SizedBox(height: 16),
-                            _buildSectionHeader("Administration", currentTheme),
-                            _buildMenuItem(
-                              icon: Icons.business_outlined,
-                              label: "Company Settings",
-                              subtitle: "Manage AI & Company configuration",
-                              onTap: () async {
-                                Navigator.pop(context);
-                                await showDialog(
-                                  context: context,
-                                  barrierDismissible: true,
-                                  barrierColor: Colors.transparent,
-                                  builder: (context) =>
-                                      const CompanySettingsDialog(),
-                                );
-                              },
-                              theme: currentTheme,
-                            ),
-                            _buildMenuItem(
-                              icon: Icons.admin_panel_settings_outlined,
-                              label: "Admin Dashboard",
-                              subtitle: "Access advanced controls",
-                              onTap: () {
-                                // We need to pop first to close the dialog window logic
-                                // But popping triggers dispose() -> shrink window.
-                                // Then pushing Admin Dashboard might need the window to be proper size?
-                                // AdminDashboard usually runs full screen (or normal window).
-                                // If we shrink on dispose, AdminDashboard might open in small window?
-                                // Wait, AdminDashboard should probably set its own preference or use the current window state.
-                                // Let's assume standard behavior for now.
-                                Navigator.pop(context);
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (context) =>
-                                          const AdminDashboardScreen()),
-                                );
-                              },
-                              theme: currentTheme,
-                            ),
+                            if (_authService.isAdmin() ||
+                                _authService.isCompanyManager()) ...[
+                              const SizedBox(height: 16),
+                              _buildSectionHeader(
+                                  "Administration", currentTheme),
+                              _buildMenuItem(
+                                icon: Icons.business_outlined,
+                                label: "Company Settings",
+                                subtitle: "Manage AI & Company configuration",
+                                onTap: () async {
+                                  Navigator.pop(context);
+                                  await showDialog(
+                                    context: context,
+                                    barrierDismissible: true,
+                                    barrierColor: Colors.transparent,
+                                    builder: (context) =>
+                                        const CompanySettingsDialog(),
+                                  );
+                                },
+                                theme: currentTheme,
+                              ),
+                              if (_authService.isAdmin())
+                                _buildMenuItem(
+                                  icon: Icons.admin_panel_settings_outlined,
+                                  label: "Admin Dashboard",
+                                  subtitle: "Access advanced controls",
+                                  onTap: () {
+                                    Navigator.pop(context);
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                          builder: (context) =>
+                                              const AdminDashboardScreen()),
+                                    );
+                                  },
+                                  theme: currentTheme,
+                                ),
+                            ],
                           ],
                         ),
                       ),

@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+
 import 'api_service.dart';
 
 class AuthService {
@@ -9,7 +10,8 @@ class AuthService {
   final ApiService _apiService = ApiService();
   Map<String, dynamic>? _currentUser;
 
-  Future<bool> login(String email, String password, {String? deviceName}) async {
+  Future<bool> login(String email, String password,
+      {String? deviceName}) async {
     try {
       final response = await _apiService.post('/auth/login', body: {
         'email': email,
@@ -21,7 +23,9 @@ class AuthService {
       // Laravel API returns success/user/token format
       if (response['success'] == true) {
         String? token = response['token'];
-        if (token == null && response['user'] != null && response['user']['token'] != null) {
+        if (token == null &&
+            response['user'] != null &&
+            response['user']['token'] != null) {
           token = response['user']['token'];
         }
 
@@ -36,7 +40,7 @@ class AuthService {
       // Fallback for standard API response format
       if (response['status'] == true && response['payload'] != null) {
         final payload = response['payload'];
-        
+
         String? token;
         if (payload['token'] != null) {
           token = payload['token'];
@@ -54,7 +58,6 @@ class AuthService {
 
       // If we got a valid JSON response but success is false, it's likely credentials
       return false;
-      
     } catch (e) {
       print('Login error: $e');
       // Rethrow so the UI can show "Network Error" or "CORS Error"
@@ -76,14 +79,17 @@ class AuthService {
         'email': email,
         'password': password,
         'password_confirmation': passwordConfirmation,
-        if (invitationCode != null && invitationCode.isNotEmpty) 'invitation_code': invitationCode,
+        if (invitationCode != null && invitationCode.isNotEmpty)
+          'invitation_code': invitationCode,
         if (role != null) 'role': role,
       });
 
       // Laravel API returns success/user/token format
       if (response['success'] == true) {
         String? token = response['token'];
-        if (token == null && response['user'] != null && response['user']['token'] != null) {
+        if (token == null &&
+            response['user'] != null &&
+            response['user']['token'] != null) {
           token = response['user']['token'];
         }
 
@@ -98,7 +104,7 @@ class AuthService {
       // Fallback for standard API response format
       if (response['status'] == true && response['payload'] != null) {
         final payload = response['payload'];
-        
+
         String? token;
         if (payload['token'] != null) {
           token = payload['token'];
@@ -140,7 +146,7 @@ class AuthService {
 
     try {
       final response = await _apiService.get('/auth/profile');
-      
+
       // Laravel API format
       if (response['success'] == true && response['user'] != null) {
         _currentUser = response['user'];
@@ -161,6 +167,25 @@ class AuthService {
     }
 
     return _currentUser;
+  }
+
+  bool isAdmin() {
+    if (_currentUser == null) return false;
+    final role = _currentUser!['role']?.toString().toLowerCase();
+    return role == 'admin';
+  }
+
+  bool isCompanyManager() {
+    if (_currentUser == null) return false;
+    final role = _currentUser!['role']?.toString().toLowerCase();
+    return role == 'company_manager' || role == 'company-manager';
+  }
+
+  bool isMember() {
+    if (_currentUser == null)
+      return true; // Default to member if logged in but no role
+    final role = _currentUser!['role']?.toString().toLowerCase();
+    return role == 'member';
   }
 
   Future<bool> isAuthenticated() async {
@@ -209,7 +234,8 @@ class AuthService {
   }
 
   /// Authorize a desktop pairing session via QR or Code
-  Future<bool> authorizePairing(String pairingIdOrCode, {String? deviceName}) async {
+  Future<bool> authorizePairing(String pairingIdOrCode,
+      {String? deviceName}) async {
     try {
       final response = await _apiService.post('/pairing/authorize', body: {
         'pairing_id': pairingIdOrCode,
@@ -238,10 +264,11 @@ class AuthService {
   }
 
   /// Claim a secure pairing session (Target device logging in)
-  Future<bool> claimPairing(String pairingIdOrCode, {String? deviceName}) async {
+  Future<bool> claimPairing(String pairingIdOrCode,
+      {String? deviceName}) async {
     try {
       print('🔄 Claiming pairing with code: $pairingIdOrCode');
-      
+
       final response = await _apiService.post('/pairing/claim', body: {
         'pairing_id': pairingIdOrCode,
         if (deviceName != null) 'device_name': deviceName,
@@ -252,16 +279,17 @@ class AuthService {
       if (response['success'] == true && response['token'] != null) {
         final token = response['token'];
         print('✅ Token received, saving...');
-        
+
         await _apiService.setToken(token);
         _currentUser = response['user'];
         await _saveUser(_currentUser);
-        
+
         print('✅ User saved: ${_currentUser?['email']}');
         return true;
       }
-      
-      print('❌ Claim failed: success=${response['success']}, has_token=${response['token'] != null}');
+
+      print(
+          '❌ Claim failed: success=${response['success']}, has_token=${response['token'] != null}');
       return false;
     } catch (e) {
       print('❌ Claim pairing error: $e');
@@ -286,7 +314,8 @@ class AuthService {
   /// Update company settings
   Future<bool> updateCompanySettings(Map<String, dynamic> settings) async {
     try {
-      final response = await _apiService.put('/company/settings', body: settings);
+      final response =
+          await _apiService.put('/company/settings', body: settings);
       return response['success'] == true;
     } catch (e) {
       print('Update company settings error: $e');
