@@ -9,6 +9,9 @@ import 'extension_inbox_screen.dart'; // New Extension Inbox
 import 'extension_editor_screen.dart';
 import '../../mobile_app/models/note_model.dart';
 import 'package:uuid/uuid.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:web/web.dart' as web;
+import 'dart:js_interop';
 
 class ExtensionHomeScreen extends StatefulWidget {
   const ExtensionHomeScreen({super.key});
@@ -42,47 +45,83 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
   
   // Minimal FAB logic for extension (simplified from Unified Home)
   Future<void> _handleTitanTap() async {
-    if (!_isRecording) {
-      if (!await _audioService.hasPermission()) {
-        if (mounted) {
-           ScaffoldMessenger.of(context).showSnackBar(
-             const SnackBar(content: Text("Microphone permission required")),
-           );
-        }
-        return;
-      }
-      
-      await _audioService.startRecording();
-      setState(() => _isRecording = true);
-    } else {
-      setState(() => _isRecording = false);
-      final path = await _audioService.stopRecording();
-      
-      if (path != null && mounted) {
-        final draft = NoteModel()
-          ..uuid = const Uuid().v4()
-          ..title = "Extension Note"
-          ..content = "Processing..."
-          ..audioPath = path
-          ..status = NoteStatus.draft
-          ..createdAt = DateTime.now()
-          ..updatedAt = DateTime.now();
-
+    try {
+      if (!_isRecording) {
         
-         final result = await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => ExtensionEditorScreen(draftNote: draft)),
-          );
-
-          if (result != null && result is String) {
-             draft.content = result;
-             draft.status = NoteStatus.processed;
-             setState(() => _selectedIndex = 0); // Go to inbox
-             Future.delayed(const Duration(milliseconds: 100), () {
-                _inboxKey.currentState?.addNote(draft);
-             });
-          }
+        // 1. Explicit Web Permission Check (Force Prompt)
+        if (kIsWeb) {
+           try {
+             final stream = await web.window.navigator.mediaDevices.getUserMedia(
+               web.MediaStreamConstraints(audio: true.toJS)
+             ).toDart;
+             
+             // Got permission! Stop these tracks immediately to release mic for the actual recorder
+             final tracks = stream.getTracks().toDart;
+             for (final track in tracks) {
+               (track as web.MediaStreamTrack).stop();
+             }
+           } catch (e) {
+             print("Web Permission Error: $e");
+             if (mounted) {
+               ScaffoldMessenger.of(context).showSnackBar(
+                 SnackBar(
+                   content: const Text("Microphone access denied."),
+                   action: SnackBarAction(
+                     label: "Fix Permissions", 
+                     textColor: Colors.white,
+                     onPressed: () {
+                        // Open permissions.html in a new tab to force prompt
+                        web.window.open('permissions.html', '_blank');
+                     }
+                   ),
+                   duration: const Duration(seconds: 5),
+                 ),
+               );
+             }
+             return; // Stop here
+           }
+        }
+        
+        // 2. Start Recording
+        await _audioService.startRecording();
+        setState(() => _isRecording = true);
+      } else {
+        // 3. Stop Recording
+        setState(() => _isRecording = false);
+        final path = await _audioService.stopRecording();
+        
+        if (path != null && mounted) {
+          final draft = NoteModel()
+            ..uuid = const Uuid().v4()
+            ..title = "Extension Note"
+            ..content = "Processing..."
+            ..audioPath = path
+            ..status = NoteStatus.draft
+            ..createdAt = DateTime.now()
+            ..updatedAt = DateTime.now();
+  
+           final result = await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => ExtensionEditorScreen(draftNote: draft)),
+            );
+  
+            if (result != null && result is String) {
+               draft.content = result;
+               draft.status = NoteStatus.processed;
+               setState(() => _selectedIndex = 0); // Go to inbox
+               Future.delayed(const Duration(milliseconds: 100), () {
+                  _inboxKey.currentState?.addNote(draft);
+               });
+            }
+        }
       }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+        );
+      }
+      setState(() => _isRecording = false);
     }
   }
 

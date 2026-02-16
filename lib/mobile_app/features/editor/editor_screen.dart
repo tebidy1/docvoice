@@ -69,6 +69,9 @@ class _EditorScreenState extends State<EditorScreen> {
     _finalController = PatternHighlightController(
       text: widget.draftNote?.formattedText ?? "",
       patternStyles: {
+        // Orange for [ Select ]
+        RegExp(r'\[ Select \]'): const TextStyle(color: Colors.orange, backgroundColor: Color(0x33FF9800), fontWeight: FontWeight.bold),
+        // Default brackets (if any remain)
         RegExp(r'\[(.*?)\]'): const TextStyle(color: Colors.orange, backgroundColor: Color(0x33FF9800)),
       },
     ); 
@@ -470,10 +473,25 @@ class _EditorScreenState extends State<EditorScreen> {
   void _handleTextFieldTap() {
     final text = _finalController.text;
     final selection = _finalController.selection;
-    
+    final cursor = selection.baseOffset;
+      
     if (selection.baseOffset < 0) return;
     
-    // Check if cursor is inside [ ... ]
+    // 0. Check for [ Select ] specific phrase
+    final selectRegex = RegExp(r'\[ Select \]');
+    final selectMatches = selectRegex.allMatches(text);
+    
+    for (final match in selectMatches) {
+        if (cursor >= match.start && cursor <= match.end) {
+            _finalController.selection = TextSelection(
+                baseOffset: match.start,
+                extentOffset: match.end,
+            );
+            return;
+        }
+    }
+      
+    // 1. Check for [Brackets]or is inside [ ... ]
     // Use RegExp to find all placeholders
     final matches = RegExp(r'\[(.*?)\]').allMatches(text);
     
@@ -493,22 +511,16 @@ class _EditorScreenState extends State<EditorScreen> {
     final text = _finalController.text;
     if (text.isEmpty) return;
 
-    // 1. Split into lines
     final List<String> lines = text.split('\n');
     final List<String> cleanLines = [];
 
-    // 2. Filter lines
     for (var line in lines) {
-      // Logic: If line contains [Not Reported] or just [...], skip it.
-      // We can be aggressive or specific.
-      // User requested: "remove lines with [Not Reported]"
-      
       bool isDirty = false;
-      
+      // Filter out [ Select ] lines
+      if (line.contains('[ Select ]')) isDirty = true;
       if (line.contains('[Not Reported]')) isDirty = true;
       if (line.contains('Not Reported')) isDirty = true;
-      // if (line.trim() == '[]') isDirty = true; 
-
+      
       if (!isDirty) {
         cleanLines.add(line);
       }
@@ -574,239 +586,7 @@ class _EditorScreenState extends State<EditorScreen> {
     setState(() => _suggestions.remove(suggestion));
   }
 
-  Widget _buildSmartHeader() {
-      // Status Logic
-      String statusText = "DRAFT";
-      Color statusColor = Colors.orange;
-      
-      // We can infer status from draftNote or current state
-      // For now, simple logic
-      if (_finalController.text.isNotEmpty && !_hasUnsavedChanges) {
-          statusText = "READY";
-          statusColor = AppTheme.success;
-      }
 
-      return Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          color: const Color(0xFF121212), // Dark header
-          child: SafeArea(
-            bottom: false,
-            child: Row(
-                children: [
-                    IconButton(
-                        icon: const Icon(Icons.arrow_back, color: Colors.white),
-                        onPressed: () => Navigator.pop(context),
-                        tooltip: 'Back',
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                        child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                                Text(
-                                    "Pocket Editor",
-                                    style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
-                                ),
-                                const SizedBox(height: 2),
-                                Row(
-                                    children: [
-                                       Text(widget.draftNote?.title ?? "New Note", style: GoogleFonts.inter(color: Colors.white70, fontSize: 11)),
-                                       const SizedBox(width: 8),
-                                       Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(
-                                              color: statusColor.withOpacity(0.1),
-                                              borderRadius: BorderRadius.circular(4),
-                                              border: Border.all(color: statusColor.withOpacity(0.3)),
-                                          ),
-                                          child: Text(statusText, style: GoogleFonts.inter(color: statusColor, fontSize: 9, fontWeight: FontWeight.bold)),
-                                      ),
-                                    ],
-                                )
-                            ],
-                        ),
-                    ),
-                    
-                    // "Use Raw Text" Button (from old UI, preserved as requesting in plan)
-                    if (_sourceController.text.isNotEmpty)
-                    InkWell(
-                      onTap: () {
-                          setState(() {
-                            _finalController.text = _sourceController.text;
-                          });
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text("⬇️ Copied raw text to editor"),
-                              duration: Duration(milliseconds: 1000),
-                              backgroundColor: Color(0xFF2C2C2C),
-                            )
-                          );
-                      },
-                      borderRadius: BorderRadius.circular(4),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.arrow_downward_rounded, color: AppTheme.accent, size: 14),
-                            const SizedBox(width: 4),
-                            Text(
-                              "Use Raw",
-                              style: GoogleFonts.inter(
-                                color: AppTheme.accent,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                ],
-            ),
-          ),
-      );
-  }
-
-  Widget _buildSourceAccordion() {
-      if (_sourceController.text.isEmpty && !_isLoading) return const SizedBox.shrink();
-
-      final lines = _sourceController.text.split('\n');
-      final preview = lines.take(1).join(' ') + (lines.length > 1 ? '...' : '');
-
-      return AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-          decoration: BoxDecoration(
-             color: const Color(0xFF1E1E1E),
-             borderRadius: BorderRadius.circular(8),
-             border: Border.all(color: Colors.white10),
-          ),
-          child: Column(
-              children: [
-                  InkWell(
-                      onTap: () => setState(() => _isSourceExpanded = !_isSourceExpanded),
-                      borderRadius: BorderRadius.circular(8),
-                      child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                                Row(
-                                    children: [
-                                        const Icon(Icons.mic_none, size: 14, color: Colors.white38),
-                                        const SizedBox(width: 8),
-                                        const Text("Source Transcript", style: TextStyle(color: Colors.white70, fontSize: 12)),
-                                        const Spacer(),
-                                        // Always visible Copy Button
-                                        InkWell(
-                                            onTap: () {
-                                                Clipboard.setData(ClipboardData(text: _sourceController.text));
-                                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Copied raw text"), duration: Duration(seconds: 1)));
-                                            },
-                                            child: const Padding(padding: EdgeInsets.all(4), child: Icon(Icons.copy, size: 14, color: AppTheme.accent)),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Icon(_isSourceExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 16, color: Colors.white38),
-                                    ],
-                                ),
-                                const SizedBox(height: 4),
-                                // Always visible textual preview (First Line)
-                                Text(
-                                  preview, 
-                                  maxLines: 1, 
-                                  overflow: TextOverflow.ellipsis, 
-                                  style: const TextStyle(color: Colors.white60, fontSize: 11, fontStyle: FontStyle.italic)
-                                ),
-                            ],
-                          ),
-                      ),
-                  ),
-                  if (_isSourceExpanded)
-                      Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                          constraints: const BoxConstraints(maxHeight: 150),
-                          child: TextField(
-                            controller: _sourceController,
-                            style: GoogleFonts.inter(fontSize: 13, color: Colors.white70, height: 1.4),
-                            maxLines: null,
-                            decoration: const InputDecoration(border: InputBorder.none),
-                          ),
-                      )
-              ],
-          ),
-      );
-  }
-
-  Widget _buildEditorToolbar() {
-     // Ensure we don't crash if macros list is empty or null, though it's initialized to []
-     final displayedMacros = _macros.take(10).toList();
-     
-     return Container(
-         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-         color: const Color(0xFF121212), // Match App Background
-         child: ScrollConfiguration(
-             behavior: ScrollConfiguration.of(context).copyWith(
-               dragDevices: {
-                 PointerDeviceKind.touch,
-                 PointerDeviceKind.mouse,
-               },
-             ),
-             child: SingleChildScrollView(
-                 scrollDirection: Axis.horizontal,
-                 child: Row(
-                     children: [
-                         Text("TEMPLATES:", style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white38)),
-                         const SizedBox(width: 8),
-                         ...displayedMacros.map((macro) {
-                             final isSelected = _selectedMacro?.id == macro.id;
-                             
-                             return Padding(
-                                 padding: const EdgeInsets.only(right: 6),
-                                 child: InkWell(
-                                     onTap: () => _applyMacroWithAI(macro),
-                                     borderRadius: BorderRadius.circular(20),
-                                     child: Container(
-                                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                         decoration: BoxDecoration(
-                                             color: isSelected ? AppTheme.accent.withOpacity(0.2) : AppTheme.surface,
-                                             borderRadius: BorderRadius.circular(20),
-                                             border: Border.all(color: isSelected ? AppTheme.accent : Colors.white24, width: isSelected ? 1.5 : 1)
-                                         ),
-                                         child: Row(
-                                           mainAxisSize: MainAxisSize.min,
-                                           children: [
-                                              if (isSelected) ...[
-                                                const Icon(Icons.check_circle, size: 12, color: AppTheme.accent),
-                                                const SizedBox(width: 4),
-                                              ],
-                                              Text(
-                                                macro.trigger, 
-                                                style: GoogleFonts.inter(fontSize: 11, fontWeight: isSelected ? FontWeight.bold : FontWeight.w500, color: isSelected ? AppTheme.accent : Colors.white70)
-                                              ),
-                                           ],
-                                         ),
-                                     ),
-                                 ),
-                             );
-                         }).toList(),
-                         
-                         // More Button
-                         IconButton(
-                             icon: const Icon(Icons.more_horiz, size: 16, color: Colors.white38),
-                             onPressed: _showAllTemplates,
-                             tooltip: "All Templates",
-                             padding: EdgeInsets.zero,
-                             constraints: const BoxConstraints(),
-                         )
-                     ],
-                 ),
-             ),
-         ),
-     );
-  }
 
 
 
@@ -895,100 +675,236 @@ class _EditorScreenState extends State<EditorScreen> {
       );
   }
 
-  Widget _buildActionDock() {
-      return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-              color: const Color(0xFF1E1E1E),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10, offset: const Offset(0, -5))]
-          ),
-          child: Row(
-              children: [
-                  Expanded(
-                      flex: 10,
-                      child: ElevatedButton(
-                          onPressed: _finalController.text.isEmpty ? null : _copyCleanText,
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.accent,
-                              foregroundColor: Colors.black, // Dark theme contrast
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              elevation: 2,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          child: const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                  Icon(Icons.copy_all, size: 18), 
-                                  SizedBox(width: 8),
-                                  Text("SMART COPY / FINISH", style: TextStyle(fontWeight: FontWeight.bold)),
-                              ],
-                          ),
-                      ),
-                  ),
-              ],
-          ),
-      );
-  }
-
-
-
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     _isKeyboardVisible = bottomInset > 0;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF121212), // Dark background
-      body: Column(
-        children: [
-           _buildSmartHeader(),
-           
-           _buildSourceAccordion(),
-           
-           // Unified Editor Area
-           Expanded(
-               child: Container(
-                   margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                   decoration: BoxDecoration(
-                       color: const Color(0xFF1E1E1E), // Dark surface
-                       borderRadius: BorderRadius.circular(16),
-                       border: Border.all(color: Colors.white10),
-                       boxShadow: [
-                           BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 4, offset: const Offset(0, 2)),
-                       ]
-                   ),
-                   child: Column(
-                       children: [
-                           _buildEditorToolbar(),
-                           const Divider(height: 1, color: Colors.white10),
-                           Expanded(
-                               child: _isProcessing 
-                               ? const Center(child: AnimatedLoadingText())
-                               : Padding(
-                                   padding: const EdgeInsets.all(16),
-                                   child: TextField(
-                                       controller: _finalController,
-                                       maxLines: null,
-                                       expands: true,
-                                       style: GoogleFonts.inter(fontSize: 16, color: Colors.white, height: 1.5),
-                                       onTap: _handleTextFieldTap,
-                                       decoration: const InputDecoration(
-                                           border: InputBorder.none,
-                                           hintText: "Generated note will appear here...",
-                                           hintStyle: TextStyle(color: Colors.white24)
-                                       ),
-                                   ),
-                               )
-                           ),
-                       ],
-                   ),
+      backgroundColor: const Color(0xFF121212), // Dark gray background
+      body: SafeArea(
+        child: Column(
+          children: [
+             // Scrollable Content
+             Expanded(
+               child: SingleChildScrollView(
+                 padding: const EdgeInsets.all(16),
+                 child: Column(
+                   crossAxisAlignment: CrossAxisAlignment.stretch,
+                   children: [
+                      _buildOriginalNoteCard(),
+                      const SizedBox(height: 16),
+                      _buildTemplateSelectorCard(),
+                      const SizedBox(height: 16),
+                      _buildGeneratedNoteCard(),
+                      const SizedBox(height: 80), // Space for bottom dock
+                   ],
+                 ),
                ),
-           ),
-           
-           _buildActionDock(),
+             ),
+             
+             // Sticky Action Dock
+             _buildStickyActionDock(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOriginalNoteCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1C1C1C),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF2A2A2A)),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.description_outlined, color: Colors.white70, size: 18),
+              const SizedBox(width: 8),
+              Text("Original Note", style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+              const SizedBox(width: 8),
+              // Status Badge
+              Container(
+                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                 decoration: BoxDecoration(
+                     color: Colors.green.withOpacity(0.1),
+                     borderRadius: BorderRadius.circular(4),
+                     border: Border.all(color: Colors.green.withOpacity(0.3)),
+                 ),
+                 child: Text("READY", style: GoogleFonts.inter(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold)),
+              ),
+              const Spacer(),
+              // Use Raw Text Button
+              InkWell(
+                onTap: () {
+                    Clipboard.setData(ClipboardData(text: _sourceController.text));
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Copied raw text"), duration: Duration(seconds: 1)));
+                },
+                child: Text("Use Raw Text", style: GoogleFonts.inter(fontSize: 12, color: AppTheme.accent, fontWeight: FontWeight.w500)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          
+          // Collapsible Text View
+          InkWell(
+            onTap: () => setState(() => _isSourceExpanded = !_isSourceExpanded),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                 Text(
+                   _sourceController.text,
+                   maxLines: _isSourceExpanded ? null : 3,
+                   overflow: _isSourceExpanded ? null : TextOverflow.ellipsis,
+                   style: GoogleFonts.inter(fontSize: 14, color: Colors.white70, height: 1.5),
+                 ),
+                 const SizedBox(height: 8),
+                 Row(
+                   mainAxisAlignment: MainAxisAlignment.center,
+                   children: [
+                     Icon(_isSourceExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 16, color: Colors.white38),
+                   ],
+                 )
+              ],
+            ),
+          )
         ],
       ),
+    );
+  }
+
+  Widget _buildTemplateSelectorCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1C1C1C),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF2A2A2A)),
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 16), // Vertical padding only
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+           Padding(
+             padding: const EdgeInsets.symmetric(horizontal: 16),
+             child: Row(
+               children: [
+                 const Icon(Icons.extension_outlined, color: Colors.white70, size: 18),
+                 const SizedBox(width: 8),
+                 Text("Choose Template", style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+                 const Spacer(),
+                 InkWell(
+                   onTap: _showAllTemplates,
+                   child: Text("All Templates", style: GoogleFonts.inter(fontSize: 12, color: AppTheme.accent, fontWeight: FontWeight.w500)),
+                 )
+               ],
+             ),
+           ),
+           const SizedBox(height: 12),
+           
+           // Horizontal Chips
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: _macros.take(5).map((macro) {
+                   final isSelected = _selectedMacro?.id == macro.id;
+                   return Padding(
+                     padding: const EdgeInsets.only(right: 8),
+                     child: FilterChip(
+                       label: Text(macro.trigger),
+                       selected: isSelected,
+                       onSelected: (bool selected) {
+                          if (selected) _applyMacroWithAI(macro);
+                       },
+                       backgroundColor: const Color(0xFF2A2A2A),
+                       selectedColor: AppTheme.accent.withOpacity(0.2),
+                       checkmarkColor: AppTheme.accent,
+                       labelStyle: GoogleFonts.inter(
+                         fontSize: 13, 
+                         color: isSelected ? AppTheme.accent : Colors.white70,
+                         fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal
+                        ),
+                       shape: RoundedRectangleBorder(
+                         borderRadius: BorderRadius.circular(20),
+                         side: BorderSide(color: isSelected ? AppTheme.accent : Colors.transparent),
+                       ),
+                       showCheckmark: true,
+                     ),
+                   );
+                }).toList(),
+              ),
+            )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGeneratedNoteCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1C1C1C),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF2A2A2A)),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+               const Icon(Icons.auto_awesome, color: AppTheme.accent, size: 18),
+               const SizedBox(width: 8),
+               Text("Generated Note", style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          
+          if (_isProcessing)
+             const Center(child: Padding(padding: EdgeInsets.all(32), child: AnimatedLoadingText()))
+          else
+             TextField(
+               controller: _finalController,
+               maxLines: null,
+               style: GoogleFonts.inter(fontSize: 14, color: Colors.white, height: 1.6),
+               decoration: const InputDecoration(
+                 border: InputBorder.none,
+                 isDense: true,
+                 contentPadding: EdgeInsets.zero,
+                 hintText: "AI generated note will appear here...",
+                 hintStyle: TextStyle(color: Colors.white24)
+               ),
+               onTap: _handleTextFieldTap,
+             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStickyActionDock() {
+    return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: const BoxDecoration(
+            color: Color(0xFF1C1C1C),
+            border: Border(top: BorderSide(color: Color(0xFF2A2A2A), width: 1)),
+        ),
+        child: ElevatedButton.icon(
+            onPressed: () {
+                 _copyCleanText();
+            },
+            icon: const Icon(Icons.content_copy_rounded, size: 18),
+            label: const Text("SMART COPY / FINISH"),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.accent,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 48),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+        ),
     );
   }
 }

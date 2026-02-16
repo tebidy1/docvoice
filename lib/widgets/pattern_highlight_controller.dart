@@ -16,57 +16,55 @@ class PatternHighlightController extends TextEditingController {
     TextStyle? style,
     required bool withComposing,
   }) {
-    final List<TextSpan> children = [];
-    final String text = value.text;
+    List<TextSpan> children = [];
+    String text = value.text;
+    TextStyle parentStyle = style ?? const TextStyle();
     
-    // Valid styles to use
-    final TextStyle parentStyle = style ?? const TextStyle();
+    // Combine all matches
+    List<Map<String, dynamic>> allMatches = [];
     
-    final List<Match> allMatches = [];
-    for (var entry in patternStyles.entries) {
-      allMatches.addAll(entry.key.allMatches(text));
+    patternStyles.forEach((regex, matchStyle) {
+      regex.allMatches(text).forEach((match) {
+        allMatches.add({
+          'start': match.start,
+          'end': match.end,
+          'style': matchStyle,
+        });
+      });
+    });
+
+    // Sort by start position
+    allMatches.sort((a, b) => (a['start'] as int).compareTo(b['start'] as int));
+
+    // Resolve overlaps (keep first found)
+    List<Map<String, dynamic>> finalMatches = [];
+    int lastEnd = 0;
+    
+    for (var match in allMatches) {
+      if ((match['start'] as int) >= lastEnd) {
+        finalMatches.add(match);
+        lastEnd = (match['end'] as int);
+      }
     }
-    
-    // Sort matches by start position
-    allMatches.sort((a, b) => a.start.compareTo(b.start));
     
     int currentIndex = 0;
-    
-    for (final match in allMatches) {
-      // 1. Add non-matching text before this match
-      if (match.start > currentIndex) {
-        children.add(TextSpan(
-          text: text.substring(currentIndex, match.start),
-          style: parentStyle,
-        ));
-      }
-      
-      // 2. Add matching text with specific style
-      // Find which pattern this match belongs to (inefficient but safe for small counts)
-      TextStyle? matchStyle;
-      for (var entry in patternStyles.entries) {
-        if (entry.key.pattern == (match.pattern as RegExp).pattern) {
-          matchStyle = entry.value;
-          break;
+    for (var match in finalMatches) {
+        if ((match['start'] as int) > currentIndex) {
+            children.add(TextSpan(text: text.substring(currentIndex, match['start'] as int), style: parentStyle));
         }
-      }
-      
-      children.add(TextSpan(
-        text: text.substring(match.start, match.end),
-        style: parentStyle.merge(matchStyle),
-      ));
-      
-      currentIndex = match.end;
+        
+        children.add(TextSpan(
+            text: text.substring(match['start'] as int, match['end'] as int),
+            style: parentStyle.merge(match['style'] as TextStyle),
+        ));
+        
+        currentIndex = (match['end'] as int);
     }
     
-    // 3. Add remaining text
     if (currentIndex < text.length) {
-      children.add(TextSpan(
-        text: text.substring(currentIndex),
-        style: parentStyle,
-      ));
+        children.add(TextSpan(text: text.substring(currentIndex), style: parentStyle));
     }
-    
+
     return TextSpan(style: parentStyle, children: children);
   }
 }

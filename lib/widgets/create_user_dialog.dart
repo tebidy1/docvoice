@@ -137,7 +137,7 @@ class _CreateUserDialogState extends State<CreateUserDialog> {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  initialValue: _role,
+                  value: _role,
                   decoration: const InputDecoration(
                     labelText: 'Role',
                     labelStyle: TextStyle(color: Colors.grey),
@@ -156,7 +156,7 @@ class _CreateUserDialogState extends State<CreateUserDialog> {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  initialValue: _status,
+                  value: _status,
                   decoration: const InputDecoration(
                     labelText: 'Status',
                     labelStyle: TextStyle(color: Colors.grey),

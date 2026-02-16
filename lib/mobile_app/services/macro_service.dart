@@ -318,23 +318,23 @@ class MacroService {
 SOAP NOTE
 
 SUBJECTIVE:
-• Chief Complaint: [Complaint]
-• HPI: [History of Present Illness]
-• ROS: [Relevant Systems / Negatives]
+• Chief Complaint: [ Select ]
+• HPI: [ Select ]
+• ROS: [ Select ]
 
 OBJECTIVE:
-• Vitals: BP: [Value / mmHg] | HR: [Value / bpm] | Temp: [Value / °C]
-• General Appearance: [Description]
-• Systemic Exam: [Key Findings]
+• Vitals: BP: [ Select ] | HR: [ Select ] | Temp: [ Select ]
+• General Appearance: [ Select ]
+• Systemic Exam: [ Select ]
 
 ASSESSMENT:
-• Primary Diagnosis: [Dx]
-• Differential: [DDx]
+• Primary Diagnosis: [ Select ]
+• Differential: [ Select ]
 
 PLAN:
-• Pharmacotherapy: [Medication Name] [Dose] [Freq] [Duration]
-• Investigations: [Labs / Imaging]
-• Follow-up: [Timeframe]
+• Pharmacotherapy: [ Select ]
+• Investigations: [ Select ]
+• Follow-up: [ Select ]
 
 "Patient educated regarding diagnosis, plan, and red flags for ER return."
 ''',
@@ -350,14 +350,14 @@ SICK LEAVE RECOMMENDATION
 To: Employer / School Administrators
 
 CLINICAL STATUS:
-• Diagnosis: [Condition]
+• Diagnosis: [ Select ]
 
 RECOMMENDATION:
 "Based on the medical examination performed today, the above-named patient is found to be unfit for work/school."
 
-• Duration: [Number] Days
-• Starting From: [Start Date]
-• Ending On: [End Date]
+• Duration: [ Select ] Days
+• Starting From: [ Select ]
+• Ending On: [ Select ]
 
 TREATING PHYSICIAN:
 [Dr. Name]
@@ -432,8 +432,8 @@ Priority: [Routine / Urgent]
 
 
 STUDY REQUESTED:
-[Modality: X-Ray/CT/MRI] of [Body Part]
-[Side: Left / Right / Bilateral]
+• Modality: [ Select ] - [ Select ]
+• Side: [ Select ]
 
 CLINICAL INDICATION:
 [Symptoms / Rule Out Diagnosis]

@@ -9,7 +9,7 @@ class AudioRecordingService {
   String? _currentPath;
 
   Future<bool> hasPermission() async {
-    // if (kIsWeb) return true; // Removed: We need to actually check/request permission on Web too
+    if (kIsWeb) return true; // Force prompt via start() on Web
     
     _audioRecorder ??= AudioRecorder();
     // Check permission using permission_handler for broader compatibility
@@ -43,12 +43,20 @@ class AudioRecordingService {
            _currentPath = null; 
         }
 
-        // Configure recording parameters: WAV is safer for Emulator/Recognition
-        const config = RecordConfig(
-          encoder: AudioEncoder.aacLc, 
-          sampleRate: 44100, 
-          bitRate: 128000,
-        );
+        // Configure recording parameters
+        RecordConfig config;
+        
+        if (kIsWeb) {
+           // On Web, let browser decide default (usually Opus/WebM) to avoid encoder errors
+           config = const RecordConfig(); 
+        } else {
+           // WAV/AAC is safer for Mobile/Desktop
+           config = const RecordConfig(
+            encoder: AudioEncoder.aacLc, 
+            sampleRate: 44100, 
+            bitRate: 128000,
+          );
+        }
 
         // Start recording to file
         if (path != null) {

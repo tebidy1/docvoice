@@ -39,6 +39,9 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
   final _finalNoteController = PatternHighlightController(
       text: "",
       patternStyles: {
+        // Orange for [ Select ]
+        RegExp(r'\[ Select \]'): const TextStyle(color: Colors.orange, backgroundColor: Color(0x33FF9800), fontWeight: FontWeight.bold),
+        // Default brackets (if any remain)
         RegExp(r'\[(.*?)\]'): const TextStyle(color: Colors.orange, backgroundColor: Color(0x33FF9800)),
       },
   );
@@ -268,11 +271,10 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
 
       for (var line in lines) {
           bool isDirty = false;
+          // Filter out [ Select ] lines
+          if (line.contains('[ Select ]')) isDirty = true;
           if (line.contains('[Not Reported]')) isDirty = true;
           if (line.contains('Not Reported')) isDirty = true; 
-          // Add logic for [Name] etc? User said "text without missing info". 
-          // Usually [Name] is mandatory but [Not Reported] is optional.
-          // We stick to the previous Smart Copy logic: pattern is mostly Not Reported.
           
           if (!isDirty) {
                cleanLines.add(line);
@@ -364,6 +366,20 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
           
           final cursor = selection.baseOffset;
           
+          // 0. Check for [ Select ] specific phrase
+          final selectRegex = RegExp(r'\[ Select \]');
+          final selectMatches = selectRegex.allMatches(text);
+          
+          for (final match in selectMatches) {
+              if (cursor >= match.start && cursor <= match.end) {
+                  _finalNoteController.selection = TextSelection(
+                      baseOffset: match.start,
+                      extentOffset: match.end,
+                  );
+                  return;
+              }
+          }
+          
           // 1. Check for [Brackets]
           final bracketRegex = RegExp(r'\[(.*?)\]');
           final bracketMatches = bracketRegex.allMatches(text);
@@ -404,327 +420,270 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
 
   // --- UI BUILDERS (Adapted for Extension Dark Theme) ---
 
+  // --- UI BUILDERS (New Card Layout) ---
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.background, // Dark background
-      body: Column(
-        children: [
-           _buildSmartHeader(),
-           
-           // Source Accordion
-           _buildSourceAccordion(),
-           
-           // Editor Area
-           Expanded(
-               child: Container(
-                   margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                   decoration: BoxDecoration(
-                       color: AppTheme.surface, // Dark surface
-                       border: Border.all(color: Colors.white10),
-                       borderRadius: BorderRadius.circular(16),
-                       boxShadow: [
-                           BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 4, offset: const Offset(0, 2)),
-                       ]
-                   ),
-                   child: Column(
-                       children: [
-                           _buildEditorToolbar(),
-                           const Divider(height: 1, color: Colors.white10),
-                           Expanded(child: _buildDarkEditor()),
-                       ],
-                   ),
+      backgroundColor: const Color(0xFF121212), // Dark gray background
+      body: SafeArea(
+        child: Column(
+          children: [
+             // Scrollable Content
+             Expanded(
+               child: SingleChildScrollView(
+                 padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 80), // Add bottom padding for FAB
+                 child: Column(
+                   crossAxisAlignment: CrossAxisAlignment.stretch,
+                   children: [
+                      // Header / Title Row
+                      Row(
+                        children: [
+                             IconButton(
+                                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                                onPressed: () {
+                                  if (Navigator.canPop(context)) {
+                                    Navigator.pop(context);
+                                  } else {
+                                    // Fallback for root? unlikely in extension stack but safe
+                                  }
+                                },
+                                tooltip: 'Back',
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                            ),
+                            const SizedBox(width: 8),
+                            const Text("Original Note", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                            const SizedBox(width: 8),
+                            _buildStatusBadge(),
+                            const Spacer(),
+                            // Use Raw Text Button moved to Header
+                            InkWell(
+                                onTap: () {
+                                    Clipboard.setData(ClipboardData(text: _rawText));
+                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Copied raw text"), duration: Duration(seconds: 1)));
+                                },
+                                child: const Text("Use Raw Text", style: TextStyle(fontSize: 12, color: AppTheme.accent, fontWeight: FontWeight.w500)),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      
+                      _buildOriginalNoteCard(),
+                      const SizedBox(height: 16),
+                      _buildTemplateSelectorCard(),
+                      const SizedBox(height: 16),
+                      _buildGeneratedNoteCard(),
+                   ],
+                 ),
                ),
+             ),
+          ],
+        ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _smartCopyAndInject,
+        icon: const Icon(Icons.input),
+        label: const Text("SMART COPY / INJECT"),
+        backgroundColor: AppTheme.accent,
+        foregroundColor: Colors.white,
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+    );
+  }
+  
+  Widget _buildStatusBadge() {
+       // Check if "Ready"
+       bool isReady = _finalNoteController.text.isNotEmpty;
+       String text = isReady ? "READY" : "DRAFT";
+       Color color = isReady ? AppTheme.success : Colors.orange;
+
+       return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: color.withOpacity(0.3)),
+          ),
+          child: Text(text, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
+      );
+  }
+
+  Widget _buildOriginalNoteCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1C1C1C),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF2A2A2A)),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: InkWell(
+        onTap: () => setState(() => _isRawTextExpanded = !_isRawTextExpanded),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+             Text(
+               _rawText.isEmpty ? "No source text available." : _rawText,
+               maxLines: _isRawTextExpanded ? null : 2, // Changed to 2 lines
+               overflow: _isRawTextExpanded ? null : TextOverflow.ellipsis,
+               style: const TextStyle(fontSize: 14, color: Colors.white70, height: 1.5),
+             ),
+             if (_rawText.isNotEmpty) ...[
+                 const SizedBox(height: 4), // Reduced spacing
+                 Row(
+                   mainAxisAlignment: MainAxisAlignment.center,
+                   children: [
+                     Icon(_isRawTextExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 16, color: Colors.white38),
+                   ],
+                 )
+             ]
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTemplateSelectorCard() {
+    // Ensure we don't crash if macros list is empty or null
+    final displayedMacros = _quickMacros.take(10).toList();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1C1C1C),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF2A2A2A)),
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 16), // Vertical padding only
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+           Padding(
+             padding: const EdgeInsets.symmetric(horizontal: 16),
+             child: Row(
+               children: [
+                 const Icon(Icons.extension_outlined, color: Colors.white70, size: 18),
+                 const SizedBox(width: 8),
+                 const Text("Choose Template", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+                 const Spacer(),
+                 // Show All Button
+                 InkWell(
+                   onTap: () async {
+                         final result = await showDialog<DesktopMacro.Macro>(
+                           context: context,
+                           builder: (context) => const MacroExplorerDialog(),
+                         );
+                         
+                         if (result != null) {
+                             // Convert to Mobile MacroModel
+                             final macroModel = MacroModel(
+                                 id: result.id,
+                                 trigger: result.trigger,
+                                 content: result.content,
+                                 isFavorite: result.isFavorite,
+                                 category: result.category,
+                                 isAiMacro: result.isAiMacro,
+                                 aiInstruction: result.aiInstruction,
+                             );
+                             _applyTemplate(macroModel);
+                         }
+                   },
+                   child: const Text("All Templates", style: TextStyle(fontSize: 12, color: AppTheme.accent, fontWeight: FontWeight.w500)),
+                 )
+               ],
+             ),
            ),
+           const SizedBox(height: 12),
            
-           // Action Dock
-           _buildActionDock(),
+           // Horizontal Chips
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: displayedMacros.map((macro) {
+                   final isSelected = _selectedMacro?.id == macro.id;
+                   return Padding(
+                     padding: const EdgeInsets.only(right: 8),
+                     child: FilterChip(
+                       label: Text(macro.trigger),
+                       selected: isSelected,
+                       onSelected: (bool selected) {
+                          if (selected) _applyTemplate(macro);
+                       },
+                       backgroundColor: const Color(0xFF2A2A2A),
+                       selectedColor: AppTheme.accent.withOpacity(0.2),
+                       checkmarkColor: AppTheme.accent,
+                       labelStyle: TextStyle(
+                         fontSize: 13, 
+                         color: isSelected ? AppTheme.accent : Colors.white70,
+                         fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                         fontFamily: 'Inter' // Assuming Inter is available or fallback
+                        ),
+                       shape: RoundedRectangleBorder(
+                         borderRadius: BorderRadius.circular(20),
+                         side: BorderSide(color: isSelected ? AppTheme.accent : Colors.transparent),
+                       ),
+                       showCheckmark: true,
+                     ),
+                   );
+                }).toList(),
+              ),
+            )
         ],
       ),
     );
   }
 
-  Widget _buildSmartHeader() {
-      return Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          color: AppTheme.background, // Dark header
-          child: Row(
-              children: [
-                  IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      onPressed: () => Navigator.pop(context),
-                      tooltip: 'Back',
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                              Text(
-                                  widget.draftNote.title ?? "Extension Note",
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
-                                  maxLines: 1, overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 2),
-                              Row(
-                                  children: [
-                                     Text("Chrome Extension", style: TextStyle(color: Colors.white70, fontSize: 10)),
-                                     const SizedBox(width: 8),
-                                     _buildStatusBadge(),
-                                  ],
-                              )
-                          ],
-                      ),
-                  ),
-                  if (_isLoading)
-                      const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                  else
-                      IconButton(
-                          icon: const Icon(Icons.check_circle_outline, color: AppTheme.success),
-                          tooltip: 'Mark as Ready',
-                          onPressed: _finalNoteController.text.isEmpty ? null : _markAsReady,
-                      ),
-              ],
+  Widget _buildGeneratedNoteCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1C1C1C),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF2A2A2A)),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+               const Icon(Icons.auto_awesome, color: AppTheme.accent, size: 18),
+               const SizedBox(width: 8),
+               const Text("Generated Note", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+            ],
           ),
-      );
-  }
-
-  Widget _buildStatusBadge() {
-       return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(
-              color: Colors.orange.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: Colors.orange.withOpacity(0.3)),
-          ),
-          child: const Text("DRAFT", style: TextStyle(color: Colors.orange, fontSize: 9, fontWeight: FontWeight.bold)),
-      );
-  }
-
-  Widget _buildSourceAccordion() {
-      if (_rawText.isEmpty && !_isLoading) return const SizedBox.shrink();
-
-      final lines = _rawText.split('\n');
-      final preview = lines.take(1).join(' ') + (lines.length > 1 ? '...' : '');
-
-      return AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-          decoration: BoxDecoration(
-             color: AppTheme.surface,
-             borderRadius: BorderRadius.circular(8),
-             border: Border.all(color: Colors.white10),
-          ),
-          child: Column(
-              children: [
-                  InkWell(
-                      onTap: () => setState(() => _isRawTextExpanded = !_isRawTextExpanded),
-                      borderRadius: BorderRadius.circular(8),
-                      child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Row(
-                                  children: [
-                                      Icon(Icons.mic_none, size: 14, color: Colors.white38),
-                                      const SizedBox(width: 8),
-                                      const Text("Source", style: TextStyle(color: Colors.white70, fontSize: 12)),
-                                      const Spacer(),
-                                      // Always visible Copy Button
-                                      InkWell(
-                                          onTap: () {
-                                              Clipboard.setData(ClipboardData(text: _rawText));
-                                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Copied raw text"), duration: Duration(seconds: 1)));
-                                          },
-                                          child: const Padding(padding: EdgeInsets.all(4), child: Icon(Icons.copy, size: 14, color: AppTheme.accent)),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Icon(_isRawTextExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 16, color: Colors.white38),
-                                  ],
-                              ),
-                              const SizedBox(height: 4),
-                              // Always visible textual preview (First Line)
-                              Text(
-                                preview, 
-                                maxLines: 1, 
-                                overflow: TextOverflow.ellipsis, 
-                                style: TextStyle(color: Colors.white60, fontSize: 11, fontStyle: FontStyle.italic)
-                              ),
-                            ],
-                          ),
-                      ),
-                  ),
-                  if (_isRawTextExpanded)
-                      Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                          constraints: const BoxConstraints(maxHeight: 150),
-                          child: SingleChildScrollView(
-                              child: SelectableText(_rawText, style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.4)),
-                          ),
-                      )
-              ],
-          ),
-      );
-  }
-
-  Widget _buildEditorToolbar() {
-     final displayedMacros = _quickMacros.take(10).toList();
-     return Container(
-         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-         color: AppTheme.background, // Dark toolbar
-         child: ScrollConfiguration(
-             behavior: ScrollConfiguration.of(context).copyWith(
-               dragDevices: {
-                 PointerDeviceKind.touch,
-                 PointerDeviceKind.mouse,
-               },
+          const SizedBox(height: 16),
+          
+          if (_isGenerating)
+             Center(
+               child: Padding(
+                 padding: const EdgeInsets.all(32), 
+                 child: Column(
+                   children: [
+                     const CircularProgressIndicator(), 
+                     const SizedBox(height: 16),
+                     Text(_statusMessages[_statusMessageIndex], style: const TextStyle(color: Colors.white60)),
+                   ]
+                 )
+               )
+             )
+          else
+             TextField(
+               controller: _finalNoteController,
+               maxLines: null,
+               style: const TextStyle(fontSize: 14, color: Colors.white, height: 1.6),
+               decoration: const InputDecoration(
+                 border: InputBorder.none,
+                 isDense: true,
+                 contentPadding: EdgeInsets.zero,
+                 hintText: "AI generated note will appear here...",
+                 hintStyle: TextStyle(color: Colors.white24)
+               ),
+               onTap: _handleEditorTap,
              ),
-             child: SingleChildScrollView(
-                 scrollDirection: Axis.horizontal,
-                 child: Row(
-                     children: [
-                         Text("TEMPLATES:", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white38)),
-                         const SizedBox(width: 8),
-                         ...displayedMacros.map((macro) {
-                             final isSelected = _selectedMacro?.id == macro.id;
-                             return Padding(
-                                 padding: const EdgeInsets.only(right: 6),
-                                 child: InkWell(
-                                     onTap: () => _applyTemplate(macro),
-                                     borderRadius: BorderRadius.circular(20), // Rounded pill shape
-                                     child: AnimatedContainer(
-                                         duration: const Duration(milliseconds: 200),
-                                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                         decoration: BoxDecoration(
-                                             color: isSelected ? AppTheme.accent.withOpacity(0.2) : AppTheme.surface,
-                                             borderRadius: BorderRadius.circular(20),
-                                             border: Border.all(color: isSelected ? AppTheme.accent : Colors.white24, width: isSelected ? 1.5 : 1)
-                                         ),
-                                         child: Row(
-                                           mainAxisSize: MainAxisSize.min,
-                                           children: [
-                                             if (isSelected) ...[
-                                               const Icon(Icons.check_circle, size: 12, color: AppTheme.accent),
-                                               const SizedBox(width: 4),
-                                             ],
-                                             Text(
-                                               macro.trigger, 
-                                               style: TextStyle(
-                                                 fontSize: 11, 
-                                                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w500, 
-                                                 color: isSelected ? AppTheme.accent : Colors.white70
-                                               )
-                                             ),
-                                           ],
-                                         ),
-                                     ),
-                                 ),
-                             );
-                         }).toList(),
-                         
-                         // More Button
-                         IconButton(
-                            icon: const Icon(Icons.more_horiz, size: 16, color: Colors.white38),
-                            onPressed: () async {
-                                 final result = await showDialog<DesktopMacro.Macro>(
-                                   context: context,
-                                   builder: (context) => const MacroExplorerDialog(),
-                                 );
-                                 
-                                 if (result != null) {
-                                     // Convert to Mobile MacroModel
-                                     final macroModel = MacroModel(
-                                         id: result.id,
-                                         trigger: result.trigger,
-                                         content: result.content,
-                                         isFavorite: result.isFavorite,
-                                         category: result.category,
-                                         isAiMacro: result.isAiMacro,
-                                         aiInstruction: result.aiInstruction,
-                                     );
-                                     _applyTemplate(macroModel);
-                                 }
-                            },
-                            tooltip: "All Templates",
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                         )
-                     ],
-                 ),
-             ),
-         ),
-     );
+        ],
+      ),
+    );
   }
 
-  Widget _buildDarkEditor() {
-      if (_isGenerating) {
-          return Center(
-              child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                      const CircularProgressIndicator(),
-                      const SizedBox(height: 16),
-                      Text(_statusMessages[_statusMessageIndex], style: TextStyle(color: Colors.white60)),
-                  ],
-              ),
-          );
-      }
-      
-      return Padding(
-          padding: const EdgeInsets.all(16),
-          child: TextField(
-              controller: _finalNoteController,
-              maxLines: null,
-              expands: true,
-              style: const TextStyle(fontSize: 14, height: 1.5, color: Colors.white), // Dark Text
-              onTap: _handleEditorTap, // Click-to-Select
-              decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  hintText: "Generated note will appear here...",
-                  hintStyle: TextStyle(color: Colors.white24)
-              ),
-          ),
-      );
-  }
 
-  Widget _buildActionDock() {
-      return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-              color: AppTheme.surface,
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10, offset: const Offset(0, -5))]
-          ),
-          child: Row(
-              children: [
-                  // Removed Separate Smart Copy Button
-                  Expanded(
-                      flex: 10,
-                      child: ElevatedButton(
-                          onPressed: _finalNoteController.text.isEmpty ? null : _smartCopyAndInject,
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.accent,
-                              foregroundColor: Colors.black, // Dark theme contrast
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              elevation: 2,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          child: const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                  Icon(Icons.input, size: 18), // Changed to Input icon
-                                  SizedBox(width: 8),
-                                  Text("SMART COPY / INJECT", style: TextStyle(fontWeight: FontWeight.bold)),
-                              ],
-                          ),
-                      ),
-                  ),
-              ],
-          ),
-      );
-  }
 }

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>ScribeFlow Permission Helper</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            font-size: 16px;
+            background: #00A6FB;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>Microphone Permission Required</h2>
+    <p>Chrome extensions need explicit permission to record audio.</p>
+    <p>Please click the button below and "Allow" microphone access.</p>
+    <button id="grantBtn" class="btn">Grant Microphone Access</button>
+    <p id="status" style="margin-top: 20px; color: #666;"></p>
+
+    <script src="permissions_script.js"></script>
+</body>
+
+</html>
