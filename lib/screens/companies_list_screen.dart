@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:window_manager/window_manager.dart';
+
+import '../models/company.dart';
 import '../services/admin_service.dart';
 import '../services/auth_service.dart';
-import '../models/company.dart';
+import '../widgets/create_company_dialog.dart';
 import '../widgets/window_title_bar.dart';
 import 'company_detail_screen.dart';
 
@@ -54,7 +55,9 @@ class _CompaniesListScreenState extends State<CompaniesListScreen> {
       final meta = response['meta'] as Map<String, dynamic>;
 
       setState(() {
-        _companies = data.map((json) => Company.fromJson(json as Map<String, dynamic>)).toList();
+        _companies = data
+            .map((json) => Company.fromJson(json as Map<String, dynamic>))
+            .toList();
         _currentPage = meta['current_page'] as int;
         _totalPages = meta['last_page'] as int;
         _isLoading = false;
@@ -79,7 +82,8 @@ class _CompaniesListScreenState extends State<CompaniesListScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Company ${updated.isActive ? "activated" : "suspended"} successfully'),
+            content: Text(
+                'Company ${updated.isActive ? "activated" : "suspended"} successfully'),
             backgroundColor: Colors.green,
           ),
         );
@@ -160,8 +164,14 @@ class _CompaniesListScreenState extends State<CompaniesListScreen> {
               ),
               IconButton(
                 icon: const Icon(Icons.add, color: Colors.grey),
-                onPressed: () {
-                  // TODO: Show create company dialog
+                onPressed: () async {
+                  final result = await showDialog<Company>(
+                    context: context,
+                    builder: (context) => const CreateCompanyDialog(),
+                  );
+                  if (result != null) {
+                    _loadCompanies(page: 1);
+                  }
                 },
                 tooltip: 'Add Company',
               ),
@@ -183,7 +193,8 @@ class _CompaniesListScreenState extends State<CompaniesListScreen> {
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(context, false),
-                          child: const Text('إلغاء', style: TextStyle(color: Colors.grey)),
+                          child: const Text('إلغاء',
+                              style: TextStyle(color: Colors.grey)),
                         ),
                         ElevatedButton(
                           onPressed: () => Navigator.pop(context, true),
@@ -200,7 +211,8 @@ class _CompaniesListScreenState extends State<CompaniesListScreen> {
                     try {
                       await _authService.logout();
                       if (mounted) {
-                        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+                        Navigator.of(context)
+                            .pushNamedAndRemoveUntil('/', (route) => false);
                       }
                     } catch (e) {
                       if (mounted) {
@@ -248,8 +260,10 @@ class _CompaniesListScreenState extends State<CompaniesListScreen> {
                         hint: const Text('Status'),
                         items: const [
                           DropdownMenuItem(value: null, child: Text('All')),
-                          DropdownMenuItem(value: 'active', child: Text('Active')),
-                          DropdownMenuItem(value: 'suspended', child: Text('Suspended')),
+                          DropdownMenuItem(
+                              value: 'active', child: Text('Active')),
+                          DropdownMenuItem(
+                              value: 'suspended', child: Text('Suspended')),
                         ],
                         onChanged: (value) {
                           setState(() {
@@ -275,7 +289,9 @@ class _CompaniesListScreenState extends State<CompaniesListScreen> {
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Text('Error: $_error', style: const TextStyle(color: Colors.red)),
+                                  Text('Error: $_error',
+                                      style:
+                                          const TextStyle(color: Colors.red)),
                                   const SizedBox(height: 16),
                                   ElevatedButton(
                                     onPressed: () => _loadCompanies(),
@@ -296,11 +312,14 @@ class _CompaniesListScreenState extends State<CompaniesListScreen> {
                                         Navigator.push(
                                           context,
                                           MaterialPageRoute(
-                                            builder: (context) => CompanyDetailScreen(companyId: company.id),
+                                            builder: (context) =>
+                                                CompanyDetailScreen(
+                                                    companyId: company.id),
                                           ),
                                         );
                                       },
-                                      onToggleStatus: () => _toggleCompanyStatus(company),
+                                      onToggleStatus: () =>
+                                          _toggleCompanyStatus(company),
                                       onDelete: () => _deleteCompany(company),
                                     );
                                   },
@@ -370,12 +389,15 @@ class _CompanyCard extends StatelessWidget {
         ),
         title: Text(
           company.name,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style:
+              const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (company.domain != null) Text('Domain: ${company.domain}', style: const TextStyle(color: Colors.grey)),
+            if (company.domain != null)
+              Text('Domain: ${company.domain}',
+                  style: const TextStyle(color: Colors.grey)),
             Text(
               'Status: ${company.status}',
               style: TextStyle(
@@ -383,7 +405,8 @@ class _CompanyCard extends StatelessWidget {
               ),
             ),
             if (company.usersCount != null)
-              Text('Users: ${company.usersCount}', style: const TextStyle(color: Colors.grey)),
+              Text('Users: ${company.usersCount}',
+                  style: const TextStyle(color: Colors.grey)),
           ],
         ),
         trailing: Row(
@@ -409,4 +432,3 @@ class _CompanyCard extends StatelessWidget {
     );
   }
 }
-

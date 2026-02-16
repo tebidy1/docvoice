@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:window_manager/window_manager.dart';
+
+import '../models/user.dart';
 import '../services/admin_service.dart';
 import '../services/auth_service.dart';
-import '../models/user.dart';
+import '../widgets/create_user_dialog.dart';
 import '../widgets/window_title_bar.dart';
 import 'user_detail_screen.dart';
 
@@ -59,7 +60,9 @@ class _UsersListScreenState extends State<UsersListScreen> {
       final meta = response['meta'] as Map<String, dynamic>;
 
       setState(() {
-        _users = data.map((json) => User.fromJson(json as Map<String, dynamic>)).toList();
+        _users = data
+            .map((json) => User.fromJson(json as Map<String, dynamic>))
+            .toList();
         _currentPage = meta['current_page'] as int;
         _totalPages = meta['last_page'] as int;
         _isLoading = false;
@@ -125,7 +128,8 @@ class _UsersListScreenState extends State<UsersListScreen> {
         children: [
           // Window Title Bar with Controls
           WindowTitleBar(
-            title: widget.companyId != null ? 'Company Users' : 'Users Management',
+            title:
+                widget.companyId != null ? 'Company Users' : 'Users Management',
             actions: [
               IconButton(
                 icon: const Icon(Icons.arrow_back, color: Colors.grey),
@@ -136,8 +140,22 @@ class _UsersListScreenState extends State<UsersListScreen> {
               ),
               IconButton(
                 icon: const Icon(Icons.add, color: Colors.grey),
-                onPressed: () {
-                  // TODO: Show create user dialog
+                onPressed: () async {
+                  if (widget.companyId == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text('Please select a company first')),
+                    );
+                    return;
+                  }
+                  final result = await showDialog<User>(
+                    context: context,
+                    builder: (context) =>
+                        CreateUserDialog(companyId: widget.companyId!),
+                  );
+                  if (result != null) {
+                    _loadUsers(page: 1);
+                  }
                 },
                 tooltip: 'Add User',
               ),
@@ -159,7 +177,8 @@ class _UsersListScreenState extends State<UsersListScreen> {
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(context, false),
-                          child: const Text('إلغاء', style: TextStyle(color: Colors.grey)),
+                          child: const Text('إلغاء',
+                              style: TextStyle(color: Colors.grey)),
                         ),
                         ElevatedButton(
                           onPressed: () => Navigator.pop(context, true),
@@ -176,7 +195,8 @@ class _UsersListScreenState extends State<UsersListScreen> {
                     try {
                       await _authService.logout();
                       if (mounted) {
-                        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+                        Navigator.of(context)
+                            .pushNamedAndRemoveUntil('/', (route) => false);
                       }
                     } catch (e) {
                       if (mounted) {
@@ -236,10 +256,15 @@ class _UsersListScreenState extends State<UsersListScreen> {
                               hint: const Text('Role'),
                               isExpanded: true,
                               items: const [
-                                DropdownMenuItem(value: null, child: Text('All Roles')),
-                                DropdownMenuItem(value: 'admin', child: Text('Admin')),
-                                DropdownMenuItem(value: 'company_manager', child: Text('Company Manager')),
-                                DropdownMenuItem(value: 'member', child: Text('Member')),
+                                DropdownMenuItem(
+                                    value: null, child: Text('All Roles')),
+                                DropdownMenuItem(
+                                    value: 'admin', child: Text('Admin')),
+                                DropdownMenuItem(
+                                    value: 'company_manager',
+                                    child: Text('Company Manager')),
+                                DropdownMenuItem(
+                                    value: 'member', child: Text('Member')),
                               ],
                               onChanged: (value) {
                                 setState(() {
@@ -256,9 +281,12 @@ class _UsersListScreenState extends State<UsersListScreen> {
                               hint: const Text('Status'),
                               isExpanded: true,
                               items: const [
-                                DropdownMenuItem(value: null, child: Text('All Status')),
-                                DropdownMenuItem(value: 'active', child: Text('Active')),
-                                DropdownMenuItem(value: 'inactive', child: Text('Inactive')),
+                                DropdownMenuItem(
+                                    value: null, child: Text('All Status')),
+                                DropdownMenuItem(
+                                    value: 'active', child: Text('Active')),
+                                DropdownMenuItem(
+                                    value: 'inactive', child: Text('Inactive')),
                               ],
                               onChanged: (value) {
                                 setState(() {
@@ -282,7 +310,9 @@ class _UsersListScreenState extends State<UsersListScreen> {
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Text('Error: $_error', style: const TextStyle(color: Colors.red)),
+                                  Text('Error: $_error',
+                                      style:
+                                          const TextStyle(color: Colors.red)),
                                   const SizedBox(height: 16),
                                   ElevatedButton(
                                     onPressed: () => _loadUsers(),
@@ -303,7 +333,9 @@ class _UsersListScreenState extends State<UsersListScreen> {
                                         Navigator.push(
                                           context,
                                           MaterialPageRoute(
-                                            builder: (context) => UserDetailScreen(userId: user.id),
+                                            builder: (context) =>
+                                                UserDetailScreen(
+                                                    userId: user.id),
                                           ),
                                         );
                                       },
@@ -387,12 +419,14 @@ class _UserCard extends StatelessWidget {
         ),
         title: Text(
           user.name,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style:
+              const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Email: ${user.email}', style: const TextStyle(color: Colors.grey)),
+            Text('Email: ${user.email}',
+                style: const TextStyle(color: Colors.grey)),
             Row(
               children: [
                 Chip(
@@ -411,7 +445,8 @@ class _UserCard extends StatelessWidget {
               ],
             ),
             if (user.companyName != null)
-              Text('Company: ${user.companyName}', style: const TextStyle(color: Colors.grey)),
+              Text('Company: ${user.companyName}',
+                  style: const TextStyle(color: Colors.grey)),
           ],
         ),
         trailing: IconButton(
@@ -424,4 +459,3 @@ class _UserCard extends StatelessWidget {
     );
   }
 }
-
