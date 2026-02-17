@@ -91,8 +91,10 @@ class _MacroManagerScreenState extends State<MacroManagerScreen> {
       grouped['Most Used (Favorites)'] = favorites;
     }
 
-    // Group the rest by category
+    // Group the rest by category (excluding favorites to prevent duplicates)
     for (var m in _macros) {
+      if (m.isFavorite) continue; // Skip favorites as they are already in the top section
+      
       if (!grouped.containsKey(m.category)) {
         grouped[m.category] = [];
       }

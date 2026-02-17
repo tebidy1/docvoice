@@ -59,7 +59,8 @@ class _CompanySettingsScreenState extends State<CompanySettingsScreen> {
         _groqKeyController.text = prefs.getString('groq_api_key') ?? "";
         _geminiKeyController.text = prefs.getString('gemini_api_key') ?? "";
         _specialtyController.text = prefs.getString('specialty') ?? "";
-        _promptController.text = prefs.getString('global_ai_prompt') ?? "";
+        _promptController.text = prefs.getString('global_ai_prompt') ?? 
+            "SYSTEM DIRECTIVE: Analyze the input for telegraphic or fragmented phrasing (e.g., '46yo male, pain, vomit'). You MUST expand these fragments into full, grammatically complete, and professional medical sentences. Do NOT verify facts, but DO ensure the narrative flows logically. Output a concise medical note, avoiding conversational filler.";
         _groqModel = prefs.getString('groq_model') ?? 'whisper-large-v3-turbo';
       }
     } catch (e) {

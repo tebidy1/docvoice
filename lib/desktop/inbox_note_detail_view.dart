@@ -38,7 +38,14 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     text: "",
     patternStyles: {
       RegExp(r'\[(.*?)\]'): const TextStyle(color: Colors.orange, backgroundColor: Color(0x33FF9800)),
-      // RegExp(r'Not Reported', caseSensitive: false): const TextStyle(color: Colors.white24, decoration: TextDecoration.lineThrough),
+      // HEADERS: Uppercase + Colon -> White Underline
+      RegExp(r'^[A-Z][A-Z0-9\s\/-]+:', multiLine: true): const TextStyle(
+        decoration: TextDecoration.underline,
+        decorationColor: Colors.white,
+        decorationThickness: 2.0,
+        fontWeight: FontWeight.bold,
+        color: Colors.white, 
+      ),
     },
   );
   Macro? _selectedMacro;

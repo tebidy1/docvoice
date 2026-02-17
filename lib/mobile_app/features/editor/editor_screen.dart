@@ -73,6 +73,14 @@ class _EditorScreenState extends State<EditorScreen> {
         RegExp(r'\[ Select \]'): const TextStyle(color: Colors.orange, backgroundColor: Color(0x33FF9800), fontWeight: FontWeight.bold),
         // Default brackets (if any remain)
         RegExp(r'\[(.*?)\]'): const TextStyle(color: Colors.orange, backgroundColor: Color(0x33FF9800)),
+        // HEADERS: Uppercase + Colon -> White Underline
+        RegExp(r'^[A-Z][A-Z0-9\s\/-]+:', multiLine: true): const TextStyle(
+          decoration: TextDecoration.underline,
+          decorationColor: Colors.white,
+          decorationThickness: 2.0, // Thicker line as requested
+          fontWeight: FontWeight.bold,
+          color: Colors.white, 
+        ),
       },
     ); 
     

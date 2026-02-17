@@ -13,6 +13,8 @@ class ApiService {
   final int _timeout =
       int.tryParse(dotenv.env['API_TIMEOUT'] ?? '30000') ?? 30000;
 
+  bool get hasToken => _token != null && _token!.isNotEmpty;
+
   Future<void> init() async {
     _baseUrl =
         dotenv.env['API_BASE_URL'] ?? 'https://docvoice.gumra-ai.com/api';
@@ -160,6 +162,10 @@ class ApiService {
         'Accept': 'application/json',
         if (_token != null) 'Authorization': 'Bearer $_token',
       });
+      
+      print("DEBUG: Multipart POST to $endpoint");
+      print("DEBUG: Token Prefix: ${_token != null && _token!.length > 10 ? _token!.substring(0, 10) : _token}");
+      print("DEBUG: File Size: ${fileBytes.length} bytes");
 
       // Add fields
       if (fields != null) {
@@ -263,6 +269,8 @@ class ApiService {
           'payload': data
         };
       }
+      
+      print("API Error ($statusCode): $responseBody"); // Log full body
 
       throw ApiException(
         data['message'] ?? 'Request failed',
@@ -271,6 +279,7 @@ class ApiService {
       );
     } catch (e) {
       if (e is ApiException) rethrow;
+      print("Response Parsing Error: $e \nBody: $responseBody");
       throw ApiException('Failed to parse response: $e', statusCode);
     }
   }

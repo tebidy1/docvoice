@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/theme.dart';
 import '../../services/macro_service.dart';
+import '../../../widgets/pattern_highlight_controller.dart';
 
 class MacroEditorScreen extends StatefulWidget {
   final MacroModel? macro; // If null, we are creating a new one
@@ -15,7 +16,10 @@ class MacroEditorScreen extends StatefulWidget {
 
 class _MacroEditorScreenState extends State<MacroEditorScreen> {
   final _triggerCtrl = TextEditingController();
-  final _contentCtrl = TextEditingController();
+  
+  // Use PatternHighlightController for visual feedback
+  late final PatternHighlightController _contentCtrl;
+  
   final _categoryCtrl = TextEditingController(text: "General");
   bool _isFavorite = false;
   
@@ -25,9 +29,25 @@ class _MacroEditorScreenState extends State<MacroEditorScreen> {
   @override
   void initState() {
     super.initState();
+    
+    // Initialize Pattern Controller
+    _contentCtrl = PatternHighlightController(
+      text: widget.macro?.content ?? "",
+      patternStyles: {
+        // HEADERS: Uppercase + Colon -> White Underline
+        RegExp(r'^[A-Z][A-Z0-9\s\/-]+:', multiLine: true): const TextStyle(
+          decoration: TextDecoration.underline,
+          decorationColor: Colors.white,
+          decorationThickness: 2.0,
+          fontWeight: FontWeight.bold,
+          color: Colors.white, 
+        ),
+      },
+    );
+
     if (widget.macro != null) {
       _triggerCtrl.text = widget.macro!.trigger;
-      _contentCtrl.text = widget.macro!.content;
+      // Content set in constructor above
       _categoryCtrl.text = widget.macro!.category;
       _isFavorite = widget.macro!.isFavorite;
     }

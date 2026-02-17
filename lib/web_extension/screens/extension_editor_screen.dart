@@ -15,6 +15,7 @@ import '../../mobile_app/models/note_model.dart';
 // Mobile Editor uses: import '../../services/macro_service.dart'; which returns List<MacroModel>.
 import '../../mobile_app/services/macro_service.dart'; 
 import '../../mobile_app/services/inbox_service.dart';
+import '../../mobile_app/services/groq_service.dart'; // Import GroqService
 import '../../services/api_service.dart';
 
 import '../../widgets/pattern_highlight_controller.dart'; 
@@ -39,10 +40,18 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
   final _finalNoteController = PatternHighlightController(
       text: "",
       patternStyles: {
-        // Orange for [ Select ]
+        // Orage for [ Select ]
         RegExp(r'\[ Select \]'): const TextStyle(color: Colors.orange, backgroundColor: Color(0x33FF9800), fontWeight: FontWeight.bold),
         // Default brackets (if any remain)
         RegExp(r'\[(.*?)\]'): const TextStyle(color: Colors.orange, backgroundColor: Color(0x33FF9800)),
+        // HEADERS: Uppercase + Colon -> White Underline
+        RegExp(r'^[A-Z][A-Z0-9\s\/-]+:', multiLine: true): const TextStyle(
+          decoration: TextDecoration.underline,
+          decorationColor: Colors.white,
+          decorationThickness: 2.0,
+          fontWeight: FontWeight.bold,
+          color: Colors.white, 
+        ),
       },
   );
   // We need a separate controller/string for Source because Desktop uses widget.note.rawText
@@ -147,7 +156,41 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
 
   Future<void> _transcribeAudio(Uint8List bytes) async {
       try {
+        final prefs = await SharedPreferences.getInstance();
+        final localGroqKey = prefs.getString('groq_api_key');
+        
+        // 1. Try Direct Groq (if key exists locally)
+        if (localGroqKey != null && localGroqKey.isNotEmpty) {
+           print("DEBUG: Using Local Groq Key (Direct Mode)");
+           final groqService = GroqService(apiKey: localGroqKey);
+           final transcript = await groqService.transcribe(bytes, filename: 'recording.webm');
+           
+           if (transcript.startsWith("Error:")) {
+               // Fallback if direct fails? Or just throw?
+               // Let's log it and try backend as backup or throw.
+               print("Direct Groq Failed: $transcript");
+               if (transcript.contains("401")) {
+                   throw "Invalid Groq API Key";
+               }
+           } else {
+               // Success
+               if (mounted) {
+                   setState(() {
+                       _rawText = transcript.trim();
+                       _isLoading = false;
+                       _isRawTextExpanded = _finalNoteController.text.isEmpty; 
+                   });
+                   _saveDraft();
+               }
+               return; // Exit, handled by Groq
+           }
+        }
+
+        // 2. Fallback to Backend Proxy
         final apiService = ApiService();
+        await apiService.init(); 
+        print("DEBUG: Transcribing via Backend... Token present: ${apiService.hasToken}"); 
+        
         final result = await apiService.multipartPost(
           '/audio/transcribe',
           fileBytes: bytes,
@@ -160,11 +203,8 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                setState(() {
                    _rawText = transcript.trim();
                    _isLoading = false;
-                   // Expand Source if it's the only thing we have
                    _isRawTextExpanded = _finalNoteController.text.isEmpty; 
                });
-               
-               // Auto-Save Draft
                _saveDraft();
            }
         } else {
@@ -232,12 +272,15 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
            
            final enableSuggestions = prefs.getBool('enable_smart_suggestions') ?? true;
            
+           final globalPrompt = prefs.getString('global_ai_prompt') ?? 
+               "SYSTEM DIRECTIVE: Analyze the input for telegraphic or fragmented phrasing (e.g., '46yo male, pain, vomit'). You MUST expand these fragments into full, grammatically complete, and professional medical sentences. Do NOT verify facts, but DO ensure the narrative flows logically. Output a concise medical note, avoiding conversational filler.";
+
            final apiService = ApiService();
            final response = await apiService.post('/audio/process', body: {
                'transcript': _rawText,
                'macro_context': macro.content,
                'specialty': prefs.getString('specialty') ?? 'General Practice',
-               'global_prompt': prefs.getString('global_ai_prompt') ?? '',
+               'global_prompt': globalPrompt,
                'mode': enableSuggestions ? 'smart' : 'fast',
            });
 
@@ -245,6 +288,11 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                final payload = response['payload'];
                final finalText = payload['final_note'] ?? payload['text'] ?? '';
                
+               if (finalText.isEmpty) {
+                   _showError("AI returned empty result. Please check API Key or try again.");
+                   print("DEBUG: AI Payload was empty/null: $payload");
+               }
+
                if (mounted) {
                    setState(() {
                        _finalNoteController.text = finalText;

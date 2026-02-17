@@ -319,7 +319,7 @@ class AuthService {
       return response['success'] == true;
     } catch (e) {
       print('Update company settings error: $e');
-      return false;
+      rethrow; // Rethrow to let UI show the error
     }
   }
 }
