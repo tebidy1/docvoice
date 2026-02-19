@@ -19,6 +19,7 @@ import '../../mobile_app/services/groq_service.dart'; // Import GroqService
 import '../../services/api_service.dart';
 
 import '../../widgets/pattern_highlight_controller.dart'; 
+import '../../widgets/processing_overlay.dart';
 import '../../desktop/macro_explorer_dialog.dart'; 
 import '../../models/macro.dart' as DesktopMacro; // Explicit import for dialog result
 
@@ -66,9 +67,6 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
   bool _isLoading = true; // For audio processing
 
   // AI Processing Animation
-  Timer? _generationTimer;
-  int _elapsedSeconds = 0;
-  int _statusMessageIndex = 0;
   final List<String> _statusMessages = [
     'Processing Note...',
     'Consulting AI...',
@@ -93,7 +91,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
 
   @override
   void dispose() {
-    _generationTimer?.cancel();
+    // _generationTimer?.cancel(); // Removed
     _finalNoteController.dispose();
     super.dispose();
   }
@@ -249,21 +247,13 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
        setState(() {
           _isGenerating = true;
           _selectedMacro = macro;
-          _elapsedSeconds = 0;
-          _statusMessageIndex = 0;
+          // _elapsedSeconds = 0; // Removed
+          // _statusMessageIndex = 0; // Removed
           _isRawTextExpanded = false; 
        });
        
-       // Animation Timer
-       _generationTimer?.cancel();
-       _generationTimer = Timer.periodic(const Duration(milliseconds: 1500), (timer) {
-           if (mounted) {
-               setState(() {
-                   _elapsedSeconds++;
-                   _statusMessageIndex = (_statusMessageIndex + 1) % _statusMessages.length;
-               });
-           }
-       });
+       
+       // Animation Timer - Removed, handled by ProcessingOverlay.dart
 
        try {
            final prefs = await SharedPreferences.getInstance();
@@ -305,52 +295,62 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
        } catch (e) {
            _showError("AI Error: $e");
        } finally {
-           _generationTimer?.cancel();
-           if(mounted) setState(() => _isGenerating = false);
-       }
+            // _generationTimer?.cancel(); // Removed
+            if(mounted) setState(() => _isGenerating = false);
+        }
   }
 
   String _getCleanText() {
-      final text = _finalNoteController.text;
-      if (text.isEmpty) return "";
+    final text = _finalNoteController.text;
+    if (text.isEmpty) return "";
 
-      final List<String> lines = text.split('\n');
-      final List<String> cleanLines = [];
+    final List<String> lines = text.split('\n');
+    final List<String> cleanLines = [];
 
-      for (var line in lines) {
-          bool isDirty = false;
-          // Filter out [ Select ] lines
-          if (line.contains('[ Select ]')) isDirty = true;
-          if (line.contains('[Not Reported]')) isDirty = true;
-          if (line.contains('Not Reported')) isDirty = true; 
-          
-          if (!isDirty) {
-               cleanLines.add(line);
-          }
+    // Robust Regex for "Missing Info" placeholders
+    // Catches: [Duration not specified], [License not provided], [No medical condition...], [ Select ]
+    final placeholderRegex = RegExp(r'\[.*?(not specified|not provided|no .*? identified|select|none).*?\]', caseSensitive: false);
+
+    for (var line in lines) {
+      bool isDirty = false;
+      
+      // Check for regex match
+      if (placeholderRegex.hasMatch(line)) isDirty = true;
+      
+      // Keep legacy checks just in case
+      if (line.contains('[ Select ]')) isDirty = true;
+      if (line.contains('Not Reported')) isDirty = true; 
+      
+      if (!isDirty) {
+           cleanLines.add(line);
       }
-      return cleanLines.join('\n');
+    }
+    return cleanLines.join('\n').trim();
   }
 
   Future<void> _smartCopyAndInject() async {
+      // 1. Get Clean Text (Filter placeholders)
       final cleanText = _getCleanText();
+      
       if (cleanText.isEmpty && _finalNoteController.text.isNotEmpty) {
-           // Fallback if everything was dirty? Should rarely happen.
-           // Maybe just warn? Or copy nothing? 
-           // Let's assume there's always *something*.
+           _showError("No clean text to copy. All lines appear to be placeholders.");
+           return;
       }
       if (cleanText.isEmpty) return;
 
-      // 1. Copy Clean Text to Clipboard
+      // 2. Copy Clean Text to Clipboard
       await Clipboard.setData(ClipboardData(text: cleanText));
       
       bool injected = false;
       
-      // 2. Try Smart Inject (Web Extension Only)
+      // 3. Try Smart Inject (Web Extension Only)
       if (kIsWeb) {
           try {
+             // Access the global window.scribeflow object defined in extension_interop.js
              final scribeflow = globalContext['scribeflow'];
              if (scribeflow != null) {
                  final jsObj = scribeflow as JSObject;
+                 // Call injectTextToActiveTab(cleanText)
                  final promise = jsObj.callMethod('injectTextToActiveTab'.toJS, cleanText.toJS) as JSPromise;
                  final result = await promise.toDart;
                  injected = (result as JSBoolean).toDart;
@@ -361,8 +361,12 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
       }
 
       String message = injected 
-          ? "✅ Injected & Clean Text Copied" 
+          ? "✅ Injected & Clean Copied" 
           : "✅ Clean Text Copied";
+          
+      if (!injected && kIsWeb) {
+          message += " (Injection failed)";
+      }
           
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(message),
@@ -375,7 +379,8 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
           await _inboxService.updateStatus(widget.draftNote.id, NoteStatus.copied);
       }
       
-      Navigator.pop(context, cleanText); 
+      // We do NOT pop here, allowing user to keep working or press Back manually
+      // Navigator.pop(context, cleanText); 
   }
 
   Future<void> _markAsReady() async {
@@ -475,57 +480,73 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF121212), // Dark gray background
       body: SafeArea(
-        child: Column(
+        child: Stack(
           children: [
-             // Scrollable Content
-             Expanded(
-               child: SingleChildScrollView(
-                 padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 80), // Add bottom padding for FAB
-                 child: Column(
-                   crossAxisAlignment: CrossAxisAlignment.stretch,
-                   children: [
-                      // Header / Title Row
-                      Row(
-                        children: [
-                             IconButton(
-                                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                                onPressed: () {
-                                  if (Navigator.canPop(context)) {
-                                    Navigator.pop(context);
-                                  } else {
-                                    // Fallback for root? unlikely in extension stack but safe
-                                  }
-                                },
-                                tooltip: 'Back',
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
-                            ),
-                            const SizedBox(width: 8),
-                            const Text("Original Note", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                            const SizedBox(width: 8),
-                            _buildStatusBadge(),
-                            const Spacer(),
-                            // Use Raw Text Button moved to Header
-                            InkWell(
-                                onTap: () {
-                                    Clipboard.setData(ClipboardData(text: _rawText));
-                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Copied raw text"), duration: Duration(seconds: 1)));
-                                },
-                                child: const Text("Use Raw Text", style: TextStyle(fontSize: 12, color: AppTheme.accent, fontWeight: FontWeight.w500)),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      
-                      _buildOriginalNoteCard(),
-                      const SizedBox(height: 16),
-                      _buildTemplateSelectorCard(),
-                      const SizedBox(height: 16),
-                      _buildGeneratedNoteCard(),
-                   ],
+            Column(
+              children: [
+                 // Scrollable Content
+                 Expanded(
+                   child: SingleChildScrollView(
+                     padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 80), // Add bottom padding for FAB
+                     child: Column(
+                       crossAxisAlignment: CrossAxisAlignment.stretch,
+                       children: [
+                          // Header / Title Row
+                          Row(
+                            children: [
+                                 IconButton(
+                                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                                    onPressed: () {
+                                      if (Navigator.canPop(context)) {
+                                        Navigator.pop(context);
+                                      } else {
+                                        // Fallback for root? unlikely in extension stack but safe
+                                      }
+                                    },
+                                    tooltip: 'Back',
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                ),
+                                const SizedBox(width: 8),
+                                const Text("Original Note", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+                                const SizedBox(width: 8),
+                                _buildStatusBadge(),
+                                const Spacer(),
+                                // Use Raw Text Button moved to Header
+                                InkWell(
+                                    onTap: () {
+                                        Clipboard.setData(ClipboardData(text: _rawText));
+                                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Copied raw text"), duration: Duration(seconds: 1)));
+                                    },
+                                    child: const Text("Use Raw Text", style: TextStyle(fontSize: 12, color: AppTheme.accent, fontWeight: FontWeight.w500)),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          
+                          _buildOriginalNoteCard(),
+                          const SizedBox(height: 16),
+                          _buildTemplateSelectorCard(),
+                          const SizedBox(height: 16),
+                          _buildGeneratedNoteCard(),
+                       ],
+                     ),
+                   ),
+                 ),
+              ],
+            ),
+            
+            // Overlay for Initial Transcription
+            if (_isLoading)
+               const Positioned.fill(child: ProcessingOverlay()),
+
+            // Overlay for AI Generation
+            if (_isGenerating)
+               Positioned.fill(
+                 child: ProcessingOverlay(
+                   cyclingMessages: _statusMessages,
                  ),
                ),
-             ),
           ],
         ),
       ),
@@ -683,50 +704,55 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
 
   Widget _buildGeneratedNoteCard() {
     return Container(
+      width: double.infinity, // Ensure full width
       decoration: BoxDecoration(
-        color: const Color(0xFF1C1C1C),
+        color: const Color(0xFF1C1C1C), // Unified background color
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFF2A2A2A)),
       ),
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.zero, // Remove inner padding from main container
+      clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-               const Icon(Icons.auto_awesome, color: AppTheme.accent, size: 18),
-               const SizedBox(width: 8),
-               const Text("Generated Note", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
-            ],
+          // Header Section
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                 const Icon(Icons.auto_awesome, color: AppTheme.accent, size: 18),
+                 const SizedBox(width: 8),
+                 const Text("Generated Note", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+              ],
+            ),
           ),
-          const SizedBox(height: 16),
           
           if (_isGenerating)
-             Center(
-               child: Padding(
-                 padding: const EdgeInsets.all(32), 
-                 child: Column(
-                   children: [
-                     const CircularProgressIndicator(), 
-                     const SizedBox(height: 16),
-                     Text(_statusMessages[_statusMessageIndex], style: const TextStyle(color: Colors.white60)),
-                   ]
-                 )
-               )
-             )
+             const SizedBox(height: 100) 
           else
-             TextField(
-               controller: _finalNoteController,
-               maxLines: null,
-               style: const TextStyle(fontSize: 14, color: Colors.white, height: 1.6),
-               decoration: const InputDecoration(
-                 border: InputBorder.none,
-                 isDense: true,
-                 contentPadding: EdgeInsets.zero,
-                 hintText: "AI generated note will appear here...",
-                 hintStyle: TextStyle(color: Colors.white24)
+             Container(
+               width: double.infinity,
+               // REMOVED color property to let it be transparent/inherit from parent
+               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0), 
+               child: TextField(
+                 controller: _finalNoteController,
+                 maxLines: null,
+                 style: const TextStyle(fontSize: 14, color: Colors.white, height: 1.6),
+                 decoration: const InputDecoration(
+                   border: InputBorder.none,
+                   focusedBorder: InputBorder.none,
+                   enabledBorder: InputBorder.none,
+                   errorBorder: InputBorder.none,
+                   disabledBorder: InputBorder.none,
+                   isDense: true,
+                   contentPadding: EdgeInsets.only(bottom: 16), // Add bottom padding for text
+                   hintText: "AI generated note will appear here...",
+                   hintStyle: TextStyle(color: Colors.white24),
+                   fillColor: Colors.transparent,
+                   filled: true,
+                 ),
+                 onTap: _handleEditorTap,
                ),
-               onTap: _handleEditorTap,
              ),
         ],
       ),

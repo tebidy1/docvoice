@@ -31,7 +31,11 @@ class _StickyNavbarState extends State<StickyNavbar> {
         widget.scrollController.hasClients ? widget.scrollController.offset : 0;
     final isScrolled = offset > 10;
     if (isScrolled != _isScrolled) {
-      if (mounted) setState(() => _isScrolled = isScrolled);
+      if (mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() => _isScrolled = isScrolled);
+        });
+      }
     }
   }
 

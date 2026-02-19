@@ -46,7 +46,7 @@ void main() async {
 
 
   // Only set up window manager on desktop platforms
-  if (!kIsWeb) {
+  if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
     try {
       await windowManager.ensureInitialized();
 

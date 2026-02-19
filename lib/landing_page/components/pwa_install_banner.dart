@@ -28,24 +28,26 @@ class _PwaInstallBannerState extends State<PwaInstallBanner> {
       builder: (context, available, child) {
         if (!available) return const SizedBox.shrink();
 
-        return Positioned(
-          bottom: 20,
-          left: 20,
-          right: 20,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: MedColors.surface,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-              border: Border.all(color: MedColors.primary.withOpacity(0.3)),
-            ),
+        if (!available) return const SizedBox.shrink();
+
+        return Align(
+          alignment: Alignment.bottomCenter,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 20, right: 20, bottom: 20),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: MedColors.surface,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+                border: Border.all(color: MedColors.primary.withOpacity(0.3)),
+              ),
             child: Row(
               children: [
                 Container(
@@ -121,7 +123,8 @@ class _PwaInstallBannerState extends State<PwaInstallBanner> {
               .slideY(
                   begin: 1, end: 0, duration: 600.ms, curve: Curves.easeOutBack)
               .fadeIn(),
-        );
+          ), // Padding
+        ); // Align
       },
     );
   }

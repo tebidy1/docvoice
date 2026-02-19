@@ -20,6 +20,7 @@ import 'package:uuid/uuid.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'animated_loading_text.dart';
 import 'dart:math'; // For exponential backoff in retry logic
+import '../../../widgets/processing_overlay.dart';
 
 class EditorScreen extends StatefulWidget {
   final NoteModel? draftNote;
@@ -302,7 +303,10 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Future<void> _applyMacroWithAI(MacroModel macro) async {
-    setState(() => _selectedMacro = macro);
+    setState(() {
+      _selectedMacro = macro;
+      _isProcessing = true;
+    });
 
     final prefs = await SharedPreferences.getInstance();
     String? geminiKey = prefs.getString('gemini_api_key');
@@ -515,29 +519,35 @@ class _EditorScreenState extends State<EditorScreen> {
     }
   }
 
-  void _copyCleanText() {
+  void _copyCleanText() async {
     final text = _finalController.text;
     if (text.isEmpty) return;
 
     final List<String> lines = text.split('\n');
     final List<String> cleanLines = [];
+    // Robust Regex for "Missing Info" placeholders
+    // Catches: [Duration not specified], [License not provided], [No medical condition...], [ Select ]
+    final placeholderRegex = RegExp(r'\[.*?(not specified|not provided|no .*? identified|select|none).*?\]', caseSensitive: false);
 
     for (var line in lines) {
       bool isDirty = false;
-      // Filter out [ Select ] lines
+      
+      // Check for regex match
+      if (placeholderRegex.hasMatch(line)) isDirty = true;
+      
+      // Keep legacy checks just in case
       if (line.contains('[ Select ]')) isDirty = true;
-      if (line.contains('[Not Reported]')) isDirty = true;
-      if (line.contains('Not Reported')) isDirty = true;
+      if (line.contains('Not Reported')) isDirty = true; 
       
       if (!isDirty) {
-        cleanLines.add(line);
+           cleanLines.add(line);
       }
     }
 
-    final cleanText = cleanLines.join('\n');
+    final cleanText = cleanLines.join('\n').trim();
 
     // 3. Copy to Clipboard
-    Clipboard.setData(ClipboardData(text: cleanText));
+    await Clipboard.setData(ClipboardData(text: cleanText));
 
     // 4. Feedback
     if (mounted) {
@@ -547,18 +557,20 @@ class _EditorScreenState extends State<EditorScreen> {
             children: [
               const Icon(Icons.cleaning_services, color: Colors.white, size: 20),
               const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text("✅ Text Cleaned & Copied!", style: TextStyle(fontWeight: FontWeight.bold)),
-                  Text("Removed ${lines.length - cleanLines.length} lines with missing info.", style: const TextStyle(fontSize: 12)),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text("✅ Smart Copy Active", style: TextStyle(fontWeight: FontWeight.bold)),
+                    Text("Copied without ${lines.length - cleanLines.length} placeholder lines.", style: const TextStyle(fontSize: 12)),
+                  ],
+                ),
               ),
             ],
           ),
           backgroundColor: Colors.green[700],
-          duration: const Duration(seconds: 3),
+          duration: const Duration(seconds: 2),
         )
       );
     }
@@ -691,28 +703,48 @@ class _EditorScreenState extends State<EditorScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF121212), // Dark gray background
       body: SafeArea(
-        child: Column(
+        child: Stack(
           children: [
-             // Scrollable Content
-             Expanded(
-               child: SingleChildScrollView(
-                 padding: const EdgeInsets.all(16),
-                 child: Column(
-                   crossAxisAlignment: CrossAxisAlignment.stretch,
-                   children: [
-                      _buildOriginalNoteCard(),
-                      const SizedBox(height: 16),
-                      _buildTemplateSelectorCard(),
-                      const SizedBox(height: 16),
-                      _buildGeneratedNoteCard(),
-                      const SizedBox(height: 80), // Space for bottom dock
+            Column(
+              children: [
+                 // Scrollable Content
+                 Expanded(
+                   child: SingleChildScrollView(
+                     padding: const EdgeInsets.all(16),
+                     child: Column(
+                       crossAxisAlignment: CrossAxisAlignment.stretch,
+                       children: [
+                          _buildOriginalNoteCard(),
+                          const SizedBox(height: 16),
+                          _buildTemplateSelectorCard(),
+                          const SizedBox(height: 16),
+                          _buildGeneratedNoteCard(),
+                          const SizedBox(height: 80), // Space for bottom dock
+                       ],
+                     ),
+                   ),
+                 ),
+                 
+                  // Sticky Action Dock
+                 _buildStickyActionDock(),
+              ],
+            ),
+            
+            // Overlay for Initial Transcription
+            if (_isLoading)
+               const Positioned.fill(child: ProcessingOverlay()),
+
+            // Overlay for AI Generation
+            if (_isProcessing)
+               const Positioned.fill(
+                 child: ProcessingOverlay(
+                   cyclingMessages: [
+                      'Processing Note...',
+                      'Consulting AI...',
+                      'Structuring Note...',
                    ],
                  ),
                ),
-             ),
-             
-             // Sticky Action Dock
-             _buildStickyActionDock(),
           ],
         ),
       ),
@@ -873,7 +905,7 @@ class _EditorScreenState extends State<EditorScreen> {
           const SizedBox(height: 16),
           
           if (_isProcessing)
-             const Center(child: Padding(padding: EdgeInsets.all(32), child: AnimatedLoadingText()))
+             const SizedBox(height: 100) // Placeholder while overlay is active
           else
              TextField(
                controller: _finalController,
@@ -905,7 +937,7 @@ class _EditorScreenState extends State<EditorScreen> {
                  _copyCleanText();
             },
             icon: const Icon(Icons.content_copy_rounded, size: 18),
-            label: const Text("SMART COPY / FINISH"),
+            label: const Text("SMART COPY"),
             style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.accent,
                 foregroundColor: Colors.white,

@@ -14,7 +14,7 @@ import 'macro_explorer_dialog.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/window_manager_helper.dart';
-
+import '../widgets/processing_overlay.dart';
 import '../widgets/pattern_highlight_controller.dart';
 
 class InboxNoteDetailView extends StatefulWidget {
@@ -517,7 +517,9 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      body: MouseRegion(
+      body: Stack(
+       children: [
+        MouseRegion(
         onEnter: (_) => WindowManagerHelper.setOpacity(1.0),
         onExit: (_) => WindowManagerHelper.setOpacity(0.95), // Less transparent
         child: Container(
@@ -567,6 +569,15 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
             ],
           ),
         ),
+      ),
+        // Overlay for AI Generation (New Unified Style)
+        if (_isGenerating)
+           Positioned.fill(
+             child: ProcessingOverlay(
+               cyclingMessages: _statusMessages,
+             ),
+           ),
+       ],
       ),
     );
   }
@@ -902,95 +913,7 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
             children: [
               Padding(
                 padding: const EdgeInsets.all(24),
-                child: _isGenerating
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            // AI Processing Ring with continuous rotation
-                            TweenAnimationBuilder<double>(
-                                key: ValueKey(_isGenerating),
-                                tween: Tween(begin: 0.0, end: 1.0),
-                                duration: const Duration(seconds: 2),
-                              onEnd: () {
-                                // Restart animation when complete
-                                if (_isGenerating && mounted) {
-                                  setState(() {});
-                                }
-                              },
-                              builder: (context, value, child) {
-                                return Transform.rotate(
-                                  angle: value * 2 * 3.14159,
-                                  child: Container(
-                                    width: 120,
-                                    height: 120,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      gradient: SweepGradient(
-                                        colors: [
-                                          theme.colorScheme.primary,
-                                          theme.colorScheme.secondary,
-                                          theme.colorScheme.primary,
-                                        ],
-                                        stops: const [0.0, 0.5, 1.0],
-                                      ),
-                                    ),
-                                    child: Center(
-                                      child: Container(
-                                        width: 110,
-                                        height: 110,
-                                        decoration: const BoxDecoration(
-                                          color: Colors.white,
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: Center(
-                                          // Pulse effect for timer
-                                          child: TweenAnimationBuilder<double>(
-                                            key: ValueKey(_elapsedSeconds),
-                                            tween: Tween(begin: 1.0, end: 1.2),
-                                            duration: const Duration(
-                                                milliseconds: 300),
-                                            curve: Curves.easeOut,
-                                            builder: (context, scale, child) {
-                                              return Transform.scale(
-                                                scale: scale,
-                                                child: Text(
-                                                  '${_elapsedSeconds}s',
-                                                  style: TextStyle(
-                                                    fontSize: 32,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: theme
-                                                        .colorScheme.primary,
-                                                  ),
-                                                ),
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                            const SizedBox(height: 24),
-                            // Rotating status message
-                            AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 500),
-                              child: Text(
-                                _statusMessages[_statusMessageIndex],
-                                key: ValueKey(_statusMessageIndex),
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    : _finalNoteController.text.isEmpty
+                child: _finalNoteController.text.isEmpty
                         ? Center(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,

@@ -106,19 +106,18 @@ class HowItWorksSection extends StatelessWidget {
     required bool isMobile,
     required Duration delay,
   }) {
-    final textSection = Expanded(
-      child: Column(
+    // 1. Text Section (Base widget without Expanded)
+    var textSection = Column(
         crossAxisAlignment: isMobile ? CrossAxisAlignment.center : (isRight ? CrossAxisAlignment.end : CrossAxisAlignment.start),
         children: [
           Text(title, style: Theme.of(context).textTheme.headlineMedium!.copyWith(fontSize: 28), textAlign: isMobile ? TextAlign.center : null),
           const SizedBox(height: 16),
           Text(desc, style: const TextStyle(fontSize: 18, color: MedColors.textMuted, height: 1.6), textAlign: isMobile ? TextAlign.center : (isRight ? TextAlign.right : TextAlign.left)),
         ],
-      ).animate(delay: delay + 200.ms).fade().slideX(begin: isRight ? -0.2 : 0.2, end: 0),
-    );
+      ).animate(delay: delay + 200.ms).fade().slideX(begin: isRight ? -0.2 : 0.2, end: 0);
 
-    final cardSection = Expanded(
-      child: HoverScale(
+    // 2. Card Section (Base widget without Expanded)
+    var cardSection = HoverScale(
         child: Container(
           height: 280,
           decoration: BoxDecoration(
@@ -184,8 +183,8 @@ class HowItWorksSection extends StatelessWidget {
              ),
           ),
         ),
-      ).animate(delay: delay).fade(duration: 800.ms).slideY(begin: 0.2, end: 0),
-    );
+      ).animate(delay: delay).fade(duration: 800.ms).slideY(begin: 0.2, end: 0);
+
 
     final spacer = const SizedBox(width: 60);
 
@@ -213,6 +212,7 @@ class HowItWorksSection extends StatelessWidget {
         children: [
           node,
           const SizedBox(height: 24),
+          // Directly use widgets without Expanded for Vertical Column
           cardSection,
           const SizedBox(height: 24),
           textSection,
@@ -222,8 +222,8 @@ class HowItWorksSection extends StatelessWidget {
 
     return Row(
       children: isRight
-          ? [textSection, spacer, node, spacer, cardSection] 
-          : [cardSection, spacer, node, spacer, textSection], 
+          ? [Expanded(child: textSection), spacer, node, spacer, Expanded(child: cardSection)] 
+          : [Expanded(child: cardSection), spacer, node, spacer, Expanded(child: textSection)], 
     );
   }
   Widget _buildQrExperience(BuildContext context) {

@@ -47,8 +47,10 @@ class AudioRecordingService {
         RecordConfig config;
         
         if (kIsWeb) {
-           // On Web, let browser decide default (usually Opus/WebM) to avoid encoder errors
-           config = const RecordConfig(); 
+           // On Web/PWA, we MUST use Opus (or allow browser default, but explicit Opus is safer)
+           config = const RecordConfig(
+             encoder: AudioEncoder.opus,
+           ); 
         } else {
            // WAV/AAC is safer for Mobile/Desktop
            config = const RecordConfig(
