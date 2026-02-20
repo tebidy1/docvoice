@@ -9,14 +9,15 @@ class BackendIntegrationExample extends StatefulWidget {
   const BackendIntegrationExample({Key? key}) : super(key: key);
 
   @override
-  State<BackendIntegrationExample> createState() => _BackendIntegrationExampleState();
+  State<BackendIntegrationExample> createState() =>
+      _BackendIntegrationExampleState();
 }
 
 class _BackendIntegrationExampleState extends State<BackendIntegrationExample> {
   late MacroRepository _macroRepository;
   late InboxNoteRepository _inboxNoteRepository;
   late AudioService _audioService;
-  
+
   List<Macro> _macros = [];
   List<InboxNote> _inboxNotes = [];
   bool _isLoading = false;
@@ -32,15 +33,15 @@ class _BackendIntegrationExampleState extends State<BackendIntegrationExample> {
     try {
       // تهيئة الخدمات
       await ServiceLocator.initialize();
-      
+
       // الحصول على المستودعات والخدمات
       _macroRepository = ServiceLocator.get<MacroRepository>();
       _inboxNoteRepository = ServiceLocator.get<InboxNoteRepository>();
       _audioService = ServiceLocator.get<AudioService>();
-      
+
       // تحميل البيانات الأولية
       await _loadData();
-      
+
       setState(() {
         _statusMessage = 'تم تهيئة النظام بنجاح';
       });
@@ -59,15 +60,16 @@ class _BackendIntegrationExampleState extends State<BackendIntegrationExample> {
     try {
       // تحميل الماكروهات
       final macros = await _macroRepository.getAll();
-      
+
       // تحميل الملاحظات
       final notes = await _inboxNoteRepository.getAll();
-      
+
       setState(() {
         _macros = macros;
         _inboxNotes = notes;
         _isLoading = false;
-        _statusMessage = 'تم تحميل ${macros.length} ماكرو و ${notes.length} ملاحظة';
+        _statusMessage =
+            'تم تحميل ${macros.length} ماكرو و ${notes.length} ملاحظة';
       });
     } catch (e) {
       setState(() {
@@ -86,7 +88,7 @@ class _BackendIntegrationExampleState extends State<BackendIntegrationExample> {
         ..createdAt = DateTime.now();
 
       final createdMacro = await _macroRepository.create(newMacro);
-      
+
       setState(() {
         _macros.add(createdMacro);
         _statusMessage = 'تم إنشاء ماكرو جديد: ${createdMacro.trigger}';
@@ -108,7 +110,7 @@ class _BackendIntegrationExampleState extends State<BackendIntegrationExample> {
         ..updatedAt = DateTime.now();
 
       final createdNote = await _inboxNoteRepository.create(newNote);
-      
+
       setState(() {
         _inboxNotes.add(createdNote);
         _statusMessage = 'تم إنشاء ملاحظة جديدة: ${createdNote.title}';
@@ -129,58 +131,57 @@ class _BackendIntegrationExampleState extends State<BackendIntegrationExample> {
     try {
       final apiService = ApiService();
       await apiService.init();
-      
+
       // Test 1: Check if we can reach the API
       setState(() {
         _statusMessage = 'اختبار 1: فحص الوصول للـ API...';
       });
-      
+
       // Try to get macros (this should work even without auth for testing)
       final macrosResponse = await apiService.get('/macros');
-      
+
       setState(() {
         _statusMessage = 'اختبار 1 نجح: تم الوصول للـ API بنجاح\n'
-                        'الاستجابة: ${macrosResponse['message'] ?? 'تم تحميل البيانات'}';
+            'الاستجابة: ${macrosResponse['message'] ?? 'تم تحميل البيانات'}';
       });
-      
+
       // Test 2: Try to get inbox notes
       setState(() {
         _statusMessage = 'اختبار 2: فحص ملاحظات الصندوق الوارد...';
       });
-      
+
       final notesResponse = await apiService.get('/inbox-notes');
-      
+
       setState(() {
         _statusMessage = 'اختبار 2 نجح: تم الوصول لملاحظات الصندوق الوارد\n'
-                        'عدد الملاحظات: ${(notesResponse['data'] as List?)?.length ?? 0}';
+            'عدد الملاحظات: ${(notesResponse['data'] as List?)?.length ?? 0}';
       });
-      
+
       // Test 3: Test repository integration
       setState(() {
         _statusMessage = 'اختبار 3: فحص تكامل المستودعات...';
       });
-      
+
       final macros = await _macroRepository.getAll();
       final notes = await _inboxNoteRepository.getAll();
-      
+
       setState(() {
         _statusMessage = 'جميع الاختبارات نجحت! ✅\n'
-                        'الماكروهات: ${macros.length}\n'
-                        'الملاحظات: ${notes.length}\n'
-                        'الاتصال مع الباك اند يعمل بشكل صحيح';
+            'الماكروهات: ${macros.length}\n'
+            'الملاحظات: ${notes.length}\n'
+            'الاتصال مع الباك اند يعمل بشكل صحيح';
         _macros = macros;
         _inboxNotes = notes;
         _isLoading = false;
       });
-      
     } catch (e) {
       setState(() {
         _statusMessage = 'فشل في الاتصال مع الباك اند ❌\n'
-                        'الخطأ: $e\n'
-                        'تأكد من:\n'
-                        '1. تشغيل الخادم على https://docvoice.gumra-ai.com\n'
-                        '2. صحة إعدادات الشبكة\n'
-                        '3. صحة رمز المصادقة';
+            'الخطأ: $e\n'
+            'تأكد من:\n'
+            '1. تشغيل الخادم على https://docapi.sootnote.com\n'
+            '2. صحة إعدادات الشبكة\n'
+            '3. صحة رمز المصادقة';
         _isLoading = false;
       });
     }
@@ -215,9 +216,9 @@ class _BackendIntegrationExampleState extends State<BackendIntegrationExample> {
                 ),
               ),
             ),
-            
+
             const SizedBox(height: 20),
-            
+
             // أزرار العمليات
             Wrap(
               spacing: 10,
@@ -245,9 +246,9 @@ class _BackendIntegrationExampleState extends State<BackendIntegrationExample> {
                 ),
               ],
             ),
-            
+
             const SizedBox(height: 20),
-            
+
             // عرض البيانات
             Expanded(
               child: _isLoading

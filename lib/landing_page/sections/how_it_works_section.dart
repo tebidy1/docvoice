@@ -22,81 +22,83 @@ class HowItWorksSection extends StatelessWidget {
 
           // The Steps Content
           LayoutBuilder(builder: (context, constraints) {
-             final isMobile = constraints.maxWidth < 800;
-             return Stack(
-               children: [
-                 // 1. The Central Neural Line (Desktop Only)
-                 if (!isMobile)
-                   Positioned.fill(
-                     child: Center(
-                       child: Container(
-                         width: 4,
-                         decoration: BoxDecoration(
-                           gradient: LinearGradient(
-                             begin: Alignment.topCenter,
-                             end: Alignment.bottomCenter,
-                             colors: [
-                               MedColors.background,
-                               MedColors.primary.withOpacity(0.5),
-                               MedColors.primary,
-                               MedColors.primary.withOpacity(0.5),
-                               MedColors.background,
-                             ],
-                           ),
-                         ),
-                       ),
-                     ),
-                   ).animate().fade(duration: 1000.ms),
+            final isMobile = constraints.maxWidth < 800;
+            return Stack(
+              children: [
+                // 1. The Central Neural Line (Desktop Only)
+                if (!isMobile)
+                  Positioned.fill(
+                    child: Center(
+                      child: Container(
+                        width: 4,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              MedColors.background,
+                              MedColors.primary.withOpacity(0.5),
+                              MedColors.primary,
+                              MedColors.primary.withOpacity(0.5),
+                              MedColors.background,
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ).animate().fade(duration: 1000.ms),
 
-                 // 2. The Steps
-                 Column(
-                   children: [
-                     _buildNeuralStep(
-                       context,
-                       index: 1,
-                       title: "استرح من الكتابة",
-                       desc: "تواصلك مع مريضك هو القيمة الأهم.",
-                       imagePath: "assets/images/landing/step_01_record_v3.png",
-                       isRight: true,
-                       color: MedColors.primary,
-                       isMobile: isMobile,
-                       delay: 400.ms,
-                     ),
-                     const SizedBox(height: 160), // Space for flow
-                     _buildNeuralStep(
-                       context,
-                       index: 2,
-                       title: "مرونة الإدخال",
-                       desc: "ملاحظاتك محفوظة الصقها في النظام براحتك.",
-                       imagePath: "assets/images/landing/step_02_process.png",
-                       isRight: false,
-                       color: MedColors.accent,
-                       isMobile: isMobile,
-                       delay: 600.ms,
-                     ),
-                     const SizedBox(height: 160),
-                     _buildNeuralStep(
-                       context,
-                       index: 3,
-                       title: "مرونة الحركة",
-                       desc: "سواء كنت في الراوند او في المكتب سجل ملاحظاتك براحتك.",
-                       imagePath: "assets/images/landing/step_03_result.jpg",
-                       isRight: true,
-                       color: MedColors.success,
-                       isMobile: isMobile,
-                       delay: 800.ms,
-                     ),
-                   ],
-                 ),
-               ],
-             );
+                // 2. The Steps
+                Column(
+                  children: [
+                    _buildNeuralStep(
+                      context,
+                      index: 1,
+                      title: "استرح من الكتابة",
+                      desc: "تواصلك مع مريضك هو القيمة الأهم.",
+                      imagePath: "assets/images/landing/step_01_record_v3.png",
+                      isRight: true,
+                      color: MedColors.primary,
+                      isMobile: isMobile,
+                      delay: 400.ms,
+                    ),
+                    const SizedBox(height: 160), // Space for flow
+                    _buildNeuralStep(
+                      context,
+                      index: 2,
+                      title: "مرونة الإدخال",
+                      desc: "ملاحظاتك محفوظة الصقها في النظام براحتك.",
+                      imagePath: "assets/images/landing/step_02_process.png",
+                      isRight: false,
+                      color: MedColors.accent,
+                      isMobile: isMobile,
+                      delay: 600.ms,
+                    ),
+                    const SizedBox(height: 160),
+                    _buildNeuralStep(
+                      context,
+                      index: 3,
+                      title: "مرونة الحركة",
+                      desc:
+                          "سواء كنت في الراوند او في المكتب سجل ملاحظاتك براحتك.",
+                      imagePath: "assets/images/landing/step_03_result.jpg",
+                      isRight: true,
+                      color: MedColors.success,
+                      isMobile: isMobile,
+                      delay: 800.ms,
+                    ),
+                  ],
+                ),
+              ],
+            );
           }),
         ],
       ),
     );
   }
 
-  Widget _buildNeuralStep(BuildContext context, {
+  Widget _buildNeuralStep(
+    BuildContext context, {
     required int index,
     required String title,
     required String desc,
@@ -108,104 +110,133 @@ class HowItWorksSection extends StatelessWidget {
   }) {
     // 1. Text Section (Base widget without Expanded)
     var textSection = Column(
-        crossAxisAlignment: isMobile ? CrossAxisAlignment.center : (isRight ? CrossAxisAlignment.end : CrossAxisAlignment.start),
-        children: [
-          Text(title, style: Theme.of(context).textTheme.headlineMedium!.copyWith(fontSize: 28), textAlign: isMobile ? TextAlign.center : null),
-          const SizedBox(height: 16),
-          Text(desc, style: const TextStyle(fontSize: 18, color: MedColors.textMuted, height: 1.6), textAlign: isMobile ? TextAlign.center : (isRight ? TextAlign.right : TextAlign.left)),
-        ],
-      ).animate(delay: delay + 200.ms).fade().slideX(begin: isRight ? -0.2 : 0.2, end: 0);
+      crossAxisAlignment: isMobile
+          ? CrossAxisAlignment.center
+          : (isRight ? CrossAxisAlignment.end : CrossAxisAlignment.start),
+      children: [
+        Text(title,
+            style: Theme.of(context)
+                .textTheme
+                .headlineMedium!
+                .copyWith(fontSize: 28),
+            textAlign: isMobile ? TextAlign.center : null),
+        const SizedBox(height: 16),
+        Text(desc,
+            style: const TextStyle(
+                fontSize: 18, color: MedColors.textMuted, height: 1.6),
+            textAlign: isMobile
+                ? TextAlign.center
+                : (isRight ? TextAlign.right : TextAlign.left)),
+      ],
+    )
+        .animate(delay: delay + 200.ms)
+        .fade()
+        .slideX(begin: isRight ? -0.2 : 0.2, end: 0);
 
     // 2. Card Section (Base widget without Expanded)
     var cardSection = HoverScale(
-        child: Container(
-          height: 280,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(30),
-            boxShadow: [
-              BoxShadow(color: color.withOpacity(0.2), blurRadius: 40, offset: const Offset(0, 10))
-            ],
-          ),
-          child: ClipRRect(
-             borderRadius: BorderRadius.circular(30),
-             child: BackdropFilter(
-               filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-               child: Container(
-                 decoration: BoxDecoration(
-                   color: MedColors.surface.withOpacity(0.6),
-                   border: Border.all(color: color.withOpacity(0.3), width: 1.5),
-                   borderRadius: BorderRadius.circular(30),
-                 ),
-                 child: Stack(
-                   alignment: Alignment.center,
-                   children: [
-                      // Image Content
-                      Image.asset(
-                         imagePath,
-                         fit: BoxFit.cover,
-                         width: double.infinity,
-                         height: double.infinity,
-                      ).animate().fade(duration: 800.ms),
-                      
-                      // Gradient Overlay
-                      Positioned.fill(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [Colors.transparent, Colors.black.withOpacity(0.7)],
-                              stops: const [0.6, 1.0],
-                            ),
-                          ),
+      child: Container(
+        height: 280,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(30),
+          boxShadow: [
+            BoxShadow(
+                color: color.withOpacity(0.2),
+                blurRadius: 40,
+                offset: const Offset(0, 10))
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(30),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              decoration: BoxDecoration(
+                color: MedColors.surface.withOpacity(0.6),
+                border: Border.all(color: color.withOpacity(0.3), width: 1.5),
+                borderRadius: BorderRadius.circular(30),
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Image Content
+                  Image.asset(
+                    imagePath,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: double.infinity,
+                  ).animate().fade(duration: 800.ms),
+
+                  // Gradient Overlay
+                  Positioned.fill(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withOpacity(0.7)
+                          ],
+                          stops: const [0.6, 1.0],
                         ),
                       ),
-                      
-                      Positioned(
-                        bottom: 16,
-                        right: 16,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: color.withOpacity(0.9),
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [BoxShadow(color: color.withOpacity(0.4), blurRadius: 8)]
-                          ),
-                          child: Text(
-                            "$index", 
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)
-                          ),
-                        ),
-                      )
-                   ],
-                 ),
-               ),
-             ),
+                    ),
+                  ),
+
+                  Positioned(
+                    bottom: 16,
+                    right: 16,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                          color: color.withOpacity(0.9),
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                                color: color.withOpacity(0.4), blurRadius: 8)
+                          ]),
+                      child: Text("$index",
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18)),
+                    ),
+                  )
+                ],
+              ),
+            ),
           ),
         ),
-      ).animate(delay: delay).fade(duration: 800.ms).slideY(begin: 0.2, end: 0);
-
+      ),
+    ).animate(delay: delay).fade(duration: 800.ms).slideY(begin: 0.2, end: 0);
 
     final spacer = const SizedBox(width: 60);
 
     // The Central Node
     final node = Container(
-      width: 40, height: 40,
+      width: 40,
+      height: 40,
       decoration: BoxDecoration(
-        color: MedColors.background,
-        shape: BoxShape.circle,
-        border: Border.all(color: color, width: 3),
-        boxShadow: [
-          BoxShadow(color: color.withOpacity(0.5), blurRadius: 15, spreadRadius: 2)
-        ]
-      ),
+          color: MedColors.background,
+          shape: BoxShape.circle,
+          border: Border.all(color: color, width: 3),
+          boxShadow: [
+            BoxShadow(
+                color: color.withOpacity(0.5), blurRadius: 15, spreadRadius: 2)
+          ]),
       child: Center(
         child: Container(
-          width: 12, height: 12,
+          width: 12,
+          height: 12,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
       ),
-    ).animate(delay: delay + 400.ms).scale(begin: const Offset(0,0), end: const Offset(1,1), curve: Curves.elasticOut);
+    ).animate(delay: delay + 400.ms).scale(
+        begin: const Offset(0, 0),
+        end: const Offset(1, 1),
+        curve: Curves.elasticOut);
 
     if (isMobile) {
       return Column(
@@ -222,13 +253,26 @@ class HowItWorksSection extends StatelessWidget {
 
     return Row(
       children: isRight
-          ? [Expanded(child: textSection), spacer, node, spacer, Expanded(child: cardSection)] 
-          : [Expanded(child: cardSection), spacer, node, spacer, Expanded(child: textSection)], 
+          ? [
+              Expanded(child: textSection),
+              spacer,
+              node,
+              spacer,
+              Expanded(child: cardSection)
+            ]
+          : [
+              Expanded(child: cardSection),
+              spacer,
+              node,
+              spacer,
+              Expanded(child: textSection)
+            ],
     );
   }
+
   Widget _buildQrExperience(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 800;
-    
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
@@ -237,40 +281,45 @@ class HowItWorksSection extends StatelessWidget {
         borderRadius: BorderRadius.circular(30),
         border: Border.all(color: MedColors.primary.withOpacity(0.2)),
         boxShadow: [
-           BoxShadow(color: MedColors.primary.withOpacity(0.05), blurRadius: 30, spreadRadius: 0)
+          BoxShadow(
+              color: MedColors.primary.withOpacity(0.05),
+              blurRadius: 30,
+              spreadRadius: 0)
         ],
       ),
-      child: isMobile 
-        ? Column(
-            children: [
-               _buildQrContent(),
-               const SizedBox(height: 24),
-               _buildQrText(context, isMobile: true),
-            ],
-          )
-        : Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildQrText(context, isMobile: false),
-              const SizedBox(width: 48),
-              Container(width: 1, height: 100, color: Colors.white10),
-              const SizedBox(width: 48),
-              _buildQrContent(),
-            ],
-          ),
+      child: isMobile
+          ? Column(
+              children: [
+                _buildQrContent(),
+                const SizedBox(height: 24),
+                _buildQrText(context, isMobile: true),
+              ],
+            )
+          : Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildQrText(context, isMobile: false),
+                const SizedBox(width: 48),
+                Container(width: 1, height: 100, color: Colors.white10),
+                const SizedBox(width: 48),
+                _buildQrContent(),
+              ],
+            ),
     ).animate().fade().slideY(begin: 0.2, end: 0);
   }
 
   Widget _buildQrText(BuildContext context, {required bool isMobile}) {
     return Column(
-      crossAxisAlignment: isMobile ? CrossAxisAlignment.center : CrossAxisAlignment.end, // RTL: End is Left
+      crossAxisAlignment: isMobile
+          ? CrossAxisAlignment.center
+          : CrossAxisAlignment.end, // RTL: End is Left
       children: [
         Text(
           "عش التجربة الاحترافية",
           style: Theme.of(context).textTheme.headlineMedium!.copyWith(
-            color: MedColors.primary,
-            fontWeight: FontWeight.bold,
-          ),
+                color: MedColors.primary,
+                fontWeight: FontWeight.bold,
+              ),
           textAlign: isMobile ? TextAlign.center : TextAlign.left,
         ),
         const SizedBox(height: 12),
@@ -281,7 +330,7 @@ class HowItWorksSection extends StatelessWidget {
             color: Colors.white,
             fontWeight: FontWeight.w500,
           ),
-           textAlign: isMobile ? TextAlign.center : TextAlign.left,
+          textAlign: isMobile ? TextAlign.center : TextAlign.left,
         ),
         const SizedBox(height: 8),
         Text(
@@ -290,7 +339,7 @@ class HowItWorksSection extends StatelessWidget {
             fontSize: 16,
             color: MedColors.textMuted,
           ),
-           textAlign: isMobile ? TextAlign.center : TextAlign.left,
+          textAlign: isMobile ? TextAlign.center : TextAlign.left,
         ),
       ],
     );
@@ -300,14 +349,13 @@ class HowItWorksSection extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(color: MedColors.primary.withOpacity(0.3), blurRadius: 20)
-        ]
-      ),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(color: MedColors.primary.withOpacity(0.3), blurRadius: 20)
+          ]),
       child: QrImageView(
-        data: 'https://docvoice.gumra-ai.com', // Link to landing page or app
+        data: 'https://docapi.sootnote.com', // Link to landing page or app
         version: QrVersions.auto,
         size: 160.0,
         backgroundColor: Colors.white,
@@ -315,4 +363,3 @@ class HowItWorksSection extends StatelessWidget {
     );
   }
 }
-

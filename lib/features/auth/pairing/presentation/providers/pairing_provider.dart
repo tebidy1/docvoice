@@ -11,7 +11,7 @@ import '../../domain/repositories/pairing_repository.dart';
 // Dio Provider
 final dioProvider = Provider<Dio>((ref) {
   final baseUrl =
-      dotenv.env['API_BASE_URL'] ?? 'https://docvoice.gumra-ai.com/api';
+      dotenv.env['API_BASE_URL'] ?? 'https://docapi.sootnote.com/api';
   final dio = Dio(BaseOptions(
     baseUrl: baseUrl.endsWith('/') ? baseUrl : '$baseUrl/',
     headers: {

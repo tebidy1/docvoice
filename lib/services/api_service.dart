@@ -16,8 +16,7 @@ class ApiService {
   bool get hasToken => _token != null && _token!.isNotEmpty;
 
   Future<void> init() async {
-    _baseUrl =
-        dotenv.env['API_BASE_URL'] ?? 'https://docvoice.gumra-ai.com/api';
+    _baseUrl = dotenv.env['API_BASE_URL'] ?? 'https://docapi.sootnote.com/api';
     // Ensure base URL doesn't end with a slash to avoid double slashes with endpoint
     if (_baseUrl!.endsWith('/')) {
       _baseUrl = _baseUrl!.substring(0, _baseUrl!.length - 1);
@@ -162,9 +161,10 @@ class ApiService {
         'Accept': 'application/json',
         if (_token != null) 'Authorization': 'Bearer $_token',
       });
-      
+
       print("DEBUG: Multipart POST to $endpoint");
-      print("DEBUG: Token Prefix: ${_token != null && _token!.length > 10 ? _token!.substring(0, 10) : _token}");
+      print(
+          "DEBUG: Token Prefix: ${_token != null && _token!.length > 10 ? _token!.substring(0, 10) : _token}");
       print("DEBUG: File Size: ${fileBytes.length} bytes");
 
       // Add fields
@@ -179,7 +179,8 @@ class ApiService {
         filename: filename,
       ));
 
-      final streamedResponse = await request.send().timeout(Duration(milliseconds: _timeout));
+      final streamedResponse =
+          await request.send().timeout(Duration(milliseconds: _timeout));
       final response = await http.Response.fromStream(streamedResponse);
 
       return _handleResponse(response);
@@ -206,17 +207,17 @@ class ApiService {
 
     try {
       final dynamic decoded = jsonDecode(responseBody);
-      
+
       // Handle List Response (Wrap it)
       if (decoded is List) {
-         if (statusCode >= 200 && statusCode < 300) {
-            return {
-              'status': true,
-              'code': statusCode,
-              'message': 'Success',
-              'data': decoded
-            };
-         }
+        if (statusCode >= 200 && statusCode < 300) {
+          return {
+            'status': true,
+            'code': statusCode,
+            'message': 'Success',
+            'data': decoded
+          };
+        }
       }
 
       final data = decoded as Map<String, dynamic>;
@@ -269,7 +270,7 @@ class ApiService {
           'payload': data
         };
       }
-      
+
       print("API Error ($statusCode): $responseBody"); // Log full body
 
       throw ApiException(
