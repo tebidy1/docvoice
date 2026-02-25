@@ -1,27 +1,28 @@
 import 'dart:async';
-import 'dart:math'; // For exponential backoff
-import 'dart:ui'; // For PointerDeviceKind
+import 'dart:math';
+import 'dart:ui';
 import 'package:flutter/material.dart';
-import '../../mobile_app/core/theme.dart'; // Import AppTheme
+import '../../mobile_app/core/theme.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:http/http.dart' as http; // For Web Blob fetching
-import 'package:flutter/foundation.dart'; // For kIsWeb
-import 'dart:js_interop'; // For calling JS functions
-import 'dart:js_interop_unsafe'; // For accessing global properties
-
+import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart';
+import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 // Models & Services
 import '../../mobile_app/models/note_model.dart';
-// Mobile Editor uses: import '../../services/macro_service.dart'; which returns List<MacroModel>.
 import '../../mobile_app/services/macro_service.dart'; 
 import '../../mobile_app/services/inbox_service.dart';
-import '../../mobile_app/services/groq_service.dart'; // Import GroqService
+import '../../mobile_app/services/groq_service.dart';
 import '../../services/api_service.dart';
-
 import '../../widgets/pattern_highlight_controller.dart'; 
 import '../../widgets/processing_overlay.dart';
 import '../../desktop/macro_explorer_dialog.dart'; 
-import '../../models/macro.dart' as DesktopMacro; // Explicit import for dialog result
+import '../../models/macro.dart' as DesktopMacro;
+// ✅ Core AI Brain — centralized services (Phase 1 refactor)
+import '../../core/ai/ai_regex_patterns.dart';
+import '../../core/ai/text_processing_service.dart';
+import '../../services/ai/ai_processing_service.dart';
 
 class ExtensionEditorScreen extends StatefulWidget {
   final NoteModel draftNote;
@@ -41,17 +42,20 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
   final _finalNoteController = PatternHighlightController(
       text: "",
       patternStyles: {
-        // Orage for [ Select ]
-        RegExp(r'\[ Select \]'): const TextStyle(color: Colors.orange, backgroundColor: Color(0x33FF9800), fontWeight: FontWeight.bold),
-        // Default brackets (if any remain)
-        RegExp(r'\[(.*?)\]'): const TextStyle(color: Colors.orange, backgroundColor: Color(0x33FF9800)),
-        // HEADERS: Uppercase + Colon -> White Underline
-        RegExp(r'^[A-Z][A-Z0-9\s\/-]+:', multiLine: true): const TextStyle(
+        // ✅ Using centralized AIRegexPatterns (Phase 1 refactor)
+        AIRegexPatterns.selectPlaceholderPattern:
+            const TextStyle(
+                color: Colors.orange,
+                backgroundColor: Color(0x33FF9800),
+                fontWeight: FontWeight.bold),
+        AIRegexPatterns.anyBracketPattern:
+            const TextStyle(color: Colors.orange, backgroundColor: Color(0x33FF9800)),
+        AIRegexPatterns.headerPattern: const TextStyle(
           decoration: TextDecoration.underline,
           decorationColor: Colors.white,
           decorationThickness: 2.0,
           fontWeight: FontWeight.bold,
-          color: Colors.white, 
+          color: Colors.white,
         ),
       },
   );
@@ -257,40 +261,34 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
 
        try {
            final prefs = await SharedPreferences.getInstance();
-           // Save selected template ID
+           // Save selected template ID for UI restoration
            await prefs.setInt('last_selected_macro_id', macro.id);
            
-           final enableSuggestions = prefs.getBool('enable_smart_suggestions') ?? true;
+           // ✅ Use centralized AIProcessingService (Phase 1 refactor)
+           final globalPrompt = await AIProcessingService.getEffectivePrompt();
+           final specialty = await AIProcessingService.getEffectiveSpecialty();
+           final enableSuggestions = await AIProcessingService.isSmartSuggestionsEnabled();
            
-           final globalPrompt = prefs.getString('global_ai_prompt') ?? 
-               "SYSTEM DIRECTIVE: Analyze the input for telegraphic or fragmented phrasing (e.g., '46yo male, pain, vomit'). You MUST expand these fragments into full, grammatically complete, and professional medical sentences. Do NOT verify facts, but DO ensure the narrative flows logically. Output a concise medical note, avoiding conversational filler.";
+           final aiService = AIProcessingService();
+           final result = await aiService.processNote(
+               transcript: _rawText,
+               macroContent: macro.content,
+               mode: enableSuggestions ? AIProcessingMode.smart : AIProcessingMode.fast,
+               specialty: specialty,
+               globalPromptOverride: globalPrompt,
+           );
 
-           final apiService = ApiService();
-           final response = await apiService.post('/audio/process', body: {
-               'transcript': _rawText,
-               'macro_context': macro.content,
-               'specialty': prefs.getString('specialty') ?? 'General Practice',
-               'global_prompt': globalPrompt,
-               'mode': enableSuggestions ? 'smart' : 'fast',
-           });
-
-           if (response['status'] == true) {
-               final payload = response['payload'];
-               final finalText = payload['final_note'] ?? payload['text'] ?? '';
-               
+           if (result.success) {
+               final finalText = result.formattedNote;
                if (finalText.isEmpty) {
                    _showError("AI returned empty result. Please check API Key or try again.");
-                   print("DEBUG: AI Payload was empty/null: $payload");
                }
-
                if (mounted) {
-                   setState(() {
-                       _finalNoteController.text = finalText;
-                   });
-                   _saveDraft(); // Auto-save result
+                   setState(() { _finalNoteController.text = finalText; });
+                   _saveDraft();
                }
            } else {
-               _showError("Generation failed: ${response['message']}");
+               _showError("Generation failed: ${result.errorMessage}");
            }
        } catch (e) {
            _showError("AI Error: $e");
@@ -301,31 +299,9 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
   }
 
   String _getCleanText() {
-    final text = _finalNoteController.text;
-    if (text.isEmpty) return "";
-
-    final List<String> lines = text.split('\n');
-    final List<String> cleanLines = [];
-
-    // Robust Regex for "Missing Info" placeholders
-    // Catches: [Duration not specified], [License not provided], [No medical condition...], [ Select ]
-    final placeholderRegex = RegExp(r'\[.*?(not specified|not provided|no .*? identified|select|none).*?\]', caseSensitive: false);
-
-    for (var line in lines) {
-      bool isDirty = false;
-      
-      // Check for regex match
-      if (placeholderRegex.hasMatch(line)) isDirty = true;
-      
-      // Keep legacy checks just in case
-      if (line.contains('[ Select ]')) isDirty = true;
-      if (line.contains('Not Reported')) isDirty = true; 
-      
-      if (!isDirty) {
-           cleanLines.add(line);
-      }
-    }
-    return cleanLines.join('\n').trim();
+    // ✅ Use TextProcessingService.applySmartCopy (Phase 1 refactor)
+    // FIXED: Removes placeholder tokens inline, NOT entire lines
+    return TextProcessingService.applySmartCopy(_finalNoteController.text);
   }
 
   Future<void> _smartCopyAndInject() async {
@@ -406,61 +382,19 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
   // Removed _copyCleanText as it is merged into _smartCopyAndInject
 
   void _handleEditorTap() {
-      // Delay to allow the system to place the cursor first.
-      // 100ms covers potential frame delays on slower devices/browsers.
       Future.delayed(const Duration(milliseconds: 100), () {
           if (!mounted) return;
-          
-          final text = _finalNoteController.text;
           final selection = _finalNoteController.selection;
-          
-          // Only auto-select if the user simply tapped (collapsed selection), not if they engaged in a drag selection.
           if (!selection.isValid || !selection.isCollapsed) return;
-          
-          final cursor = selection.baseOffset;
-          
-          // 0. Check for [ Select ] specific phrase
-          final selectRegex = RegExp(r'\[ Select \]');
-          final selectMatches = selectRegex.allMatches(text);
-          
-          for (final match in selectMatches) {
-              if (cursor >= match.start && cursor <= match.end) {
-                  _finalNoteController.selection = TextSelection(
-                      baseOffset: match.start,
-                      extentOffset: match.end,
-                  );
-                  return;
-              }
-          }
-          
-          // 1. Check for [Brackets]
-          final bracketRegex = RegExp(r'\[(.*?)\]');
-          final bracketMatches = bracketRegex.allMatches(text);
-          
-          for (final match in bracketMatches) {
-              // Check if cursor is strictly INSIDE or ON the edges
-              if (cursor >= match.start && cursor <= match.end) {
-                  _finalNoteController.selection = TextSelection(
-                      baseOffset: match.start,
-                      extentOffset: match.end,
-                  );
-                  return; 
-              }
-          }
-          
-          // 2. Check for "Not Reported" (Case Insensitive)
-          // For bare occurrences outside brackets
-          final nrRegex = RegExp(r'Not Reported', caseSensitive: false);
-          final nrMatches = nrRegex.allMatches(text);
-          
-          for (final match in nrMatches) {
-               if (cursor >= match.start && cursor <= match.end) {
-                  _finalNoteController.selection = TextSelection(
-                      baseOffset: match.start,
-                      extentOffset: match.end,
-                  );
-                  return;
-              }
+
+          // ✅ Use TextProcessingService.findPlaceholderAtCursor (Phase 1 refactor)
+          final placeholder = TextProcessingService.findPlaceholderAtCursor(
+              _finalNoteController.text, selection.baseOffset);
+          if (placeholder != null) {
+              _finalNoteController.selection = TextSelection(
+                  baseOffset: placeholder.start,
+                  extentOffset: placeholder.end,
+              );
           }
       });
   }
