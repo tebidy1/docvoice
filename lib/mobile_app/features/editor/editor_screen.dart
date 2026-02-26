@@ -1,26 +1,32 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // For Clipboard
-import 'dart:ui'; // For PointerDeviceKind
-import '../../../widgets/pattern_highlight_controller.dart';
-import '../../../services/api_service.dart';
+import 'package:flutter/services.dart';
+import 'dart:ui';
+import 'dart:async';
+import 'dart:math';
+import 'package:flutter/foundation.dart';
+import 'package:universal_io/io.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+// App Widgets & Services
+import '../../../widgets/pattern_highlight_controller.dart';
+import '../../../widgets/processing_overlay.dart';
 import '../../core/theme.dart';
 import '../../models/note_model.dart';
-import 'package:provider/provider.dart';
-import '../../services/websocket_service.dart';
-import 'dart:async';
-import 'package:universal_io/io.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../../services/macro_service.dart';
-import 'package:http/http.dart' as http; // For Web Blob fetching
-import 'package:flutter/foundation.dart'; // For kIsWeb
 import '../../services/inbox_service.dart';
-import '../../models/note_model.dart'; // Ensure NoteModel is imported
-import 'package:uuid/uuid.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'animated_loading_text.dart';
-import 'dart:math'; // For exponential backoff in retry logic
-import '../../../widgets/processing_overlay.dart';
+import '../../services/macro_service.dart';
+import '../../services/whisper_local_stub.dart'
+    if (dart.library.io) '../../services/whisper_local_service.dart';
+import '../../services/model_download_service.dart';
+import '../../../services/api_service.dart';
+import '../../services/groq_service.dart'; // Direct Groq for faster Web transcription
+// ✅ Core AI Brain — centralized services (Phase 1 refactor)
+import '../../../core/ai/ai_regex_patterns.dart';
+import '../../../core/ai/text_processing_service.dart';
+import '../../../services/ai/ai_processing_service.dart';
+
 
 class EditorScreen extends StatefulWidget {
   final NoteModel? draftNote;
@@ -46,6 +52,11 @@ class _EditorScreenState extends State<EditorScreen> {
   bool _isSourceExpanded = false; // Toggle source view
   bool _useHighAccuracy = false; // Toggle for AI Mode (Standard vs Suggestions)
   
+  // Native STT
+  stt.SpeechToText _speechToText = stt.SpeechToText();
+  bool _speechEnabled = false;
+  String _sttEnginePref = 'groq'; // 'groq' or 'native'
+  
   // Auto-Save State
   int? _currentNoteId; // Track the cloud note ID for updates
   bool _hasUnsavedChanges = false;
@@ -66,24 +77,31 @@ class _EditorScreenState extends State<EditorScreen> {
     _sourceController = TextEditingController(text: widget.draftNote?.originalText ?? widget.draftNote?.content ?? "");
     
     // Final: Formatted text if exists
-    // Use PatternHighlightController to highlight [brackets] or "Not Reported"
+    // Use PatternHighlightController with centralized AIRegexPatterns
     _finalController = PatternHighlightController(
       text: widget.draftNote?.formattedText ?? "",
       patternStyles: {
-        // Orange for [ Select ]
-        RegExp(r'\[ Select \]'): const TextStyle(color: Colors.orange, backgroundColor: Color(0x33FF9800), fontWeight: FontWeight.bold),
-        // Default brackets (if any remain)
-        RegExp(r'\[(.*?)\]'): const TextStyle(color: Colors.orange, backgroundColor: Color(0x33FF9800)),
-        // HEADERS: Uppercase + Colon -> White Underline
-        RegExp(r'^[A-Z][A-Z0-9\s\/-]+:', multiLine: true): const TextStyle(
+        // Orange for [ Select ] — highest priority
+        AIRegexPatterns.selectPlaceholderPattern:
+            const TextStyle(
+                color: Colors.orange,
+                backgroundColor: Color(0x33FF9800),
+                fontWeight: FontWeight.bold),
+        // Orange for any remaining [bracket] placeholder
+        AIRegexPatterns.anyBracketPattern:
+            const TextStyle(
+                color: Colors.orange,
+                backgroundColor: Color(0x33FF9800)),
+        // Bold underlined WHITE for SECTION HEADERS (e.g. SUBJECTIVE:)
+        AIRegexPatterns.headerPattern: const TextStyle(
           decoration: TextDecoration.underline,
           decorationColor: Colors.white,
-          decorationThickness: 2.0, // Thicker line as requested
+          decorationThickness: 2.0,
           fontWeight: FontWeight.bold,
-          color: Colors.white, 
+          color: Colors.white,
         ),
       },
-    ); 
+    );
     
     // Auto-save on manual edits
     _finalController.addListener(_onManualEdit);
@@ -239,51 +257,118 @@ class _EditorScreenState extends State<EditorScreen> {
          }
 
          // --- Processing ---
-         if (bytes != null) {
+         if (path != null) {
               try {
-                final apiService = ApiService();
-                final result = await apiService.multipartPost(
-                  '/audio/transcribe',
-                  fileBytes: bytes,
-                  filename: kIsWeb ? 'recording.webm' : 'recording.m4a',
-                );
-
-                if (result['status'] == true) {
-                  final transcript = result['payload']['text'] ?? "";
-                  
-                  if (mounted) {
-                    setState(() => _isLoading = false);
+                final prefs = await SharedPreferences.getInstance();
+                final sttEngine = prefs.getString('stt_engine_pref') ?? 'groq';
+                
+                String transcript = "";
+                
+                if (sttEngine == 'whisper_local' && !kIsWeb) {
+                    // --- Whisper Local On-Device Transcription ---
+                    debugPrint("🎙️ Using Whisper Local STT");
                     
-                    final cleanText = transcript.trim();
-                    if (cleanText.isNotEmpty) {
-                        _sourceController.text = cleanText;
-                        
-                        // AUTO-SAVE: Create draft immediately after transcription
-                        try {
-                          final inboxService = InboxService();
-                          final noteId = await inboxService.addNote(
-                            cleanText,
-                            patientName: "Draft Note",
-                          );
-                          
-                          setState(() => _currentNoteId = noteId);
-                          
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text("📝 Draft saved to cloud"),
-                                backgroundColor: Colors.blueGrey,
-                                duration: Duration(seconds: 2),
-                              )
-                            );
-                          }
-                        } catch (e) {
-                          debugPrint("Auto-save draft failed: $e");
-                        }
+                    // Check if model is downloaded
+                    final downloadService = ModelDownloadService();
+                    if (!await downloadService.isModelReady()) {
+                      // Show download dialog
+                      if (!mounted) return;
+                      final shouldDownload = await showDialog<bool>(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (ctx) => _ModelDownloadDialog(),
+                      );
+                      if (shouldDownload != true) {
+                        setState(() { _isProcessing = false; });
+                        return;
+                      }
                     }
-                  }
+                    
+                    final whisperService = WhisperLocalService();
+                    transcript = await whisperService.transcribeAudioUrl(path);
+                    
+                    if (transcript.startsWith('Error')) {
+                        throw Exception(transcript);
+                    }
                 } else {
-                  throw result['message'] ?? 'Transcription failed';
+                    // --- Cloud Transcription (Groq) ---
+                    if (bytes != null) {
+                        // ⚡ STRATEGY: On Web, call Groq DIRECTLY for speed.
+                        // Backend proxy adds a full network round-trip + possible transcoding.
+                        // Direct call: Browser→Groq (fast)
+                        // Backend proxy: Browser→Backend→Groq→Backend→Browser (slow)
+                        bool transcribed = false;
+                        
+                        if (kIsWeb) {
+                          final prefs2 = await SharedPreferences.getInstance();
+                          final localGroqKey = prefs2.getString('groq_api_key') ?? 
+                              (dotenv.isInitialized ? dotenv.env['GROQ_API_KEY'] ?? '' : '');
+                          
+                          if (localGroqKey.isNotEmpty) {
+                            debugPrint("⚡ Web: Using Direct Groq API (fast path)");
+                            final groqService = GroqService(apiKey: localGroqKey);
+                            final directResult = await groqService.transcribe(bytes!, filename: 'recording.webm');
+                            
+                            if (!directResult.startsWith('Error')) {
+                              transcript = directResult;
+                              transcribed = true;
+                            } else {
+                              debugPrint("⚠️ Direct Groq failed: $directResult. Falling back to backend proxy.");
+                            }
+                          }
+                        }
+                        
+                        // Fallback: Backend Proxy (for Mobile, or if Direct Groq failed)
+                        if (!transcribed) {
+                          debugPrint("☁️ Using Backend Proxy for STT");
+                          final apiService = ApiService();
+                          final result = await apiService.multipartPost(
+                            '/audio/transcribe',
+                            fileBytes: bytes!,
+                            filename: kIsWeb ? 'recording.webm' : 'recording.wav',
+                          );
+
+                          if (result['status'] == true) {
+                            transcript = result['payload']['text'] ?? "";
+                          } else {
+                            throw Exception(result['message'] ?? 'Transcription failed');
+                          }
+                        }
+                    } else {
+                        throw Exception("No audio bytes available for Cloud STT.");
+                    }
+                }
+
+                if (mounted) {
+                  setState(() => _isLoading = false);
+                  
+                  final cleanText = transcript.trim();
+                  if (cleanText.isNotEmpty) {
+                      _sourceController.text = cleanText;
+                      
+                      // AUTO-SAVE: Create draft immediately after transcription
+                      try {
+                        final inboxService = InboxService();
+                        final noteId = await inboxService.addNote(
+                          cleanText,
+                          patientName: "Draft Note",
+                        );
+                        
+                        setState(() => _currentNoteId = noteId);
+                        
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text("📝 Draft saved to cloud"),
+                              backgroundColor: Colors.blueGrey,
+                              duration: Duration(seconds: 2),
+                            )
+                          );
+                        }
+                      } catch (e) {
+                        debugPrint("Auto-save draft failed: $e");
+                      }
+                  }
                 }
               } catch (e) {
                 debugPrint("Transcription Error: $e");
@@ -292,11 +377,10 @@ class _EditorScreenState extends State<EditorScreen> {
                   _sourceController.text = "❌ Transcription error: $e";
                 }
               }
-         }
- else {
-             debugPrint("No audio bytes found/loaded.");
+         } else {
+             debugPrint("No audio path found to transcribe.");
              if (mounted) setState(() => _isLoading = false);
-        }
+         }
      } else {
        if (mounted) setState(() => _isLoading = false);
      }
@@ -348,26 +432,21 @@ class _EditorScreenState extends State<EditorScreen> {
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      final apiService = ApiService();
+      // ✅ Use AIProcessingService — centralized AI call (Phase 1 refactor)
+      final aiService = AIProcessingService();
+      final mode = await AIProcessingService.getEffectiveMode();
       
-      final response = await apiService.post('/audio/process', body: {
-        'transcript': _sourceController.text,
-        'macro_context': macro.content,
-        'specialty': prefs.getString('specialty') ?? 'General Practice',
-        'global_prompt': prefs.getString('global_ai_prompt') ?? '',
-        'mode': _useHighAccuracy ? 'smart' : 'fast',
-      });
+      final result = await aiService.processNote(
+        transcript: _sourceController.text,
+        macroContent: macro.content,
+        mode: mode,
+      );
 
-      if (response['status'] == true) {
-        final payload = response['payload'];
+      if (result.success) {
         if (mounted) {
           setState(() {
-            _finalController.text = payload['final_note'] ?? payload['text'] ?? '';
-            if (payload.containsKey('missing_suggestions')) {
-              _suggestions = (payload['missing_suggestions'] as List).cast<Map<String, dynamic>>();
-            } else {
-              _suggestions = [];
-            }
+            _finalController.text = result.formattedNote;
+            _suggestions = result.missingSuggestions;
           });
 
           // 5. AUTO-SAVE: Update existing note or create new one
@@ -406,7 +485,7 @@ class _EditorScreenState extends State<EditorScreen> {
           }
         }
       } else {
-        throw response['message'] ?? 'Processing failed';
+        throw result.errorMessage ?? 'Processing failed';
       }
     } catch (e, stackTrace) {
       debugPrint('❌ FULL AI ERROR: $e');
@@ -485,37 +564,17 @@ class _EditorScreenState extends State<EditorScreen> {
   void _handleTextFieldTap() {
     final text = _finalController.text;
     final selection = _finalController.selection;
-    final cursor = selection.baseOffset;
-      
     if (selection.baseOffset < 0) return;
-    
-    // 0. Check for [ Select ] specific phrase
-    final selectRegex = RegExp(r'\[ Select \]');
-    final selectMatches = selectRegex.allMatches(text);
-    
-    for (final match in selectMatches) {
-        if (cursor >= match.start && cursor <= match.end) {
-            _finalController.selection = TextSelection(
-                baseOffset: match.start,
-                extentOffset: match.end,
-            );
-            return;
-        }
-    }
-      
-    // 1. Check for [Brackets]or is inside [ ... ]
-    // Use RegExp to find all placeholders
-    final matches = RegExp(r'\[(.*?)\]').allMatches(text);
-    
-    for (final match in matches) {
-      if (selection.baseOffset >= match.start && selection.baseOffset <= match.end) {
-        // Select the whole match
-        _finalController.selection = TextSelection(
-          baseOffset: match.start, 
-          extentOffset: match.end
-        );
-        break;
-      }
+
+    // ✅ Use TextProcessingService.findPlaceholderAtCursor (Phase 1 refactor)
+    final placeholder = TextProcessingService.findPlaceholderAtCursor(
+        text, selection.baseOffset);
+
+    if (placeholder != null) {
+      _finalController.selection = TextSelection(
+        baseOffset: placeholder.start,
+        extentOffset: placeholder.end,
+      );
     }
   }
 
@@ -523,33 +582,13 @@ class _EditorScreenState extends State<EditorScreen> {
     final text = _finalController.text;
     if (text.isEmpty) return;
 
-    final List<String> lines = text.split('\n');
-    final List<String> cleanLines = [];
-    // Robust Regex for "Missing Info" placeholders
-    // Catches: [Duration not specified], [License not provided], [No medical condition...], [ Select ]
-    final placeholderRegex = RegExp(r'\[.*?(not specified|not provided|no .*? identified|select|none).*?\]', caseSensitive: false);
+    // ✅ Use TextProcessingService.applySmartCopy (Phase 1 refactor)
+    // FIXED: No longer deletes entire lines — removes only placeholder tokens
+    final placeholderCount = TextProcessingService.countPlaceholders(text);
+    final cleanText = TextProcessingService.applySmartCopy(text);
 
-    for (var line in lines) {
-      bool isDirty = false;
-      
-      // Check for regex match
-      if (placeholderRegex.hasMatch(line)) isDirty = true;
-      
-      // Keep legacy checks just in case
-      if (line.contains('[ Select ]')) isDirty = true;
-      if (line.contains('Not Reported')) isDirty = true; 
-      
-      if (!isDirty) {
-           cleanLines.add(line);
-      }
-    }
-
-    final cleanText = cleanLines.join('\n').trim();
-
-    // 3. Copy to Clipboard
     await Clipboard.setData(ClipboardData(text: cleanText));
 
-    // 4. Feedback
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -562,8 +601,14 @@ class _EditorScreenState extends State<EditorScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text("✅ Smart Copy Active", style: TextStyle(fontWeight: FontWeight.bold)),
-                    Text("Copied without ${lines.length - cleanLines.length} placeholder lines.", style: const TextStyle(fontSize: 12)),
+                    const Text("✅ Smart Copy Active",
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    Text(
+                      placeholderCount > 0
+                          ? "Copied without $placeholderCount placeholder token(s)."
+                          : "Copied — note is complete, no placeholders found.",
+                      style: const TextStyle(fontSize: 12),
+                    ),
                   ],
                 ),
               ),
@@ -571,7 +616,7 @@ class _EditorScreenState extends State<EditorScreen> {
           ),
           backgroundColor: Colors.green[700],
           duration: const Duration(seconds: 2),
-        )
+        ),
       );
     }
   }
@@ -945,6 +990,91 @@ class _EditorScreenState extends State<EditorScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
         ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Model Download Dialog (shown when Whisper model is not installed)
+// ─────────────────────────────────────────────────────────────
+class _ModelDownloadDialog extends StatefulWidget {
+  @override
+  _ModelDownloadDialogState createState() => _ModelDownloadDialogState();
+}
+
+class _ModelDownloadDialogState extends State<_ModelDownloadDialog> {
+  bool _downloading = false;
+  double _progress = 0.0;
+  String _currentFile = '';
+  String? _error;
+
+  Future<void> _startDownload() async {
+    setState(() {
+      _downloading = true;
+      _error = null;
+    });
+
+    try {
+      await ModelDownloadService().downloadModel(
+        onProgress: (downloaded, total, fileName) {
+          if (mounted) {
+            setState(() {
+              _progress = total > 0 ? downloaded / total : 0.0;
+              _currentFile = fileName;
+            });
+          }
+        },
+      );
+
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _downloading = false;
+          _error = 'Download failed: $e';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Speech Model Required'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (!_downloading && _error == null)
+            const Text(
+              'The offline speech recognition model (~245 MB) needs to be downloaded. This is a one-time download.',
+            ),
+          if (_downloading) ...[
+            const SizedBox(height: 16),
+            LinearProgressIndicator(value: _progress),
+            const SizedBox(height: 8),
+            Text(
+              '${(_progress * 100).toStringAsFixed(1)}% — $_currentFile',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            Text(_error!, style: const TextStyle(color: Colors.red)),
+          ],
+        ],
+      ),
+      actions: [
+        if (!_downloading)
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+        if (!_downloading)
+          ElevatedButton(
+            onPressed: _startDownload,
+            child: Text(_error != null ? 'Retry' : 'Download'),
+          ),
+      ],
     );
   }
 }

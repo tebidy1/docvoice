@@ -1,21 +1,23 @@
 import 'dart:async';
-import 'dart:ui'; // For PointerDeviceKind
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/inbox_note.dart';
 import '../models/macro.dart';
 import '../models/smart_suggestion.dart';
 import '../services/inbox_service.dart';
-import '../services/api_service.dart';
 import '../services/keyboard_service.dart';
 import '../services/macro_service.dart';
 import 'macro_explorer_dialog.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/window_manager_helper.dart';
 import '../widgets/processing_overlay.dart';
 import '../widgets/pattern_highlight_controller.dart';
+// ✅ Core AI Brain — centralized services (Phase 1 refactor)
+import '../core/ai/ai_regex_patterns.dart';
+import '../core/ai/text_processing_service.dart';
+import '../services/ai/ai_processing_service.dart';
 
 class InboxNoteDetailView extends StatefulWidget {
   final NoteModel note;
@@ -37,14 +39,20 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   final _finalNoteController = PatternHighlightController(
     text: "",
     patternStyles: {
-      RegExp(r'\[(.*?)\]'): const TextStyle(color: Colors.orange, backgroundColor: Color(0x33FF9800)),
-      // HEADERS: Uppercase + Colon -> White Underline
-      RegExp(r'^[A-Z][A-Z0-9\s\/-]+:', multiLine: true): const TextStyle(
+      // ✅ Using centralized AIRegexPatterns (Phase 1 refactor)
+      AIRegexPatterns.selectPlaceholderPattern:
+          const TextStyle(
+              color: Colors.orange,
+              backgroundColor: Color(0x33FF9800),
+              fontWeight: FontWeight.bold),
+      AIRegexPatterns.anyBracketPattern:
+          const TextStyle(color: Colors.orange, backgroundColor: Color(0x33FF9800)),
+      AIRegexPatterns.headerPattern: const TextStyle(
         decoration: TextDecoration.underline,
         decorationColor: Colors.white,
         decorationThickness: 2.0,
         fontWeight: FontWeight.bold,
-        color: Colors.white, 
+        color: Colors.white,
       ),
     },
   );
@@ -79,11 +87,23 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     // 1. Setup Stream (If Instant Open)
     if (widget.pendingTextStream != null) {
       _isLoadingText = true;
+      
+      // Start the same animation timer as AI generation
+      _generationTimer?.cancel();
+      _generationTimer = Timer.periodic(const Duration(milliseconds: 1500), (timer) {
+        if (mounted) {
+          setState(() {
+            _elapsedSeconds++;
+            _statusMessageIndex = (_statusMessageIndex + 1) % _statusMessages.length;
+          });
+        }
+      });
+
       _textStreamSubscription = widget.pendingTextStream!.listen((text) {
         if (mounted) {
             setState(() {
-             _finalNoteController.text = text; // Update Field
              _isLoadingText = false; // Stop Loading
+             _generationTimer?.cancel(); // Stop animation
              
              // Update the "source" note model effectively so future operations use this text
              widget.note.rawText = text; // <-- CRITICAL FIX: Ensure UI reads from NoteModel
@@ -91,7 +111,17 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
         }
       }, onError: (e) {
          _showError("Transcription Failed: $e");
-         setState(() => _isLoadingText = false);
+         setState(() {
+           _isLoadingText = false;
+           _generationTimer?.cancel();
+         });
+      }, onDone: () {
+         if (mounted && _isLoadingText) {
+            setState(() {
+              _isLoadingText = false;
+              _generationTimer?.cancel();
+            });
+         }
       });
     }
 
@@ -215,9 +245,9 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   }
 
   Future<void> _restoreWindow() async {
-    // Restore to Mini-Bar / Pill dimensions (Floating Bar)
+    // Restore to sidebar dimensions (InboxManagerDialog is still open underneath)
     if (mounted) {
-       await WindowManagerHelper.collapseToPill(context);
+       await WindowManagerHelper.expandToSidebar(context);
     }
   }
 
@@ -244,44 +274,34 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     });
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final specialty = prefs.getString('specialty') ?? 'General Practice';
-      final globalPrompt = prefs.getString('global_ai_prompt') ?? '';
-      final enableSuggestions =
-          prefs.getBool('enable_smart_suggestions') ?? true;
-
-      final apiService = ApiService();
+      // ✅ Use centralized AIProcessingService (Phase 1 refactor)
+      final aiService = AIProcessingService();
+      final enableSuggestions = await AIProcessingService.isSmartSuggestionsEnabled();
       
-      final response = await apiService.post('/audio/process', body: {
-        'transcript': widget.note.rawText,
-        'macro_context': macro.content,
-        'specialty': specialty,
-        'global_prompt': globalPrompt,
-        'mode': enableSuggestions ? 'smart' : 'fast',
-      });
+      final result = await aiService.processNote(
+        transcript: widget.note.rawText,
+        macroContent: macro.content,
+        mode: enableSuggestions ? AIProcessingMode.smart : AIProcessingMode.fast,
+      );
 
-      if (response['status'] == true) {
-        final payload = response['payload'];
+      if (result.success) {
         if (enableSuggestions) {
           setState(() {
-            _finalNoteController.text = payload['final_note'] ?? '';
-            _suggestions = (payload['missing_suggestions'] as List?)
-                    ?.map((s) =>
-                        SmartSuggestion.fromJson(s as Map<String, dynamic>))
-                    .toList() ??
-                [];
+            _finalNoteController.text = result.formattedNote;
+            _suggestions = result.missingSuggestions
+                .map((s) => SmartSuggestion.fromJson(s))
+                .toList();
           });
-          _autoSaveGeneratedContent(payload['final_note'] ?? '', macro);
+          _autoSaveGeneratedContent(result.formattedNote, macro);
         } else {
-          final formattedText = payload['text'] ?? '';
           setState(() {
-            _finalNoteController.text = formattedText;
+            _finalNoteController.text = result.formattedNote;
             _suggestions = [];
           });
-          _autoSaveGeneratedContent(formattedText, macro);
+          _autoSaveGeneratedContent(result.formattedNote, macro);
         }
       } else {
-        _showError("Failed to generate note: ${response['message']}");
+        _showError("Failed to generate note: ${result.errorMessage}");
       }
     } catch (e) {
       print("DetailView: Error: $e");
@@ -345,24 +365,9 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   }
 
   String _getCleanText() {
-      final text = _finalNoteController.text;
-      if (text.isEmpty) return "";
-
-      final List<String> lines = text.split('\n');
-      final List<String> cleanLines = [];
-
-      for (var line in lines) {
-          bool isDirty = false;
-          // Check for [Not Reported] or Not Reported
-          if (line.contains('[Not Reported]')) isDirty = true;
-          if (line.contains('Not Reported')) isDirty = true; 
-
-          if (!isDirty) {
-               cleanLines.add(line);
-          }
-      }
-
-      return cleanLines.join('\n');
+    // ✅ Use TextProcessingService.applySmartCopy (Phase 1 refactor)
+    // FIXED: Removes placeholder tokens inline, NOT entire lines
+    return TextProcessingService.applySmartCopy(_finalNoteController.text);
   }
 
   Future<void> _smartCopyAndInject() async {
@@ -397,43 +402,19 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   }
 
   void _handleEditorTap() {
-      // Delay to allow the system to place the cursor first.
       Future.delayed(const Duration(milliseconds: 100), () {
           if (!mounted) return;
-          
-          final text = _finalNoteController.text;
           final selection = _finalNoteController.selection;
-          
           if (!selection.isValid || !selection.isCollapsed) return;
-          
-          final cursor = selection.baseOffset;
-          
-          // 1. Check for [Brackets]
-          final bracketRegex = RegExp(r'\[(.*?)\]');
-          final bracketMatches = bracketRegex.allMatches(text);
-          
-          for (final match in bracketMatches) {
-              if (cursor >= match.start && cursor <= match.end) {
-                  _finalNoteController.selection = TextSelection(
-                      baseOffset: match.start,
-                      extentOffset: match.end,
-                  );
-                  return; 
-              }
-          }
-          
-          // 2. Check for "Not Reported" (Case Insensitive)
-          final nrRegex = RegExp(r'Not Reported', caseSensitive: false);
-          final nrMatches = nrRegex.allMatches(text);
-          
-          for (final match in nrMatches) {
-               if (cursor >= match.start && cursor <= match.end) {
-                  _finalNoteController.selection = TextSelection(
-                      baseOffset: match.start,
-                      extentOffset: match.end,
-                  );
-                  return;
-              }
+
+          // ✅ Use TextProcessingService.findPlaceholderAtCursor (Phase 1 refactor)
+          final placeholder = TextProcessingService.findPlaceholderAtCursor(
+              _finalNoteController.text, selection.baseOffset);
+          if (placeholder != null) {
+              _finalNoteController.selection = TextSelection(
+                  baseOffset: placeholder.start,
+                  extentOffset: placeholder.end,
+              );
           }
       });
   }
@@ -570,11 +551,13 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
           ),
         ),
       ),
-        // Overlay for AI Generation (New Unified Style)
-        if (_isGenerating)
+        // Overlay for AI Generation/Transcription (New Unified Style)
+        if (_isGenerating || _isLoadingText)
            Positioned.fill(
              child: ProcessingOverlay(
-               cyclingMessages: _statusMessages,
+               cyclingMessages: _isGenerating 
+                 ? _statusMessages 
+                 : ['Transcribing Audio...', 'Analyzing Speech...', 'Extracting Text...'],
              ),
            ),
        ],

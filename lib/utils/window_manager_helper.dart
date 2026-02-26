@@ -12,14 +12,14 @@ class WindowManagerHelper {
     try {
       final primaryDisplay = await screenRetriever.getPrimaryDisplay();
       final screenSize = primaryDisplay.size;
-      
-      // Expand to full sidebar dimensions
-      final height = screenSize.height - 60; // Account for taskbar
+      // Provide a reasonable max height, leaving space for top hospital system headers
+      final height = screenSize.height * 0.75; // 75% of screen height
       await windowManager.setSize(Size(sidebarWidth, height));
       
-      // Position at right edge, top aligned
-      final x = screenSize.width - sidebarWidth;
-      await windowManager.setPosition(Offset(x, 0));
+      // Position at bottom-right edge, avoiding taskbar
+      final x = screenSize.width - sidebarWidth - 20; // 20px padding from right
+      final y = screenSize.height - height - 80; // 80px padding from bottom
+      await windowManager.setPosition(Offset(x, y));
     } catch (e) {
       print("Error expanding to sidebar: $e");
     }
@@ -39,10 +39,9 @@ class WindowManagerHelper {
         await windowManager.setSize(const Size(pillWidth, pillHeight));
         await windowManager.setResizable(false); // Lock it back
       } catch (e) { print(e); }
-      
-      // Position at right-center
-      final x = screenSize.width - pillWidth - 10;
-      final y = (screenSize.height - pillHeight) / 2;
+      // Position at bottom-right (leaving margin for taskbar and edge)
+      final x = screenSize.width - pillWidth - 20; // 20px padding from right
+      final y = screenSize.height - pillHeight - 80; // 80px padding from bottom to avoid taskbar
       await windowManager.setPosition(Offset(x, y));
     } catch (e) {
       print("Error collapsing to pill: $e");

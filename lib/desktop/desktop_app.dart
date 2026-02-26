@@ -17,6 +17,8 @@ import '../utils/window_manager_helper.dart';
 import 'inbox_manager_dialog.dart';
 import 'inbox_note_detail_view.dart'; // Import Detail View for instant open
 import 'macro_manager_dialog.dart';
+import '../services/oracle_live_speech_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class DesktopApp extends StatefulWidget {
   const DesktopApp({super.key});
@@ -34,6 +36,10 @@ class _DesktopAppState extends State<DesktopApp> {
   bool _isRecording = false;
   bool _isProcessing = false; // Visual feedback for processing
   int _lastViewedCount = 0; // For Smart Badge logic
+
+  // Oracle streaming
+  OracleLiveSpeechService? _oracleService;
+  Future<String>? _oracleTranscriptFuture;
 
   @override
   void initState() {
@@ -169,17 +175,91 @@ class _DesktopAppState extends State<DesktopApp> {
   Future<void> _toggleRecording() async {
     print("Mic Button Tapped. Current State: Recording=$_isRecording");
 
+    final prefs = await SharedPreferences.getInstance();
+    final sttEngine = prefs.getString('stt_engine_pref') ?? 'groq';
+
     if (_isRecording) {
       // Stop
       _amplitudeTimer?.cancel();
 
       print("Stopping recording...");
       try {
+        if (sttEngine == 'oracle_live') {
+          // --- ORACLE STREAMING STOP ---
+          if (mounted) {
+            setState(() {
+              _isRecording = false;
+              _isProcessing = true;
+            });
+          }
+          
+          if (_oracleService != null && _oracleTranscriptFuture != null) {
+            // 1. Push Detail Viewer IMMEDIATELY so user gets instant visual feedback.
+            final instantTextController = StreamController<String>.broadcast();
+            final tempNote = NoteModel()
+              ..id = 0
+              ..uuid = 'temp_${DateTime.now().millisecondsSinceEpoch}'
+              ..content = ''
+              ..rawText = ''
+              ..createdAt = DateTime.now()
+              ..updatedAt = DateTime.now()
+              ..status = NoteStatus.draft
+              ..patientName = 'Untitled';
+
+            // Close InboxManagerDialog if we can (optional but avoids stack mess)
+            // But to be safe and match groq, we just push on top.
+            final dialogFuture = showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) => InboxNoteDetailView(
+                note: tempNote,
+                pendingTextStream: instantTextController.stream,
+              ),
+            );
+
+            // 2. Safely stop recorder in the background
+            try {
+               await _recorder.stopRecording().timeout(const Duration(milliseconds: 500));
+            } catch (e) {
+               print("AudioRecorder stop timeout/error ignored: $e");
+            }
+
+            // 3. Complete Oracle
+            try {
+              final text = await _oracleService!.stopSession();
+              if (text.isNotEmpty) {
+                 instantTextController.add(text);
+                 await _inboxService.addNote(text, patientName: 'Untitled', summary: null);
+              } else {
+                 print("Warning: Oracle returned empty transcript");
+                 instantTextController.addError(Exception("No speech detected."));
+              }
+            } catch (e) {
+               print("Oracle Streaming Error: $e");
+               instantTextController.addError(e);
+            } finally {
+              _oracleService = null;
+              _oracleTranscriptFuture = null;
+              instantTextController.close();
+            }
+
+            await dialogFuture;
+            if (mounted) setState(() => _isProcessing = false);
+          } else {
+             try { await _recorder.stopRecording(); } catch(_) {}
+             if (mounted) setState(() => _isProcessing = false);
+          }
+          return; // Skip standard WAV handling
+        }
+
+        // --- STANDARD GROQ WAV FLOW ---
         final path = await _recorder.stop();
-        setState(() {
-          _isRecording = false;
-          _isProcessing = true; // Start processing spinner
-        });
+        if (mounted) {
+          setState(() {
+            _isRecording = false;
+            _isProcessing = true; // Start processing spinner
+          });
+        }
 
         if (path != null) {
           print("Recording saved to: $path");
@@ -212,9 +292,9 @@ class _DesktopAppState extends State<DesktopApp> {
                 NoteStatus.draft // Use 'draft' as 'processing' does not exist
             ..patientName = 'Untitled';
 
-          // 2. Open the View IMMEDIATELY (Do not await yet)
-          // We use a disjoint async block to show dialog so we can continue execution
-          showDialog(
+          // 2. Open the View IMMEDIATELY and AWAIT it
+          // We capture the future so we can await it before resetting _isProcessing completely.
+          final dialogFuture = showDialog(
             context: context,
             barrierDismissible: false, // Prevent closing while loading
             builder: (context) => InboxNoteDetailView(
@@ -256,28 +336,35 @@ class _DesktopAppState extends State<DesktopApp> {
             // when transcribeWav finishes, it emits to textStream, triggers above logic
           } catch (e) {
             instantTextController.addError(e);
-            setState(() => _isProcessing = false);
+            if (mounted) setState(() => _isProcessing = false);
             serverSub.cancel();
           }
 
           // Cleanup File
           await file.delete();
 
-          // Wait for dialog to close (optional, if we want to track it)
-          // await dialogFuture;
+          // Wait for dialog to close before finally resetting processing state
+          await dialogFuture;
+          if (mounted) {
+            setState(() => _isProcessing = false);
+          }
         } else {
           print("ERROR: Recorder returned null path");
-          setState(() {
-            print("Error: No file");
-            _isProcessing = false;
-          });
+          if (mounted) {
+            setState(() {
+              print("Error: No file");
+              _isProcessing = false;
+            });
+          }
         }
       } catch (e) {
         print("Error stopping: $e");
-        setState(() {
-          print("Error: $e");
-          _isProcessing = false;
-        });
+        if (mounted) {
+          setState(() {
+            print("Error: $e");
+            _isProcessing = false;
+          });
+        }
       }
     } else {
       // Start
@@ -289,16 +376,52 @@ class _DesktopAppState extends State<DesktopApp> {
           return;
         }
 
-        // Get temp path
-        final dir = await getTemporaryDirectory();
-        final path = '${dir.path}/temp_recording.wav';
+        if (sttEngine == 'oracle_live') {
+           // --- ORACLE STREAMING START ---
+           final useWhisper = prefs.getBool('oracle_use_whisper_model') ?? false;
+           final creds = OciCredentials(
+             tenancyId: 'ocid1.tenancy.oc1..aaaaaaaadt3eulxchu6ygrisqsai4z6qji5dyqiam7tgwgd6rrxe2wsocp2a',
+             userId: 'ocid1.user.oc1..aaaaaaaa3ykq2ykgaixlhze3yip5m3fxrsbkghnzecezym7c7neqk57fupdq',
+             fingerprint: 'fb:38:d1:b4:7c:47:61:fd:95:e6:5a:e8:bb:2c:43:ee',
+             compartmentId: 'ocid1.tenancy.oc1..aaaaaaaadt3eulxchu6ygrisqsai4z6qji5dyqiam7tgwgd6rrxe2wsocp2a',
+             privateKeyPem: '''
+-----BEGIN PRIVATE KEY-----
+MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDLQFaVcyVWbo1jq4LqN1jQ6E25nbE1Ks6nUE6zhH1h6B6kUSOYLihsKVxmKI5wVKKKYUnTTqUCYmtrKBlan46q9vfk0ccV1dxDDFIdZezk5+vuEdLklBxia/acfKZib3CThCuPX6NPoUPGrXDDeDqwsp4dhvu1QkZJRoGyMEoV5qrl2Boj0H+yVoSlAw1gCN8PZYCgstv7xgAgCwx78KIulc8uIwyl0SmEuyl9DzihqdMNjOf84yeulC5wvGE4UoQVMgiifUn3j59Iio+Wua1SYqas2cHGUxq17t7Y0Ti5iVPtL5DTASXjNbqL8woeDRFiTtcV+mmkwsBC4kXaib69AgMBAAECggIAAvqC+lGJFR/tda3hry3XS50dPHs1ibECUnHgbAw6QSkjanw06xSWwOUHRrOmng9OICcxANb+GrpCAZHsHdzzkd5Tf4MyfsesS2rpY3xm+8DJVJW8Hd+XczrKpFGa/PDN+R9z+vfSFHHpehvNvf5A+pjCLUPD5GIKVnsQc1chUs+l9keRZfHinCf3ao6fYK7hRxC5pYIrmf2f2AuPb/K0UaC3hS+oa+XLNxe5bZUuQDPuWr1dMRWKAfraHxSC+psmlqWnhpJA8DLYp1K+zRyotTyZhI3NmdWSJh3PnbtOEVCslXtaRTT/9zXkZZ7yu7PSZrg1ob1SnN7B9M3nKFVmeQKBgQDrZMOJgd29sNHh26bOcrAkQmSNyC+bElNSBWvwnBEbvqeHiSCcADWIDd4VWnLMbqUNN0GusxJhQxGvzZXlXD8K0LxnEDspecEaWiTPuYnQ752v28YRZosxSUB7bl89FjQpcu3GPd1hK3UJtpo1qQrauOMyjWA/4uT7grfVLso5aQKBgQDdC0G+Dc28r6T1Rx4cxYR0W2hnHFq1X7yDrVx0H3PEdH8+fyJPAJPkk5m/LdgE2l068NL1/39Ru3IehPM+8ZDEd2rEfvhP3IMO3uAm7IvkJMIbFFcEuR5YcABm3p2pdsEUT+/N2qjjBrvuSsghscowHsjR1rEJebW+SuBfD1V8NQKBgQDZR8Ouk+9of2TcxHHusrKgZaCHtzcqPvomBdci3Ax2vb/KPeuZ1B+VnKdYsoqw5Zj43/6DEcxvdwdGbdBlTIbspsyhnbvehwKWHotIKw1pjSTTBVyJB0yIjAM3bCQBMROpBuswSD6myQRZmPIzgfwA9RTSvukPT5LqDjk+UNhdsQKBgD1cj56D1HYpyEAywuA30KJAccYV7/RjpEBlksHFrWx+7ofZ4RtPTL7qXobc4hfOyoy/J8EUcTKuN2rTe3cgthBkGiZ8HNCGpXcuVclYZykpLx03U0TDYvIn/WSRLfFKPyU1X5uktLd5OhhXeCEqardbBGKEF9dKizJNNOYOqqt1AoGBAOa107lq0koA7A1oSlayeJY/Rw/MR3Qgzmv6Xn7dF1K2dxySo6c/8erNWt17qsC2lRFlo3p8UhyuyywvIYpNy8g1uEYVTGTAtgJKhOGSSMOpkdivygLgHGv1e+1/m79c6oGGUqdf2xmxSgxjHzsvjFhu1HSrW46DXj424N8jFYGS
+-----END PRIVATE KEY-----''',
+           );
 
-        await _recorder.startRecordingToFile(path);
+           _oracleService = OracleLiveSpeechService(
+             credentials: creds,
+             model: useWhisper ? OracleSTTModel.whisperGeneric : OracleSTTModel.oracleMedical,
+             language: 'ar-SA',
+             onError: (e) {
+                print("Oracle Stream Error: $e");
+             },
+           );
+           
+           final audioStream = await _recorder.startRecording();
+           _oracleTranscriptFuture = _oracleService!.startSession(audioStream);
 
-        print("Recording started successfully to $path");
-        setState(() {
-          _isRecording = true;
-        });
+           if (mounted) {
+             setState(() {
+               _isRecording = true;
+             });
+             _openRecordingDialog();
+           }
+        } else {
+           // --- STANDARD GROQ WAV FLOW ---
+           // Get temp path
+           final dir = await getTemporaryDirectory();
+           final path = '${dir.path}/temp_recording.wav';
+           await _recorder.startRecordingToFile(path);
+           print("Recording started successfully to $path");
+           if (mounted) {
+             setState(() {
+               _isRecording = true;
+             });
+             _openRecordingDialog();
+           }
+        }
       } catch (e) {
         print("Error recording: $e");
 
@@ -311,9 +434,31 @@ class _DesktopAppState extends State<DesktopApp> {
             ),
           );
         }
+        setState(() => _isRecording = false);
       }
     }
   }
+
+  // Helper to open the visual recording overlay on the side
+  void _openRecordingDialog() async {
+    await WindowManagerHelper.expandToSidebar(context);
+    if (!mounted) return;
+    await showDialog(
+      context: context,
+      barrierDismissible: false, // Must tap stop manually
+      barrierColor: Colors.transparent,
+      builder: (context) => InboxManagerDialog(
+        isRecording: _isRecording,
+        isProcessing: _isProcessing,
+        onRecordTap: _toggleRecording,
+        recorderService: _recorder,
+      ),
+    );
+    if (mounted) {
+      await WindowManagerHelper.collapseToPill(context);
+    }
+  }
+
 
   @override
   void dispose() {
@@ -448,7 +593,12 @@ class _DesktopAppState extends State<DesktopApp> {
                                                 barrierColor:
                                                     Colors.transparent,
                                                 builder: (context) =>
-                                                    const InboxManagerDialog(),
+                                                    InboxManagerDialog(
+                                                      isRecording: _isRecording,
+                                                      isProcessing: _isProcessing,
+                                                      onRecordTap: _toggleRecording,
+                                                      recorderService: _recorder,
+                                                    ),
                                               );
                                               await WindowManagerHelper
                                                   .collapseToPill(context);
@@ -457,8 +607,10 @@ class _DesktopAppState extends State<DesktopApp> {
                                               final freshNotes =
                                                   await _inboxService
                                                       .getPendingNotes();
-                                              setState(() => _lastViewedCount =
-                                                  freshNotes.length);
+                                              if (mounted) {
+                                                setState(() => _lastViewedCount =
+                                                    freshNotes.length);
+                                              }
                                             },
                                             tooltip: "Inbox",
                                             color: hasNew

@@ -24,6 +24,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isLoading = false;
   String _statusMessage = "Not Connected";
   Color _statusColor = Colors.grey;
+  String _sttEnginePref = 'groq';
+
+  // A/B Testing: Oracle Medical (default) vs Whisper Generic
+  bool _useOracleWhisperModel = false; // false = Oracle Medical, true = Whisper Generic
 
   Map<String, dynamic>? _currentUser;
   bool _isFetchingProfile = true;
@@ -112,6 +116,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     setState(() {
       _ipController.text = prefs.getString('server_ip') ?? "192.168.1.100";
+      _sttEnginePref = prefs.getString('stt_engine_pref') ?? 'groq';
+      _useOracleWhisperModel = prefs.getBool('oracle_use_whisper_model') ?? false;
     });
   }
 
@@ -372,6 +378,102 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ),
+
+            _buildSectionHeader(context, "Speech-to-Text Engine"),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: Column(
+                  children: [
+                    RadioListTile<String>(
+                      title: const Text("Groq (Cloud - High Accuracy)"),
+                      subtitle: const Text("Requires internet. Best for complex medical terms."),
+                      value: 'groq',
+                      groupValue: _sttEnginePref,
+                      activeColor: AppTheme.accent,
+                      onChanged: (val) async {
+                        if (val != null) {
+                          setState(() => _sttEnginePref = val);
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.setString('stt_engine_pref', val);
+                        }
+                      },
+                    ),
+                    RadioListTile<String>(
+                      title: const Text("System Native (Built-in)"),
+                      subtitle: const Text("Uses Apple/Google built-in speech engine."),
+                      value: 'native',
+                      groupValue: _sttEnginePref,
+                      activeColor: AppTheme.accent,
+                      onChanged: (val) async {
+                        if (val != null) {
+                          setState(() => _sttEnginePref = val);
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.setString('stt_engine_pref', val);
+                        }
+                      },
+                    ),
+                    RadioListTile<String>(
+                      title: const Text("Oracle OCI Live Speech (Cloud)"),
+                      subtitle: const Text("Real-time streaming via Oracle AI (me-riyadh-1). Recommended."),
+                      value: 'oracle_live',
+                      groupValue: _sttEnginePref,
+                      activeColor: Colors.orange,
+                      onChanged: (val) async {
+                        if (val != null) {
+                          setState(() => _sttEnginePref = val);
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.setString('stt_engine_pref', val);
+                        }
+                      },
+                    ),
+                    // A/B Testing Toggle — only visible when Oracle is selected
+                    if (_sttEnginePref == 'oracle_live') ...
+                      [
+                        const Divider(height: 1),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.science_outlined, size: 16, color: Colors.orange),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _useOracleWhisperModel
+                                          ? 'Model: Whisper Generic'
+                                          : 'Model: Oracle Medical',
+                                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                                    ),
+                                    Text(
+                                      _useOracleWhisperModel
+                                          ? 'modelType=WHISPER domain=GENERIC'
+                                          : 'modelType=ORACLE domain=MEDICAL',
+                                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Switch(
+                                value: _useOracleWhisperModel,
+                                activeColor: Colors.orange,
+                                onChanged: (val) async {
+                                  setState(() => _useOracleWhisperModel = val);
+                                  final prefs = await SharedPreferences.getInstance();
+                                  await prefs.setBool('oracle_use_whisper_model', val);
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
 
             _buildSectionHeader(context, "AI Brain & Macros"),
             Card(

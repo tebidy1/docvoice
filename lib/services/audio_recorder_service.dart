@@ -36,7 +36,7 @@ class AudioRecorderService {
     
     final stream = await _audioRecorder.startStream(
       const RecordConfig(
-        encoder: AudioEncoder.aacLc, 
+        encoder: AudioEncoder.pcm16bits, 
         sampleRate: 16000,
         numChannels: 1,
       ),
@@ -59,10 +59,11 @@ class AudioRecorderService {
   }
 
   Future<void> stopRecording() async {
-    await _audioRecorder.stop();
     await _recordSubscription?.cancel();
+    _recordSubscription = null;
     await _audioStreamController?.close();
     _audioStreamController = null;
+    await _audioRecorder.stop();
   }
 
   Future<void> startRecordingToFile(String path) async {
