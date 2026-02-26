@@ -35,8 +35,8 @@ class AudioRecordingService {
         if (!kIsWeb) {
           final Directory appDocDir = await getApplicationDocumentsDirectory();
           final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-          // Use m4a for AAC encoding (efficient and widely supported)
-          path = '${appDocDir.path}/recording_$timestamp.m4a';
+          // Use wav for Whisper compatibility (required: 16kHz Mono WAV)
+          path = '${appDocDir.path}/recording_$timestamp.wav';
           _currentPath = path;
         } else {
            // On Web, path is ignored or handled internally by browser/recorder
@@ -52,11 +52,11 @@ class AudioRecordingService {
              encoder: AudioEncoder.opus,
            ); 
         } else {
-           // WAV/AAC is safer for Mobile/Desktop
+           // WAV 16kHz Mono is required for local Whisper
            config = const RecordConfig(
-            encoder: AudioEncoder.aacLc, 
-            sampleRate: 44100, 
-            bitRate: 128000,
+            encoder: AudioEncoder.wav, 
+            sampleRate: 16000, 
+            numChannels: 1, // Mono
           );
         }
 
@@ -108,6 +108,11 @@ class AudioRecordingService {
   Future<bool> isRecording() async {
     if (_audioRecorder == null) return false;
     return await _audioRecorder!.isRecording();
+  }
+
+  Future<Amplitude> getAmplitude() async {
+    if (_audioRecorder == null) return Amplitude(current: -160.0, max: -160.0);
+    return await _audioRecorder!.getAmplitude();
   }
 
   // Reactive UI Support

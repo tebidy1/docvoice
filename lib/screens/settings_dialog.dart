@@ -22,6 +22,8 @@ class SettingsDialog extends StatefulWidget {
 
 class _SettingsDialogState extends State<SettingsDialog> {
   String _localIp = "Loading...";
+  String _sttEnginePref = 'groq';
+  bool _useOracleWhisperModel = false;
   // Track initial values to determine if changes occurred
 
   @override
@@ -65,7 +67,10 @@ class _SettingsDialogState extends State<SettingsDialog> {
     }
 
     if (mounted) {
-      setState(() {});
+      setState(() {
+        _sttEnginePref = prefs.getString('stt_engine_pref') ?? 'groq';
+        _useOracleWhisperModel = prefs.getBool('oracle_use_whisper_model') ?? false;
+      });
     }
   }
 
@@ -211,6 +216,66 @@ class _SettingsDialogState extends State<SettingsDialog> {
                               },
                               theme: currentTheme,
                             ),
+
+                            const SizedBox(height: 16),
+                            _buildSectionHeader("Speech-to-Text Engine", currentTheme),
+                            _buildSttItem(
+                              title: "Groq (Cloud - High Accuracy)",
+                              value: 'groq',
+                              theme: currentTheme,
+                            ),
+                            _buildSttItem(
+                              title: "System Native (Built-in)",
+                              value: 'native',
+                              theme: currentTheme,
+                            ),
+                            _buildSttItem(
+                              title: "Oracle OCI Live Speech (Cloud)",
+                              value: 'oracle_live',
+                              theme: currentTheme,
+                            ),
+                            if (_sttEnginePref == 'oracle_live') ...[
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.science_outlined, size: 20, color: Colors.orange),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            _useOracleWhisperModel ? 'Model: Whisper Generic' : 'Model: Oracle Medical',
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: currentTheme.iconColor,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          Text(
+                                            _useOracleWhisperModel ? 'modelType=WHISPER domain=GENERIC' : 'modelType=ORACLE domain=MEDICAL',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: currentTheme.iconColor.withOpacity(0.6),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Switch(
+                                      value: _useOracleWhisperModel,
+                                      activeColor: Colors.orange,
+                                      onChanged: (val) async {
+                                        setState(() => _useOracleWhisperModel = val);
+                                        final prefs = await SharedPreferences.getInstance();
+                                        await prefs.setBool('oracle_use_whisper_model', val);
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
 
                             const SizedBox(height: 16),
 
@@ -436,6 +501,41 @@ class _SettingsDialogState extends State<SettingsDialog> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildSttItem({
+    required String title,
+    required String value,
+    required AppTheme theme,
+  }) {
+    final isSelected = _sttEnginePref == value;
+    final primaryColor = value == 'oracle_live' ? Colors.orange : Colors.blue;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: isSelected
+            ? theme.micIdleBackground.withOpacity(0.8)
+            : theme.backgroundColor,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+            color: isSelected ? primaryColor : theme.dividerColor,
+            width: isSelected ? 2 : 1),
+      ),
+      child: RadioListTile<String>(
+        title: Text(title, style: TextStyle(color: theme.iconColor, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+        value: value,
+        groupValue: _sttEnginePref,
+        activeColor: primaryColor,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+        onChanged: (val) async {
+          if (val != null) {
+            setState(() => _sttEnginePref = val);
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('stt_engine_pref', val);
+          }
+        },
       ),
     );
   }

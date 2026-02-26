@@ -127,7 +127,7 @@ class AIProcessingService {
           specialty ?? prefs.getString('specialty') ?? 'General Practice';
       final resolvedPrompt = globalPromptOverride ??
           prefs.getString('global_ai_prompt') ??
-          AIPromptConstants.masterPrompt; // ← Uses centralized constant
+          AIPromptConstants.globalMasterPrompt; // ← Uses centralized constant
 
       final response = await _apiService.post('/audio/process', body: {
         'transcript': transcript,
@@ -208,7 +208,7 @@ class AIProcessingService {
   static Future<String> getEffectivePrompt() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('global_ai_prompt') ??
-        AIPromptConstants.masterPrompt;
+        AIPromptConstants.globalMasterPrompt;
   }
 
   /// Loads the effective specialty setting.

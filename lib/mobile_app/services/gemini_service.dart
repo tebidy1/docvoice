@@ -1,4 +1,5 @@
 import '../../services/api_service.dart';
+import '../../utils/arabic_scrubber.dart';
 
 class GeminiService {
   final ApiService _apiService = ApiService();
@@ -7,9 +8,11 @@ class GeminiService {
 
   /// Analyzes raw note text and extracts patient name, summary, and suggests macro type
   Future<Map<String, dynamic>> analyzeNote(String rawText) async {
+    final scrubbedText = ArabicScrubber.anonymizePII(rawText);
+    
     try {
       final response = await _apiService.post('/audio/analyze', body: {
-        'transcript': rawText,
+        'transcript': scrubbedText,
       });
 
       if (response['status'] == true) {
@@ -32,9 +35,11 @@ class GeminiService {
     String? specialty, 
     String? globalPrompt
   }) async {
+    final scrubbedText = ArabicScrubber.anonymizePII(rawText);
+    
     try {
       final response = await _apiService.post('/audio/process', body: {
-        'transcript': rawText,
+        'transcript': scrubbedText,
         'macro_context': macroContext,
         'instruction': instruction,
         'specialty': specialty,
@@ -58,9 +63,11 @@ class GeminiService {
     String? specialty,
     String? globalPrompt,
   }) async {
+    final scrubbedText = ArabicScrubber.anonymizePII(rawText);
+
     try {
       final response = await _apiService.post('/audio/process', body: {
-        'transcript': rawText,
+        'transcript': scrubbedText,
         'macro_context': macroContext,
         'specialty': specialty,
         'global_prompt': globalPrompt,

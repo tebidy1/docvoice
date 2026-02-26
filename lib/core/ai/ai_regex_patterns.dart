@@ -78,7 +78,7 @@ class AIRegexPatterns {
   /// Used by PatternHighlightController to render bold,
   /// underlined section headers.
   static final RegExp headerPattern = RegExp(
-    r'^[A-Z][A-Z0-9\s\/-]+:',
+    r'^[A-Z][A-Z0-9\s\/\-\(\)\&]+:',
     multiLine: true,
   );
 

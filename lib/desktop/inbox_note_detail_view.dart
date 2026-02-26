@@ -87,11 +87,23 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     // 1. Setup Stream (If Instant Open)
     if (widget.pendingTextStream != null) {
       _isLoadingText = true;
+      
+      // Start the same animation timer as AI generation
+      _generationTimer?.cancel();
+      _generationTimer = Timer.periodic(const Duration(milliseconds: 1500), (timer) {
+        if (mounted) {
+          setState(() {
+            _elapsedSeconds++;
+            _statusMessageIndex = (_statusMessageIndex + 1) % _statusMessages.length;
+          });
+        }
+      });
+
       _textStreamSubscription = widget.pendingTextStream!.listen((text) {
         if (mounted) {
             setState(() {
-             _finalNoteController.text = text; // Update Field
              _isLoadingText = false; // Stop Loading
+             _generationTimer?.cancel(); // Stop animation
              
              // Update the "source" note model effectively so future operations use this text
              widget.note.rawText = text; // <-- CRITICAL FIX: Ensure UI reads from NoteModel
@@ -99,7 +111,17 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
         }
       }, onError: (e) {
          _showError("Transcription Failed: $e");
-         setState(() => _isLoadingText = false);
+         setState(() {
+           _isLoadingText = false;
+           _generationTimer?.cancel();
+         });
+      }, onDone: () {
+         if (mounted && _isLoadingText) {
+            setState(() {
+              _isLoadingText = false;
+              _generationTimer?.cancel();
+            });
+         }
       });
     }
 
@@ -223,9 +245,9 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   }
 
   Future<void> _restoreWindow() async {
-    // Restore to Mini-Bar / Pill dimensions (Floating Bar)
+    // Restore to sidebar dimensions (InboxManagerDialog is still open underneath)
     if (mounted) {
-       await WindowManagerHelper.collapseToPill(context);
+       await WindowManagerHelper.expandToSidebar(context);
     }
   }
 
@@ -529,11 +551,13 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
           ),
         ),
       ),
-        // Overlay for AI Generation (New Unified Style)
-        if (_isGenerating)
+        // Overlay for AI Generation/Transcription (New Unified Style)
+        if (_isGenerating || _isLoadingText)
            Positioned.fill(
              child: ProcessingOverlay(
-               cyclingMessages: _statusMessages,
+               cyclingMessages: _isGenerating 
+                 ? _statusMessages 
+                 : ['Transcribing Audio...', 'Analyzing Speech...', 'Extracting Text...'],
              ),
            ),
        ],

@@ -6,10 +6,8 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:universal_io/io.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:uuid/uuid.dart';
 import 'package:http/http.dart' as http;
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 // App Widgets & Services
@@ -19,10 +17,11 @@ import '../../core/theme.dart';
 import '../../models/note_model.dart';
 import '../../services/inbox_service.dart';
 import '../../services/macro_service.dart';
-import '../../services/websocket_service.dart';
-import '../../services/whisper_local_service.dart';
+import '../../services/whisper_local_stub.dart'
+    if (dart.library.io) '../../services/whisper_local_service.dart';
 import '../../services/model_download_service.dart';
-import 'animated_loading_text.dart';
+import '../../../services/api_service.dart';
+import '../../services/groq_service.dart'; // Direct Groq for faster Web transcription
 // ✅ Core AI Brain — centralized services (Phase 1 refactor)
 import '../../../core/ai/ai_regex_patterns.dart';
 import '../../../core/ai/text_processing_service.dart';
@@ -292,20 +291,48 @@ class _EditorScreenState extends State<EditorScreen> {
                         throw Exception(transcript);
                     }
                 } else {
-                    // --- Cloud Transcription (Groq) via API ---
+                    // --- Cloud Transcription (Groq) ---
                     if (bytes != null) {
-                        debugPrint("☁️ Using Cloud STT (Groq)");
-                        final apiService = ApiService();
-                        final result = await apiService.multipartPost(
-                          '/audio/transcribe',
-                          fileBytes: bytes,
-                          filename: kIsWeb ? 'recording.webm' : 'recording.wav',
-                        );
+                        // ⚡ STRATEGY: On Web, call Groq DIRECTLY for speed.
+                        // Backend proxy adds a full network round-trip + possible transcoding.
+                        // Direct call: Browser→Groq (fast)
+                        // Backend proxy: Browser→Backend→Groq→Backend→Browser (slow)
+                        bool transcribed = false;
+                        
+                        if (kIsWeb) {
+                          final prefs2 = await SharedPreferences.getInstance();
+                          final localGroqKey = prefs2.getString('groq_api_key') ?? 
+                              (dotenv.isInitialized ? dotenv.env['GROQ_API_KEY'] ?? '' : '');
+                          
+                          if (localGroqKey.isNotEmpty) {
+                            debugPrint("⚡ Web: Using Direct Groq API (fast path)");
+                            final groqService = GroqService(apiKey: localGroqKey);
+                            final directResult = await groqService.transcribe(bytes!, filename: 'recording.webm');
+                            
+                            if (!directResult.startsWith('Error')) {
+                              transcript = directResult;
+                              transcribed = true;
+                            } else {
+                              debugPrint("⚠️ Direct Groq failed: $directResult. Falling back to backend proxy.");
+                            }
+                          }
+                        }
+                        
+                        // Fallback: Backend Proxy (for Mobile, or if Direct Groq failed)
+                        if (!transcribed) {
+                          debugPrint("☁️ Using Backend Proxy for STT");
+                          final apiService = ApiService();
+                          final result = await apiService.multipartPost(
+                            '/audio/transcribe',
+                            fileBytes: bytes!,
+                            filename: kIsWeb ? 'recording.webm' : 'recording.wav',
+                          );
 
-                        if (result['status'] == true) {
-                          transcript = result['payload']['text'] ?? "";
-                        } else {
-                          throw Exception(result['message'] ?? 'Transcription failed');
+                          if (result['status'] == true) {
+                            transcript = result['payload']['text'] ?? "";
+                          } else {
+                            throw Exception(result['message'] ?? 'Transcription failed');
+                          }
                         }
                     } else {
                         throw Exception("No audio bytes available for Cloud STT.");
