@@ -30,7 +30,8 @@ window.addEventListener('load', function (ev) {
             engineInitializer.initializeEngine({
                 hostElement: document.querySelector('body'),
                 renderer: 'html', // FORCE HTML renderer.
-                assetBase: './'
+                assetBase: chrome.runtime.getURL(''),
+                canvasKitBaseUrl: chrome.runtime.getURL('canvaskit/')
             }).then(function (appRunner) {
                 console.log("[ScribeFlow] Engine Initialized. Running App...");
 

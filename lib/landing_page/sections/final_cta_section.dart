@@ -54,7 +54,7 @@ class FinalCTASection extends StatelessWidget {
                     Text(
                       "استعد وقتك المفقود مع العائلة.",
                       style: Theme.of(context).textTheme.headlineMedium!.copyWith(
-                        fontSize: 48, // Bigger impact
+                        fontSize: MediaQuery.of(context).size.width < 600 ? 32 : 48,
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                         shadows: [
@@ -66,7 +66,7 @@ class FinalCTASection extends StatelessWidget {
                     const SizedBox(height: 24),
                     const Text(
                       "أنهِ عيادتك في وقتها تماماً. جرب MedNote AI الآن.",
-                      style: TextStyle(color: MedColors.textMuted, fontSize: 20, height: 1.6),
+                      style: TextStyle(color: MedColors.textMuted, fontSize: 16, height: 1.6),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 48),

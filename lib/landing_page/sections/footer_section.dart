@@ -15,23 +15,48 @@ class FooterSection extends StatelessWidget {
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1200),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                "© MedNote AI — 2026",
-                style: Theme.of(context).textTheme.bodyMedium!.copyWith(
-                  color: MedColors.textMuted,
-                ),
-              ),
-              Row(
-                children: [
-                  _FooterLink("الخصوصية"),
-                  const SizedBox(width: 24),
-                  _FooterLink("الشروط"),
-                ],
-              ),
-            ],
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isMobile = MediaQuery.of(context).size.width < 600;
+              return isMobile 
+                ? Column(
+                    children: [
+                      Text(
+                        "© MedNote AI — 2026",
+                        style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                          color: MedColors.textMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _FooterLink("الخصوصية"),
+                          const SizedBox(width: 24),
+                          _FooterLink("الشروط"),
+                        ],
+                      ),
+                    ],
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        "© MedNote AI — 2026",
+                        style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                          color: MedColors.textMuted,
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          _FooterLink("الخصوصية"),
+                          const SizedBox(width: 24),
+                          _FooterLink("الشروط"),
+                        ],
+                      ),
+                    ],
+                  );
+            },
           ),
         ),
       ),

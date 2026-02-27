@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import 'package:record/record.dart'; // For Amplitude
@@ -123,8 +124,8 @@ class _HomeScreenState extends State<HomeScreen> {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Speech recognition not available")));
           setState(() => _isRecording = false);
        }
-    } else if (sttEngine == 'oracle_live') {
-      // ── Oracle OCI Live Speech ────────────────────────────────────────────
+    } else if (sttEngine == 'oracle_live' && !kIsWeb) {
+      // ── Oracle OCI Live Speech (Mobile/Desktop Only) ──────────────────────
       final hasPermission = await _streamRecorder.hasPermission();
       if (!hasPermission) {
         if (mounted) {
@@ -248,45 +249,38 @@ cQBOFhw1ZkYvxx4A6HSNxyae
     // Stop Recording manually when the user taps
     if (sttEngine == 'system_native') {
        await _stopNativeRecording();
-    } else if (sttEngine == 'oracle_live') {
-      // ── Oracle stop: flush audio stream, await final result ───────────────
+    } else if (sttEngine == 'oracle_live' && !kIsWeb) {
+      // ── Oracle stop (Mobile/Desktop Only) ──────────────────────────────────
+      // Navigate IMMEDIATELY to EditorScreen (like Groq) and let it resolve
+      // the transcript Future there, showing its own ProcessingOverlay.
       setState(() => _isRecording = false);
-      await _streamRecorder.stopRecording();
 
-      if (_oracleService == null || _oracleTranscriptFuture == null) return;
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('⏳ Waiting for Oracle final transcription...'),
-            duration: Duration(seconds: 30),
-          ),
-        );
+      if (_oracleService == null || _oracleTranscriptFuture == null) {
+        await _streamRecorder.stopRecording();
+        return;
       }
 
-      try {
-        final transcript = await _oracleService!.stopSession();
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        if (transcript.isNotEmpty) {
-          _processAndNavigate(nativeText: transcript);
-        } else {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('No speech detected by Oracle'), backgroundColor: Colors.orange),
-            );
-          }
+      // Capture references before nulling them.
+      final oracleService = _oracleService!;
+      final oracleFuture = _oracleTranscriptFuture!;
+      _oracleService = null;
+      _oracleTranscriptFuture = null;
+
+      // Build a Future that: stops Oracle session → stops recorder → returns transcript.
+      final transcriptFuture = () async {
+        try {
+          final transcript = await oracleService.stopSession();
+          await _streamRecorder.stopRecording();
+          return transcript;
+        } catch (e) {
+          await _streamRecorder.stopRecording();
+          rethrow;
         }
-      } catch (e) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Oracle transcription failed: $e'), backgroundColor: Colors.red),
-          );
-        }
-      } finally {
-        _oracleService = null;
-        _oracleTranscriptFuture = null;
-      }
+      }();
+
+      // Navigate immediately — EditorScreen will show ProcessingOverlay
+      // while awaiting the Future.
+      _processAndNavigate(oracleTranscriptFuture: transcriptFuture);
     } else {
        final audioPath = await _audioService.stopRecording();
        if (audioPath != null) {
@@ -309,7 +303,7 @@ cQBOFhw1ZkYvxx4A6HSNxyae
     }
   }
 
-  Future<void> _processAndNavigate({String? audioPath, String? nativeText}) async {
+  Future<void> _processAndNavigate({String? audioPath, String? nativeText, Future<String>? oracleTranscriptFuture}) async {
       // Create Real Draft Note
       final draft = NoteModel()
         ..uuid = const Uuid().v4()
@@ -325,7 +319,7 @@ cQBOFhw1ZkYvxx4A6HSNxyae
         // Navigate to Editor and wait for result
         final result = await Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => EditorScreen(draftNote: draft)),
+          MaterialPageRoute(builder: (_) => EditorScreen(draftNote: draft, oracleTranscriptFuture: oracleTranscriptFuture)),
         );
 
         // If note returned, animate it into inbox

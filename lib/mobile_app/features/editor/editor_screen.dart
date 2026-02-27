@@ -30,8 +30,9 @@ import '../../../services/ai/ai_processing_service.dart';
 
 class EditorScreen extends StatefulWidget {
   final NoteModel? draftNote;
+  final Future<String>? oracleTranscriptFuture;
   
-  const EditorScreen({super.key, this.draftNote});
+  const EditorScreen({super.key, this.draftNote, this.oracleTranscriptFuture});
 
   @override
   State<EditorScreen> createState() => _EditorScreenState();
@@ -223,6 +224,60 @@ class _EditorScreenState extends State<EditorScreen> {
      }
 
      final path = widget.draftNote?.audioPath;
+     final oracleFuture = widget.oracleTranscriptFuture;
+
+     // ── Oracle Live Speech: transcript arrives via Future ───────────────
+     if (oracleFuture != null) {
+       try {
+         final transcript = await oracleFuture;
+         if (mounted) {
+           setState(() => _isLoading = false);
+           final cleanText = transcript.trim();
+           if (cleanText.isNotEmpty) {
+             _sourceController.text = cleanText;
+             // AUTO-SAVE: Create draft immediately after transcription
+             try {
+               final inboxService = InboxService();
+               final noteId = await inboxService.addNote(
+                 cleanText,
+                 patientName: "Draft Note",
+               );
+               setState(() => _currentNoteId = noteId);
+               if (mounted) {
+                 ScaffoldMessenger.of(context).showSnackBar(
+                   const SnackBar(
+                     content: Text("📝 Draft saved to cloud"),
+                     backgroundColor: Colors.blueGrey,
+                     duration: Duration(seconds: 2),
+                   )
+                 );
+               }
+             } catch (e) {
+               debugPrint("Auto-save draft failed: $e");
+             }
+           } else {
+             _sourceController.text = "";
+             if (mounted) {
+               ScaffoldMessenger.of(context).showSnackBar(
+                 const SnackBar(
+                   content: Text('No speech detected by Oracle'),
+                   backgroundColor: Colors.orange,
+                 ),
+               );
+             }
+           }
+         }
+       } catch (e) {
+         debugPrint("Oracle transcript error: $e");
+         if (mounted) {
+           setState(() => _isLoading = false);
+           _sourceController.text = "❌ Oracle transcription error: $e";
+         }
+       }
+       return;
+     }
+
+     // ── Groq / file-based STT flow ─────────────────────────────────────
      if (path != null) {
          
          Uint8List? bytes;

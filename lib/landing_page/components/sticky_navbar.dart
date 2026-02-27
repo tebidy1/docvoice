@@ -62,7 +62,9 @@ class _StickyNavbarState extends State<StickyNavbar> {
               ]
             : [],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: EdgeInsets.symmetric(
+        horizontal: MediaQuery.of(context).size.width < 600 ? 12 : 24,
+      ),
       child: Row(
         children: [
           // Logo Area
@@ -77,16 +79,18 @@ class _StickyNavbarState extends State<StickyNavbar> {
                 ),
                 child: const Icon(Icons.mic, color: MedColors.primary),
               ),
-              const SizedBox(width: 12),
-              const Text(
-                'MedNote AI',
-                style: TextStyle(
-                  fontFamily: 'Cairo',
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
-                  color: MedColors.textMain,
+              if (MediaQuery.of(context).size.width > 500) ...[
+                const SizedBox(width: 12),
+                const Text(
+                  'MedNote AI',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                    color: MedColors.textMain,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
 
@@ -109,14 +113,18 @@ class _StickyNavbarState extends State<StickyNavbar> {
           // Actions
           Row(
             children: [
-              OutlinedButton(
-                onPressed: () => Navigator.pushNamed(context, '/login'),
-                child: const Text("تسجيل الدخول"),
-              ),
-              const SizedBox(width: 12),
+              if (MediaQuery.of(context).size.width > 600) ...[
+                OutlinedButton(
+                  onPressed: () => Navigator.pushNamed(context, '/login'),
+                  child: const Text("تسجيل الدخول"),
+                ),
+                const SizedBox(width: 12),
+              ],
               ElevatedButton(
                 onPressed: () => Navigator.pushNamed(context, '/login'),
-                child: const Text("جرّب الآن مجانًا"),
+                child: Text(
+                  MediaQuery.of(context).size.width < 500 ? "جرّب الآن" : "جرّب الآن مجانًا",
+                ),
               ),
             ],
           )
