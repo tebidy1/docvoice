@@ -116,8 +116,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     setState(() {
       _ipController.text = prefs.getString('server_ip') ?? "192.168.1.100";
-      _sttEnginePref = prefs.getString('stt_engine_pref') ?? 'groq';
-      _useOracleWhisperModel = prefs.getBool('oracle_use_whisper_model') ?? false;
+      _sttEnginePref = prefs.getString('stt_engine_pref') ?? 'oracle_live';
+      _useOracleWhisperModel = prefs.getBool('oracle_use_whisper_model') ?? true;
     });
   }
 

@@ -260,7 +260,7 @@ class _EditorScreenState extends State<EditorScreen> {
          if (path != null) {
               try {
                 final prefs = await SharedPreferences.getInstance();
-                final sttEngine = prefs.getString('stt_engine_pref') ?? 'groq';
+                final sttEngine = prefs.getString('stt_engine_pref') ?? 'oracle_live';
                 
                 String transcript = "";
                 

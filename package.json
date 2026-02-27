@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "oci-aispeech": "^2.125.3",
+    "oci-common": "^2.125.3",
+    "ws": "^8.19.0"
+  }
+}

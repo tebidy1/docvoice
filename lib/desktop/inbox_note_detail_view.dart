@@ -110,11 +110,13 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
            });
         }
       }, onError: (e) {
-         _showError("Transcription Failed: $e");
-         setState(() {
-           _isLoadingText = false;
-           _generationTimer?.cancel();
-         });
+         if (mounted) {
+             _showError("Transcription Failed: $e");
+             setState(() {
+               _isLoadingText = false;
+               _generationTimer?.cancel();
+             });
+         }
       }, onDone: () {
          if (mounted && _isLoadingText) {
             setState(() {

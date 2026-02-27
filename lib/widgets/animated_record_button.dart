@@ -44,7 +44,10 @@ class _AnimatedRecordButtonState extends State<AnimatedRecordButton> {
     if (!widget.initialIsRecording && _localIsRecording && !widget.initialIsProcessing) {
       _localIsRecording = false;
       _localIsProcessing = false;
-      widget.onRecordingStateChanged?.call(false);
+      
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.onRecordingStateChanged?.call(false);
+      });
     }
   }
 

@@ -68,8 +68,8 @@ class _SettingsDialogState extends State<SettingsDialog> {
 
     if (mounted) {
       setState(() {
-        _sttEnginePref = prefs.getString('stt_engine_pref') ?? 'groq';
-        _useOracleWhisperModel = prefs.getBool('oracle_use_whisper_model') ?? false;
+        _sttEnginePref = prefs.getString('stt_engine_pref') ?? 'oracle_live';
+        _useOracleWhisperModel = prefs.getBool('oracle_use_whisper_model') ?? true;
       });
     }
   }
