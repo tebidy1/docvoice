@@ -32,7 +32,17 @@ class OciRequestSigner {
     required String url,
     Uint8List? body,
   }) {
-    final uri = Uri.parse(url);
+    return signRequestUri(method: method, uri: Uri.parse(url), body: body);
+  }
+
+  /// Like [signRequest], but takes a pre-built [Uri] to avoid re-parsing.
+  /// This is critical when the query string contains characters like `;`
+  /// (e.g. `encoding=audio/raw;rate=16000`) that `Uri.parse` would mangle.
+  Map<String, String> signRequestUri({
+    required String method,
+    required Uri uri,
+    Uint8List? body,
+  }) {
     final now = _httpDate();
 
     // 1. Base headers always needed
@@ -157,11 +167,15 @@ class OciRequestSigner {
   }
 
   Map<String, BigInt> _parsePrivateKey(String pem) {
-    final stripped = pem
-        .replaceAll(RegExp(r'-----BEGIN.*?-----'), '')
-        .replaceAll(RegExp(r'-----END.*?-----'), '')
-        .replaceAll(RegExp(r'\s+'), '');
-    final der = base64.decode(stripped);
+    var base64String = pem
+        .replaceAll('-----BEGIN PRIVATE KEY-----', '')
+        .replaceAll('-----END PRIVATE KEY-----', '')
+        .replaceAll(RegExp(r'[^A-Za-z0-9+/=]'), '');
+        
+    final padLen = (4 - (base64String.length % 4)) % 4;
+    base64String += '=' * padLen;
+
+    final der = base64.decode(base64String);
 
     int index = -1;
     for (int i = 0; i < der.length - 4 && i < 300; i++) {

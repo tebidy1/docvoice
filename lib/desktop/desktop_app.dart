@@ -170,279 +170,318 @@ class _DesktopAppState extends State<DesktopApp> {
     });
   }
 
+  bool _isToggling = false;
+  bool _isRecordingDialogOpen = false;
   Timer? _amplitudeTimer;
 
   Future<void> _toggleRecording() async {
-    print("Mic Button Tapped. Current State: Recording=$_isRecording");
+    if (_isToggling) return;
+    _isToggling = true;
+    try {
+      print("Mic Button Tapped. Current State: Recording=$_isRecording");
 
-    final prefs = await SharedPreferences.getInstance();
-    final sttEngine = prefs.getString('stt_engine_pref') ?? 'groq';
+      final prefs = await SharedPreferences.getInstance();
+      final sttEngine = prefs.getString('stt_engine_pref') ?? 'oracle_live';
 
-    if (_isRecording) {
-      // Stop
-      _amplitudeTimer?.cancel();
+      if (_isRecording) {
+        // Stop
+        _amplitudeTimer?.cancel();
 
-      print("Stopping recording...");
-      try {
-        if (sttEngine == 'oracle_live') {
-          // --- ORACLE STREAMING STOP ---
+        print("Stopping recording...");
+        try {
+          if (sttEngine == 'oracle_live') {
+            // --- ORACLE STREAMING STOP ---
+            if (mounted) {
+              setState(() {
+                _isRecording = false;
+                _isProcessing = true;
+              });
+            }
+            
+            if (_oracleService != null && _oracleTranscriptFuture != null) {
+              // 1. Push Detail Viewer IMMEDIATELY so user gets instant visual feedback.
+              final instantTextController = StreamController<String>.broadcast();
+              final tempNote = NoteModel()
+                ..id = 0
+                ..uuid = 'temp_${DateTime.now().millisecondsSinceEpoch}'
+                ..content = ''
+                ..rawText = ''
+                ..createdAt = DateTime.now()
+                ..updatedAt = DateTime.now()
+                ..status = NoteStatus.draft
+                ..patientName = 'Untitled';
+
+              // Close InboxManagerDialog if we can (optional but avoids stack mess)
+              // But to be safe and match groq, we just push on top.
+              final dialogFuture = showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) => InboxNoteDetailView(
+                  note: tempNote,
+                  pendingTextStream: instantTextController.stream,
+                ),
+              );
+
+              // 2. Safely stop recorder in the background
+              try {
+                 await _recorder.stopRecording().timeout(const Duration(milliseconds: 500));
+              } catch (e) {
+                 print("AudioRecorder stop timeout/error ignored: $e");
+              }
+
+              // 3. Complete Oracle
+              try {
+                // Send the correct STOP message for Oracle! It should probably just close the stream, but we wait for stopSession.
+                final text = await _oracleService!.stopSession();
+                if (text.isNotEmpty) {
+                   instantTextController.add(text);
+                   await _inboxService.addNote(text, patientName: 'Untitled', summary: null);
+                } else {
+                   print("Warning: Oracle returned empty transcript");
+                   instantTextController.addError(Exception("No speech detected."));
+                }
+              } catch (e) {
+                 print("Oracle Streaming Error: $e");
+                 instantTextController.addError(e);
+              } finally {
+                _oracleService = null;
+                _oracleTranscriptFuture = null;
+                instantTextController.close();
+              }
+
+              await dialogFuture;
+              if (mounted) setState(() => _isProcessing = false);
+            } else {
+               try { await _recorder.stopRecording(); } catch(_) {}
+               if (mounted) setState(() => _isProcessing = false);
+            }
+            return; // Skip standard WAV handling
+          }
+
+          // --- STANDARD GROQ WAV FLOW ---
+          final path = await _recorder.stop();
           if (mounted) {
             setState(() {
               _isRecording = false;
-              _isProcessing = true;
+              _isProcessing = true; // Start processing spinner
             });
           }
-          
-          if (_oracleService != null && _oracleTranscriptFuture != null) {
-            // 1. Push Detail Viewer IMMEDIATELY so user gets instant visual feedback.
+
+          if (path != null) {
+            print("Recording saved to: $path");
+            final file = File(path);
+
+            // Check if file exists
+            if (!await file.exists()) {
+              // ... error handling ...
+              return;
+            }
+
+            final bytes = await file.readAsBytes();
+            print("Read ${bytes.length} bytes from recording file");
+
+            // ---------------------------------------------------------
+            // INSTANT REVIEW FLOW
+            // ---------------------------------------------------------
+            // 1. Create a StreamController for this specific session
             final instantTextController = StreamController<String>.broadcast();
+
+            // Use cascade operator since NoteModel has no named constructor
             final tempNote = NoteModel()
-              ..id = 0
+              ..id = 0 // Temporary ID
               ..uuid = 'temp_${DateTime.now().millisecondsSinceEpoch}'
               ..content = ''
               ..rawText = ''
               ..createdAt = DateTime.now()
               ..updatedAt = DateTime.now()
-              ..status = NoteStatus.draft
+              ..status =
+                  NoteStatus.draft // Use 'draft' as 'processing' does not exist
               ..patientName = 'Untitled';
 
-            // Close InboxManagerDialog if we can (optional but avoids stack mess)
-            // But to be safe and match groq, we just push on top.
+            // 2. Open the View IMMEDIATELY and AWAIT it
+            // We capture the future so we can await it before resetting _isProcessing completely.
             final dialogFuture = showDialog(
               context: context,
-              barrierDismissible: false,
+              barrierDismissible: false, // Prevent closing while loading
               builder: (context) => InboxNoteDetailView(
                 note: tempNote,
                 pendingTextStream: instantTextController.stream,
               ),
             );
 
-            // 2. Safely stop recorder in the background
-            try {
-               await _recorder.stopRecording().timeout(const Duration(milliseconds: 500));
-            } catch (e) {
-               print("AudioRecorder stop timeout/error ignored: $e");
-            }
+            // 3. Start Processing in background
+            // We attach a specific listener for THIS recording session
+            StreamSubscription? serverSub;
+            serverSub = _server.textStream.listen((text) async {
+              // A. Pipe text to the open dialog
+              instantTextController.add(text); // This updates the UI via Stream
 
-            // 3. Complete Oracle
-            try {
-              final text = await _oracleService!.stopSession();
-              if (text.isNotEmpty) {
-                 instantTextController.add(text);
-                 await _inboxService.addNote(text, patientName: 'Untitled', summary: null);
-              } else {
-                 print("Warning: Oracle returned empty transcript");
-                 instantTextController.addError(Exception("No speech detected."));
+              // B. Save to Database (Real Persistence)
+              try {
+                // Determine Patient Name logic here if needed, or keep "Untitled"
+                // The Detail View handles the "final" version
+                await _inboxService.addNote(
+                  text,
+                  patientName: 'Untitled',
+                  summary: null,
+                );
+                print("✅ Persisted to Inbox");
+              } catch (e) {
+                print("❌ Save failed: $e");
               }
-            } catch (e) {
-               print("Oracle Streaming Error: $e");
-               instantTextController.addError(e);
-            } finally {
-              _oracleService = null;
-              _oracleTranscriptFuture = null;
+
+              // C. Cleanup
+              serverSub?.cancel();
               instantTextController.close();
-            }
+              setState(() => _isProcessing = false);
+            });
 
-            await dialogFuture;
-            if (mounted) setState(() => _isProcessing = false);
-          } else {
-             try { await _recorder.stopRecording(); } catch(_) {}
-             if (mounted) setState(() => _isProcessing = false);
-          }
-          return; // Skip standard WAV handling
-        }
-
-        // --- STANDARD GROQ WAV FLOW ---
-        final path = await _recorder.stop();
-        if (mounted) {
-          setState(() {
-            _isRecording = false;
-            _isProcessing = true; // Start processing spinner
-          });
-        }
-
-        if (path != null) {
-          print("Recording saved to: $path");
-          final file = File(path);
-
-          // Check if file exists
-          if (!await file.exists()) {
-            // ... error handling ...
-            return;
-          }
-
-          final bytes = await file.readAsBytes();
-          print("Read ${bytes.length} bytes from recording file");
-
-          // ---------------------------------------------------------
-          // INSTANT REVIEW FLOW
-          // ---------------------------------------------------------
-          // 1. Create a StreamController for this specific session
-          final instantTextController = StreamController<String>.broadcast();
-
-          // Use cascade operator since NoteModel has no named constructor
-          final tempNote = NoteModel()
-            ..id = 0 // Temporary ID
-            ..uuid = 'temp_${DateTime.now().millisecondsSinceEpoch}'
-            ..content = ''
-            ..rawText = ''
-            ..createdAt = DateTime.now()
-            ..updatedAt = DateTime.now()
-            ..status =
-                NoteStatus.draft // Use 'draft' as 'processing' does not exist
-            ..patientName = 'Untitled';
-
-          // 2. Open the View IMMEDIATELY and AWAIT it
-          // We capture the future so we can await it before resetting _isProcessing completely.
-          final dialogFuture = showDialog(
-            context: context,
-            barrierDismissible: false, // Prevent closing while loading
-            builder: (context) => InboxNoteDetailView(
-              note: tempNote,
-              pendingTextStream: instantTextController.stream,
-            ),
-          );
-
-          // 3. Start Processing in background
-          // We attach a specific listener for THIS recording session
-          StreamSubscription? serverSub;
-          serverSub = _server.textStream.listen((text) async {
-            // A. Pipe text to the open dialog
-            instantTextController.add(text); // This updates the UI via Stream
-
-            // B. Save to Database (Real Persistence)
+            // 4. Trigger the actual heavy lifting
             try {
-              // Determine Patient Name logic here if needed, or keep "Untitled"
-              // The Detail View handles the "final" version
-              await _inboxService.addNote(
-                text,
-                patientName: 'Untitled',
-                summary: null,
-              );
-              print("✅ Persisted to Inbox");
+              await _server.transcribeWav(bytes);
+              // when transcribeWav finishes, it emits to textStream, triggers above logic
             } catch (e) {
-              print("❌ Save failed: $e");
+              instantTextController.addError(e);
+              if (mounted) setState(() => _isProcessing = false);
+              serverSub.cancel();
             }
 
-            // C. Cleanup
-            serverSub?.cancel();
-            instantTextController.close();
-            setState(() => _isProcessing = false);
-          });
+            // Cleanup File
+            await file.delete();
 
-          // 4. Trigger the actual heavy lifting
-          try {
-            await _server.transcribeWav(bytes);
-            // when transcribeWav finishes, it emits to textStream, triggers above logic
-          } catch (e) {
-            instantTextController.addError(e);
-            if (mounted) setState(() => _isProcessing = false);
-            serverSub.cancel();
+            // Wait for dialog to close before finally resetting processing state
+            await dialogFuture;
+            if (mounted) {
+              setState(() => _isProcessing = false);
+            }
+          } else {
+            print("ERROR: Recorder returned null path");
+            if (mounted) {
+              setState(() {
+                print("Error: No file");
+                _isProcessing = false;
+              });
+            }
           }
-
-          // Cleanup File
-          await file.delete();
-
-          // Wait for dialog to close before finally resetting processing state
-          await dialogFuture;
-          if (mounted) {
-            setState(() => _isProcessing = false);
-          }
-        } else {
-          print("ERROR: Recorder returned null path");
+        } catch (e) {
+          print("Error stopping: $e");
           if (mounted) {
             setState(() {
-              print("Error: No file");
+              print("Error: $e");
               _isProcessing = false;
             });
           }
         }
-      } catch (e) {
-        print("Error stopping: $e");
-        if (mounted) {
-          setState(() {
-            print("Error: $e");
-            _isProcessing = false;
-          });
-        }
-      }
-    } else {
-      // Start
-      print("Starting recording...");
-      try {
-        if (!await _recorder.hasPermission()) {
-          print("Permission denied");
-          print("Permission Denied");
-          return;
-        }
+      } else {
+        // Start
+        print("Starting recording...");
+        try {
+          if (!await _recorder.hasPermission()) {
+            print("Permission denied");
+            print("Permission Denied");
+            return;
+          }
 
-        if (sttEngine == 'oracle_live') {
-           // --- ORACLE STREAMING START ---
-           final useWhisper = prefs.getBool('oracle_use_whisper_model') ?? false;
-           final creds = OciCredentials(
-             tenancyId: 'ocid1.tenancy.oc1..aaaaaaaadt3eulxchu6ygrisqsai4z6qji5dyqiam7tgwgd6rrxe2wsocp2a',
-             userId: 'ocid1.user.oc1..aaaaaaaa3ykq2ykgaixlhze3yip5m3fxrsbkghnzecezym7c7neqk57fupdq',
-             fingerprint: 'fb:38:d1:b4:7c:47:61:fd:95:e6:5a:e8:bb:2c:43:ee',
-             compartmentId: 'ocid1.tenancy.oc1..aaaaaaaadt3eulxchu6ygrisqsai4z6qji5dyqiam7tgwgd6rrxe2wsocp2a',
-             privateKeyPem: '''
------BEGIN PRIVATE KEY-----
-MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDLQFaVcyVWbo1jq4LqN1jQ6E25nbE1Ks6nUE6zhH1h6B6kUSOYLihsKVxmKI5wVKKKYUnTTqUCYmtrKBlan46q9vfk0ccV1dxDDFIdZezk5+vuEdLklBxia/acfKZib3CThCuPX6NPoUPGrXDDeDqwsp4dhvu1QkZJRoGyMEoV5qrl2Boj0H+yVoSlAw1gCN8PZYCgstv7xgAgCwx78KIulc8uIwyl0SmEuyl9DzihqdMNjOf84yeulC5wvGE4UoQVMgiifUn3j59Iio+Wua1SYqas2cHGUxq17t7Y0Ti5iVPtL5DTASXjNbqL8woeDRFiTtcV+mmkwsBC4kXaib69AgMBAAECggIAAvqC+lGJFR/tda3hry3XS50dPHs1ibECUnHgbAw6QSkjanw06xSWwOUHRrOmng9OICcxANb+GrpCAZHsHdzzkd5Tf4MyfsesS2rpY3xm+8DJVJW8Hd+XczrKpFGa/PDN+R9z+vfSFHHpehvNvf5A+pjCLUPD5GIKVnsQc1chUs+l9keRZfHinCf3ao6fYK7hRxC5pYIrmf2f2AuPb/K0UaC3hS+oa+XLNxe5bZUuQDPuWr1dMRWKAfraHxSC+psmlqWnhpJA8DLYp1K+zRyotTyZhI3NmdWSJh3PnbtOEVCslXtaRTT/9zXkZZ7yu7PSZrg1ob1SnN7B9M3nKFVmeQKBgQDrZMOJgd29sNHh26bOcrAkQmSNyC+bElNSBWvwnBEbvqeHiSCcADWIDd4VWnLMbqUNN0GusxJhQxGvzZXlXD8K0LxnEDspecEaWiTPuYnQ752v28YRZosxSUB7bl89FjQpcu3GPd1hK3UJtpo1qQrauOMyjWA/4uT7grfVLso5aQKBgQDdC0G+Dc28r6T1Rx4cxYR0W2hnHFq1X7yDrVx0H3PEdH8+fyJPAJPkk5m/LdgE2l068NL1/39Ru3IehPM+8ZDEd2rEfvhP3IMO3uAm7IvkJMIbFFcEuR5YcABm3p2pdsEUT+/N2qjjBrvuSsghscowHsjR1rEJebW+SuBfD1V8NQKBgQDZR8Ouk+9of2TcxHHusrKgZaCHtzcqPvomBdci3Ax2vb/KPeuZ1B+VnKdYsoqw5Zj43/6DEcxvdwdGbdBlTIbspsyhnbvehwKWHotIKw1pjSTTBVyJB0yIjAM3bCQBMROpBuswSD6myQRZmPIzgfwA9RTSvukPT5LqDjk+UNhdsQKBgD1cj56D1HYpyEAywuA30KJAccYV7/RjpEBlksHFrWx+7ofZ4RtPTL7qXobc4hfOyoy/J8EUcTKuN2rTe3cgthBkGiZ8HNCGpXcuVclYZykpLx03U0TDYvIn/WSRLfFKPyU1X5uktLd5OhhXeCEqardbBGKEF9dKizJNNOYOqqt1AoGBAOa107lq0koA7A1oSlayeJY/Rw/MR3Qgzmv6Xn7dF1K2dxySo6c/8erNWt17qsC2lRFlo3p8UhyuyywvIYpNy8g1uEYVTGTAtgJKhOGSSMOpkdivygLgHGv1e+1/m79c6oGGUqdf2xmxSgxjHzsvjFhu1HSrW46DXj424N8jFYGS
+          if (sttEngine == 'oracle_live') {
+             // ORACLE MULTIPLEXER
+             final useWhisper = prefs.getBool('oracle_use_whisper_model') ?? true;
+             final creds = OciCredentials(
+               tenancyId: 'ocid1.tenancy.oc1..aaaaaaaadt3eulxchu6ygrisqsai4z6qji5dyqiam7tgwgd6rrxe2wsocp2a',
+               userId: 'ocid1.user.oc1..aaaaaaaa3ykq2ykgaixlhze3yip5m3fxrsbkghnzecezym7c7neqk57fupdq',
+               fingerprint: 'a6:24:f0:9f:9a:f0:77:18:c5:85:2d:03:90:02:6d:c2',
+               compartmentId: 'ocid1.tenancy.oc1..aaaaaaaadt3eulxchu6ygrisqsai4z6qji5dyqiam7tgwgd6rrxe2wsocp2a',
+               privateKeyPem: '''-----BEGIN PRIVATE KEY-----
+MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC9aeoZKxpjh42c
+Gy5DFMUe/Qu9zn5e+jI2uFZ28liFl+K5vok6dUW/pG0H3htbNH03pdo2419nBZ5W
+6or6vFf7lnhHY8eTsZ8ZVXP7UG3yHV5hyG7e4iWCEQgOcprjjWDY9v2Rg5NIRi8V
+36FAvcIgUXLKCHUTIuq6RSKKicbj/QsZsiEBdA6ZB20agIMwjhmMNeQuBG6R2JDe
+WLg6kx6vUhzxqV0ULIBuRpSaUmEZ1JAzOHMKLhzZgEj423ga2Z1hRAjySdznNuoH
+fKGYnDcq1QN8/vcdslDKUq51WcAWI/8kFrMULqwEb6TQz1iggSPTSzaJVaTT7eN8
+jzC8b01VAgMBAAECggEAQeJxd0ey6iPgcghSUysKVfkW+HK3KjpE9Ruxl7Y8bFuk
+lY9dFGRuWnbLJg1v3o2ncI/UE3uLV75wkTMMHKMex3hTZiGi7hC+koVSznvvgmQM
+zF53kjd/bHqYHs5mafhnU5C2KsNlm6IuBqG+6VIYED3Ee9ntPzbKBvi9Rwsdj3d/
+wKzuyM/QurCaf2rbNgEK3z8YXqYKywo0Vnfg1owcPVK8Wn4dES6xeOB0y+1Hmx6P
+zwsYxpl5BXQmk1Pf1RK13FK564FMe6MhvBkRnPariW6/BJPBEOcMfZIET+tHljdM
+i7FVEgzQh6v+YqNMxTbSXrrYOjeprWClN0Q1upWTkQKBgQDqqHhZI9jqOJhAw2Hg
+HlKlIWBt5qogBIPkWj6X7JbA9/TCWJMp8LR3hXYZyAtdOpwrURxZ3JMPDY0ucNH3
+oAc23y6yqyQypFxlneNHT/TsA54mw55Ksdz+VcFUm+3+oVN+Ob6HN7K8ugs9QXIi
+9hUrTllGdSBmA7gc9bJMrD9kEwKBgQDOpAXQbQHEcassVw8+qj094YkloKCAOLwh
+y4XOv08IZZOZP3F7g0lJu+rfwLC3rtEieSTFHQzARssI1rWwtqCBj5kEiwe/lnRO
+91Xohevhi3NR1q3q8VWwMl9J7QK85w8XXUYmV9BPjI3Ave1o9XFpKWJW+qZPgw5Z
+9K04KtUl9wKBgQDo9ujEVrp7jkRZx5/cCT6zgjdh5Kbxsoneo1mRKulgGst8RsOT
+18zS/EULw3bEz/NLbfNfo4S8ZQ/NE2ThGpcO+vQ5nX8KZ/LzT5Tcr5zQ06anhX4Z
+Wgu01R5jCYt2SGPD5UAqrjlc9LdD0T2nR/gsTlSDhrTrkrWuyp6BUGB+0QKBgBnt
+bKlVNBaQ6JhcqBYFyD9ecBXfjKPp+nkHD1f8mw8Dp7xfwH5t36E3yeWfSM0TSzxX
+FO0CkxoBB/Ko9g0hLQx0lw+B3kwEtb0+vXG6c/lNxP9sv0+uTkEYYOpmqaRIHZWh
+525iMEn66cJYUlSMD1nRjnw5YOqzF/bjg2R7w1jLAoGBAIN+zY0VUwMoPSrD84lP
+PX/UnDv9wjrl95oGxuahSW3LfrrLXGdeN4KAL2IFMQLhghu7O3G72DHM3LboUWQm
+OONRokqHJyqd1n1fNXCCk8wUJJSAVzv3atnDtxP1Vs03yhwL6OkBnr+jyvRT/VSf
+cQBOFhw1ZkYvxx4A6HSNxyae
 -----END PRIVATE KEY-----''',
-           );
+             );
 
-           _oracleService = OracleLiveSpeechService(
-             credentials: creds,
-             model: useWhisper ? OracleSTTModel.whisperGeneric : OracleSTTModel.oracleMedical,
-             language: 'ar-SA',
-             onError: (e) {
-                print("Oracle Stream Error: $e");
-             },
-           );
-           
-           final audioStream = await _recorder.startRecording();
-           _oracleTranscriptFuture = _oracleService!.startSession(audioStream);
+             _oracleService = OracleLiveSpeechService(
+               credentials: creds,
+               model: useWhisper ? OracleSTTModel.whisperGeneric : OracleSTTModel.oracleMedical,
+               language: 'ar',
+               onError: (e) {
+                  print("Oracle Stream Error: $e");
+               },
+             );
+             
+             final audioStream = await _recorder.startRecording();
+             _oracleTranscriptFuture = _oracleService!.startSession(audioStream);
 
-           if (mounted) {
-             setState(() {
-               _isRecording = true;
-             });
-             _openRecordingDialog();
-           }
-        } else {
-           // --- STANDARD GROQ WAV FLOW ---
-           // Get temp path
-           final dir = await getTemporaryDirectory();
-           final path = '${dir.path}/temp_recording.wav';
-           await _recorder.startRecordingToFile(path);
-           print("Recording started successfully to $path");
-           if (mounted) {
-             setState(() {
-               _isRecording = true;
-             });
-             _openRecordingDialog();
-           }
+             if (mounted) {
+               setState(() {
+                 _isRecording = true;
+               });
+               _openRecordingDialog();
+             }
+          } else {
+             // --- STANDARD GROQ WAV FLOW ---
+             // Get temp path
+             final dir = await getTemporaryDirectory();
+             final path = '${dir.path}/temp_recording.wav';
+             await _recorder.startRecordingToFile(path);
+             print("Recording started successfully to $path");
+             if (mounted) {
+               setState(() {
+                 _isRecording = true;
+               });
+               _openRecordingDialog();
+             }
+          }
+        } catch (e) {
+          print("Error recording: $e");
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text("Mic Error: $e"),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 5),
+              ),
+            );
+          }
+          setState(() => _isRecording = false);
         }
-      } catch (e) {
-        print("Error recording: $e");
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text("Mic Error: $e"),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 5),
-            ),
-          );
-        }
-        setState(() => _isRecording = false);
       }
+    } finally {
+      _isToggling = false;
     }
   }
 
   // Helper to open the visual recording overlay on the side
   void _openRecordingDialog() async {
+    if (_isRecordingDialogOpen) return;
+    _isRecordingDialogOpen = true;
+
     await WindowManagerHelper.expandToSidebar(context);
-    if (!mounted) return;
+    if (!mounted) {
+      _isRecordingDialogOpen = false;
+      return;
+    }
     await showDialog(
       context: context,
       barrierDismissible: false, // Must tap stop manually
@@ -454,6 +493,7 @@ MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDLQFaVcyVWbo1jq4LqN1jQ6E25nbE1
         recorderService: _recorder,
       ),
     );
+    _isRecordingDialogOpen = false;
     if (mounted) {
       await WindowManagerHelper.collapseToPill(context);
     }

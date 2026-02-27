@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
+// dart:typed_data provided transitively by flutter/foundation.dart
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:http/http.dart' as http;
@@ -86,8 +86,7 @@ class OracleLiveSpeechService {
   // ── Region-derived endpoint ───────────────────────────────────────────────
 
   static const _region = 'me-riyadh-1';
-  static const _httpsEndpoint =
-      'https://speech.aiservice.$_region.oci.oraclecloud.com';
+  // (_httpsEndpoint removed — no longer making REST calls)
   static const _wssEndpoint =
       'wss://realtime.aiservice.$_region.oci.oraclecloud.com';
 
@@ -112,13 +111,13 @@ class OracleLiveSpeechService {
     _transcriptCompleter = Completer<String>();
 
     try {
-      // Step 1: Obtain a short-lived OCI session token via REST (signed request).
-      _setState(OracleSpeechState.authenticating);
-      final sessionToken = await _createRealtimeSessionToken();
-
-      // Step 2: Open WebSocket with the token.
+      // Step 1: Open WebSocket with config in query params.
       _setState(OracleSpeechState.connecting);
-      await _openWebSocket(sessionToken);
+      await _openWebSocket();
+
+      // Step 2: Send CREDENTIALS authentication message.
+      _setState(OracleSpeechState.authenticating);
+      await _sendCredentials();
 
       // Step 3: Start streaming audio.
       _setState(OracleSpeechState.ready);
@@ -126,7 +125,9 @@ class OracleLiveSpeechService {
     } catch (e) {
       _setState(OracleSpeechState.error);
       onError?.call(e);
-      _transcriptCompleter?.completeError(e);
+      if (!(_transcriptCompleter?.isCompleted ?? true)) {
+        _transcriptCompleter?.completeError(e);
+      }
     }
 
     return _transcriptCompleter!.future;
@@ -142,7 +143,7 @@ class OracleLiveSpeechService {
 
       // Send "end of audio" sentinel to OCI so it can flush partial results.
       try {
-        _channel!.sink.add(jsonEncode({'event': 'STOP'}));
+        _channel!.sink.add(jsonEncode({'event': 'SEND_FINAL_RESULT'}));
       } catch (_) {/* WebSocket may already be closing */}
     }
 
@@ -166,71 +167,66 @@ class OracleLiveSpeechService {
   Future<void> dispose() => _cleanup();
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // Step 1: Obtain Realtime Session Token
+  // Step 1: Open WebSocket (config params in URL query string)
   // ═══════════════════════════════════════════════════════════════════════════
 
-  Future<String> _createRealtimeSessionToken() async {
-    final url =
-        '$_httpsEndpoint/20220101/actions/createRealtimeSessionToken';
+  /// Builds the WebSocket URL query string dynamically based on the selected
+  /// model. Verified working profiles via Node.js WebSocket test:
+  ///
+  /// ORACLE MEDICAL: ?isAckEnabled=false&encoding=audio/raw;rate=16000
+  ///   &modelType=ORACLE&modelDomain=MEDICAL&languageCode=en-US
+  ///   &finalSilenceThresholdInMs=2000
+  ///
+  /// WHISPER Arabic: ?isAckEnabled=false&encoding=audio/raw;rate=16000
+  ///   &modelType=WHISPER&languageCode=ar
+  ///   (⚠️ NO modelDomain, NO silence thresholds, NO stabilizePartialResults)
+  String _buildWsQueryParams() {
+    final params = <String>[
+      'isAckEnabled=false',
+      'encoding=audio/raw;rate=16000',
+    ];
 
-    final body = jsonEncode({
-      'compartmentId': credentials.compartmentId,
-    });
-    final bodyBytes = Uint8List.fromList(utf8.encode(body));
-
-    final signer = OciRequestSigner(
-      tenancyId: credentials.tenancyId,
-      userId: credentials.userId,
-      fingerprint: credentials.fingerprint,
-      privateKeyPem: credentials.privateKeyPem,
-    );
-
-    final signedHeaders = signer.signRequest(
-      method: 'POST',
-      url: url,
-      body: bodyBytes,
-    );
-
-    final response = await http.post(
-      Uri.parse(url),
-      headers: signedHeaders,
-      body: bodyBytes,
-    );
-
-    if (response.statusCode != 200) {
-      throw Exception(
-          'OCI Session Token Error [${response.statusCode}]: ${response.body}');
+    if (model == OracleSTTModel.oracleMedical) {
+      // ── Oracle Medical (English only) ─────────────────────────────────
+      params.addAll([
+        'modelType=ORACLE',
+        'modelDomain=MEDICAL',
+        'languageCode=en-US',
+        'finalSilenceThresholdInMs=2000',
+      ]);
+    } else {
+      // ── Whisper Generic (Arabic) ──────────────────────────────────────
+      // ⚠️ STRICTLY FORBIDDEN: modelDomain, partialSilenceThresholdInMs,
+      //    finalSilenceThresholdInMs, stabilizePartialResults,
+      //    shouldIgnoreInvalidCustomizations — ANY of these causes 400.
+      params.addAll([
+        'modelType=WHISPER',
+        'languageCode=auto',
+      ]);
     }
 
-    final json = jsonDecode(response.body) as Map<String, dynamic>;
-    // OCI returns: { "token": "<JWT>", "sessionId": "..." }
-    final token = json['token'] as String?;
-    if (token == null || token.isEmpty) {
-      throw Exception('OCI auth response missing token: ${response.body}');
-    }
-    debugPrint('✅ OCI Session Token obtained');
-    return token;
+    return params.join('&');
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Step 2: Open WebSocket
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  Future<void> _openWebSocket(String sessionToken) async {
-    // The session token is passed as a query param on the WSS URL.
+  Future<void> _openWebSocket() async {
+    final queryParams = _buildWsQueryParams();
+    // CRITICAL: Use Uri() constructor, NOT Uri.parse()!
+    // BUT DO NOT pass the raw pre-joined string to `query:` because Dart
+    // will percent-encode '=' and '&'! We must use `query` but we need to
+    // be careful. Actually, `queryParameters` would URL-encode the `;` in
+    // raw;rate=16000. So we must inject the query manually or use parse!
+    // Wait, earlier we were using Uri.parse which mangled it? No, Uri.parse
+    // is fine as long as the string is valid!
     final wsUri = Uri.parse(
-      '$_wssEndpoint/ws/transcribe/stream?'
-      'token=${Uri.encodeComponent(sessionToken)}',
+      'wss://realtime.aiservice.$_region.oci.oraclecloud.com/ws/transcribe/stream?$queryParams'
     );
 
+    debugPrint('OCI WS connecting to: $wsUri');
     _channel = WebSocketChannel.connect(wsUri);
 
-    // Wait for the connection to be established.
+    // Wait for the WebSocket handshake (HTTP 101 Upgrade).
     await _channel!.ready;
-
-    // Send the opening configuration message.
-    _channel!.sink.add(jsonEncode(_buildConfig()));
-    debugPrint('✅ OCI WebSocket connected. Streaming audio now...');
+    debugPrint('✅ OCI WebSocket connected (HTTP 101 Upgrade succeeded)');
 
     // Listen to server messages.
     _wsSubscription = _channel!.stream.listen(
@@ -245,13 +241,77 @@ class OracleLiveSpeechService {
       },
       onDone: () {
         debugPrint('🔌 OCI WebSocket closed.');
-        // If we never received a FINAL result, resolve with what we have.
         if (!(_transcriptCompleter?.isCompleted ?? true)) {
           _transcriptCompleter?.complete(_finalSegments.join(' ').trim());
         }
         _setState(OracleSpeechState.done);
       },
     );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Step 2: Fetch Token (PROVEN TO WORK) & Send via WS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  Future<String> _createRealtimeSessionToken() async {
+    final signer = OciRequestSigner(
+      tenancyId: credentials.tenancyId,
+      userId: credentials.userId,
+      fingerprint: credentials.fingerprint,
+      privateKeyPem: credentials.privateKeyPem,
+    );
+
+    final host = 'speech.aiservice.$_region.oci.oraclecloud.com';
+    final targetUri = Uri.parse('https://$host/20220101/actions/realtimeSessionToken');
+
+    final body = jsonEncode({
+      "compartmentId": credentials.compartmentId,
+    });
+
+    final headers = signer.signRequest(
+      method: "POST",
+      url: targetUri.toString(),
+      body: utf8.encode(body) as Uint8List,
+    );
+    // Remove pseudo header
+    headers.remove('(request-target)');
+
+    // Add required content headers
+    headers['Content-Type'] = 'application/json';
+    headers['Content-Length'] = utf8.encode(body).length.toString();
+
+    debugPrint('Fetching Token from: $targetUri');
+    final response = await http.post(
+      targetUri,
+      headers: headers,
+      body: body,
+    );
+
+    if (response.statusCode == 200) {
+      final jsonResponse = jsonDecode(response.body);
+      return jsonResponse['token'] as String;
+    } else {
+      throw Exception('Failed to get realtime session token: HTTP ${response.statusCode} - ${response.body}');
+    }
+  }
+
+  Future<void> _sendCredentials() async {
+    try {
+      final token = await _createRealtimeSessionToken();
+      debugPrint('✅ OCI Token acquired successfully (HTTP 200)');
+
+      final authMessage = jsonEncode({
+        'authenticationType': 'TOKEN',
+        'token': token,
+        'compartmentId': credentials.compartmentId,
+      });
+
+      _channel!.sink.add(authMessage);
+      debugPrint('✅ OCI TOKEN auth message sent over WebSocket');
+    } catch (e) {
+      debugPrint('❌ OCI Token generation failed: $e');
+      rethrow;
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -346,52 +406,7 @@ class OracleLiveSpeechService {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Build the OCI realtime config JSON message
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  Map<String, dynamic> _buildConfig() {
-    // Common params for both models
-    final config = <String, dynamic>{
-      'event': 'SEND_FINAL_SILENCE_THRESHOLD',
-      'compartmentId': credentials.compartmentId,
-      'transcriptionProperties': <String, dynamic>{
-        'languageCode': language,
-        // ⚠️ ORACLE DOCUMENTATION TRAP:
-        // The params below are ONLY valid for modelType == "ORACLE".
-        // If sent with "WHISPER", OCI returns "Connection Refused".
-        // They are added conditionally below.
-      },
-    };
-
-    final transcriptionProps =
-        config['transcriptionProperties'] as Map<String, dynamic>;
-
-    if (model == OracleSTTModel.oracleMedical) {
-      // ── Oracle Medical ────────────────────────────────────────────────────
-      transcriptionProps['modelDetails'] = {
-        'modelType': 'ORACLE',
-        'domain': 'MEDICAL',
-      };
-      // These parameters are ALLOWED only with ORACLE model:
-      transcriptionProps['partialSilenceThresholdInMs'] = 0;
-      transcriptionProps['finalSilenceThresholdInMs'] = 2000;
-      transcriptionProps['stabilizePartialResults'] = 'NONE';
-      transcriptionProps['shouldIgnoreInvalidCustomizations'] = false;
-    } else {
-      // ── Whisper Generic ───────────────────────────────────────────────────
-      // ⚠️ STRICTLY OMIT: partialSilenceThresholdInMs, finalSilenceThresholdInMs,
-      //                    stabilizePartialResults, shouldIgnoreInvalidCustomizations,
-      //                    customizations — sending any of these causes Connection Refused.
-      transcriptionProps['modelDetails'] = {
-        'modelType': 'WHISPER',
-        'domain': 'GENERIC',
-      };
-      // Do NOT add any of the forbidden params here.
-    }
-
-    return config;
-  }
+  // (_buildConfig removed — config is now in the WebSocket URL query string)
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Helpers

@@ -69,6 +69,7 @@ class _ListeningModeViewState extends State<ListeningModeView>
       if (!mounted) return;
 
       final amp = await widget.getAmplitude();
+      if (!mounted) return;
 
       // Normalize amplitude (-60 to 0) to (0.0 to 1.0)
       double normalized = (amp.clamp(-60.0, 0.0) + 60) / 60;
