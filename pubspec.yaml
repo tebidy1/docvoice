@@ -1,5 +1,5 @@
-name: scribeflow
-description: "ScribeFlow: AI-powered medical dictation widget and mobile companion."
+name: soutnote
+description: "SoutNote: AI-powered medical dictation widget and mobile companion."
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -59,7 +59,7 @@ dependencies:
   # UI
   google_fonts: ^6.2.1
   glassmorphism: ^3.0.0
-  shared_preferences: ^2.2.2
+  shared_preferences: ^2.5.4
   intl: ^0.20.2
   screen_retriever: ^0.2.0
   cupertino_icons: ^1.0.8
@@ -73,6 +73,7 @@ dependencies:
   sherpa_onnx: ^1.12.25
   pointycastle: ^3.9.1
   crypto: ^3.0.3
+  flutter_svg: ^2.2.3
 
 dev_dependencies:
   flutter_test:
@@ -80,6 +81,19 @@ dev_dependencies:
   flutter_lints: ^5.0.0
   isar_generator: ^3.1.0+1
   build_runner: ^2.4.8
+  flutter_launcher_icons: ^0.13.1
+
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: false
+  web:
+    generate: true
+    image_path: "assets/images/launcher_icon_source.png"
+    background_color: "#ffffff"
+    theme_color: "#0F172A"
+  image_path: "assets/images/launcher_icon_source.png"
+  adaptive_icon_background: "#ffffff" # Using white background for the adaptive icon
+  adaptive_icon_foreground: "assets/images/launcher_icon_source.png"
   
   # Testing dependencies
   mockito: ^5.4.4

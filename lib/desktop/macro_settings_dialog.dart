@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:window_manager/window_manager.dart';
 
 import 'qr_connect_dialog.dart';
 import 'gemini_test_dialog.dart';
@@ -72,12 +73,22 @@ class _MacroSettingsDialogState extends State<MacroSettingsDialog> {
     return AlertDialog(
       backgroundColor: const Color(0xFF2A2A2A),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-      title: const Row(
-        children: [
-          Icon(Icons.settings, color: Colors.white70),
-          SizedBox(width: 10),
-          Text("Macro Settings", style: TextStyle(color: Colors.white)),
-        ],
+      title: GestureDetector(
+        onPanStart: (details) {
+          try {
+            windowManager.startDragging();
+          } catch (_) {}
+        },
+        child: Container(
+          color: Colors.transparent,
+          child: const Row(
+            children: [
+              Icon(Icons.settings, color: Colors.white70),
+              SizedBox(width: 10),
+              Text("Macro Settings", style: TextStyle(color: Colors.white)),
+            ],
+          ),
+        ),
       ),
       content: _isLoading
           ? const SizedBox(height: 100, child: Center(child: CircularProgressIndicator(color: Colors.amber)))

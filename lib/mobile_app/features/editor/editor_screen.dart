@@ -22,17 +22,18 @@ import '../../services/whisper_local_stub.dart'
 import '../../services/model_download_service.dart';
 import '../../../services/api_service.dart';
 import '../../services/groq_service.dart'; // Direct Groq for faster Web transcription
-// ✅ Core AI Brain — centralized services (Phase 1 refactor)
 import '../../../core/ai/ai_regex_patterns.dart';
 import '../../../core/ai/text_processing_service.dart';
 import '../../../services/ai/ai_processing_service.dart';
+import '../../../../web_extension/services/extension_injection_service.dart';
 
 
 class EditorScreen extends StatefulWidget {
   final NoteModel? draftNote;
   final Future<String>? oracleTranscriptFuture;
+  final int noteNumber;
   
-  const EditorScreen({super.key, this.draftNote, this.oracleTranscriptFuture});
+  const EditorScreen({super.key, this.draftNote, this.oracleTranscriptFuture, this.noteNumber = 0});
 
   @override
   State<EditorScreen> createState() => _EditorScreenState();
@@ -47,11 +48,13 @@ class _EditorScreenState extends State<EditorScreen> {
   List<MacroModel> _macros = []; 
   MacroModel? _selectedMacro; // Track selected template 
   StreamSubscription? _wsSubscription;
-  bool _isLoading = true; // For initial transcription
+  late bool _isLoading; // Set dynamically in initState
   bool _isProcessing = false; // For AI generation
   List<Map<String, dynamic>> _suggestions = [];
   bool _isSourceExpanded = false; // Toggle source view
   bool _useHighAccuracy = false; // Toggle for AI Mode (Standard vs Suggestions)
+  bool _isTemplateCardExpanded = true;  // Template card: expanded by default
+  bool _isGeneratedCardExpanded = false; // Generated note card: collapsed by default
   
   // Native STT
   stt.SpeechToText _speechToText = stt.SpeechToText();
@@ -66,6 +69,9 @@ class _EditorScreenState extends State<EditorScreen> {
   @override
   void initState() {
     super.initState();
+    
+    final path = widget.draftNote?.audioPath;
+    _isLoading = widget.oracleTranscriptFuture != null || (path != null && path.isNotEmpty);
     
     // Initialize ID if opening existing draft
     if (widget.draftNote != null) {
@@ -103,6 +109,14 @@ class _EditorScreenState extends State<EditorScreen> {
         ),
       },
     );
+
+    if (widget.draftNote != null && widget.draftNote!.formattedText.isNotEmpty) {
+      _isTemplateCardExpanded = false;
+      _isGeneratedCardExpanded = true;
+    } else {
+      _isTemplateCardExpanded = true;
+      _isGeneratedCardExpanded = false;
+    }
     
     // Auto-save on manual edits
     _finalController.addListener(_onManualEdit);
@@ -191,6 +205,8 @@ class _EditorScreenState extends State<EditorScreen> {
              debugPrint("🔄 Loading saved AI result from cloud...");
              debugPrint("   Formatted Text Length: ${freshNote.formattedText.length}");
              _finalController.text = freshNote.formattedText;
+             _isTemplateCardExpanded = false;
+             _isGeneratedCardExpanded = true;
            }
            if (freshNote.originalText.isNotEmpty) {
              _sourceController.text = freshNote.originalText;
@@ -210,17 +226,23 @@ class _EditorScreenState extends State<EditorScreen> {
          if (!a.isFavorite && b.isFavorite) return 1;
          return a.trigger.compareTo(b.trigger);
        });
-       setState(() => _macros = macros);
-       
-       // Restore selected macro from draft if available
+
+       // Restore selected macro from draft and move to front
+       MacroModel? restoredMacro;
        if (widget.draftNote != null && widget.draftNote!.appliedMacroId != null) {
           try {
-             final restored = macros.firstWhere((m) => m.id == widget.draftNote!.appliedMacroId);
-             setState(() => _selectedMacro = restored);
+             restoredMacro = macros.firstWhere((m) => m.id == widget.draftNote!.appliedMacroId);
+             macros.remove(restoredMacro);
+             macros.insert(0, restoredMacro);
           } catch (e) {
              debugPrint("Could not restore selected macro: $e");
           }
        }
+
+       setState(() {
+         _macros = macros;
+         if (restoredMacro != null) _selectedMacro = restoredMacro;
+       });
      }
 
      final path = widget.draftNote?.audioPath;
@@ -278,7 +300,7 @@ class _EditorScreenState extends State<EditorScreen> {
      }
 
      // ── Groq / file-based STT flow ─────────────────────────────────────
-     if (path != null) {
+     if (path != null && path.isNotEmpty) {
          
          Uint8List? bytes;
          // --- Web Logic ---
@@ -312,7 +334,7 @@ class _EditorScreenState extends State<EditorScreen> {
          }
 
          // --- Processing ---
-         if (path != null) {
+         if (path != null && path.isNotEmpty) {
               try {
                 final prefs = await SharedPreferences.getInstance();
                 final sttEngine = prefs.getString('stt_engine_pref') ?? 'oracle_live';
@@ -445,6 +467,8 @@ class _EditorScreenState extends State<EditorScreen> {
     setState(() {
       _selectedMacro = macro;
       _isProcessing = true;
+      _isTemplateCardExpanded = false;   // Collapse template card
+      _isGeneratedCardExpanded = true;   // Expand generated note card
     });
 
     final prefs = await SharedPreferences.getInstance();
@@ -513,6 +537,7 @@ class _EditorScreenState extends State<EditorScreen> {
                 rawText: _sourceController.text,
                 formattedText: _finalController.text,
                 suggestedMacroId: int.tryParse(macro.id.toString()) ?? 0,
+                summary: macro.trigger, // Changed to summary for template name badge
                 patientName: macro.trigger,
               );
               
@@ -526,6 +551,7 @@ class _EditorScreenState extends State<EditorScreen> {
                 _sourceController.text,
                 formattedText: _finalController.text,
                 suggestedMacroId: int.tryParse(macro.id.toString()) ?? 0,
+                summary: macro.trigger, // Changed to summary for template name badge
                 patientName: macro.trigger,
               );
               setState(() => _currentNoteId = noteId);
@@ -637,42 +663,63 @@ class _EditorScreenState extends State<EditorScreen> {
     final text = _finalController.text;
     if (text.isEmpty) return;
 
-    // ✅ Use TextProcessingService.applySmartCopy (Phase 1 refactor)
-    // FIXED: No longer deletes entire lines — removes only placeholder tokens
-    final placeholderCount = TextProcessingService.countPlaceholders(text);
-    final cleanText = TextProcessingService.applySmartCopy(text);
+    if (kIsWeb) {
+        // Use the centralized Extension Injection Service
+        final result = await ExtensionInjectionService.smartCopyAndInject(text);
+        if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(result.message),
+              backgroundColor: result.status == InjectionStatus.success ? Colors.green : Colors.blue,
+              duration: const Duration(seconds: 2),
+           ));
+        }
+    } else {
+        // ✅ Use TextProcessingService.applySmartCopy (Phase 1 refactor)
+        // FIXED: No longer deletes entire lines — removes only placeholder tokens
+        final placeholderCount = TextProcessingService.countPlaceholders(text);
+        final cleanText = TextProcessingService.applySmartCopy(text);
 
-    await Clipboard.setData(ClipboardData(text: cleanText));
+        await Clipboard.setData(ClipboardData(text: cleanText));
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.cleaning_services, color: Colors.white, size: 20),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text("✅ Smart Copy Active",
-                        style: TextStyle(fontWeight: FontWeight.bold)),
-                    Text(
-                      placeholderCount > 0
-                          ? "Copied without $placeholderCount placeholder token(s)."
-                          : "Copied — note is complete, no placeholders found.",
-                      style: const TextStyle(fontSize: 12),
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.cleaning_services, color: Colors.white, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text("✅ Smart Copy Active",
+                            style: TextStyle(fontWeight: FontWeight.bold)),
+                        Text(
+                          placeholderCount > 0
+                              ? "Copied without $placeholderCount placeholder token(s)."
+                              : "Copied — note is complete, no placeholders found.",
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
-          backgroundColor: Colors.green[700],
-          duration: const Duration(seconds: 2),
-        ),
-      );
+              backgroundColor: Colors.green[700],
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+    }
+    
+    // Auto-update status to COPIED if we have a draft ID
+    if (_currentNoteId != null) {
+        try {
+            await InboxService().updateStatus(_currentNoteId!, NoteStatus.copied);
+        } catch(e) {
+            debugPrint("Failed to update status to copied: $e");
+        }
     }
   }
 
@@ -710,90 +757,7 @@ class _EditorScreenState extends State<EditorScreen> {
 
 
 
-  void _showAllTemplates() {
-      showModalBottomSheet(
-          context: context,
-          backgroundColor: const Color(0xFF181818),
-          isScrollControlled: true,
-          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-          builder: (context) {
-              return DraggableScrollableSheet(
-                  initialChildSize: 0.5,
-                  minChildSize: 0.3,
-                  maxChildSize: 0.9,
-                  expand: false,
-                  builder: (context, scrollController) {
-                      return Column(
-                          children: [
-                              const SizedBox(height: 12),
-                              // Handle
-                              Center(
-                                child: Container(
-                                  width: 40, height: 4, 
-                                  decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2))
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
-                                child: Text("All Templates", style: GoogleFonts.inter(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                              ),
-                              const SizedBox(height: 16),
-                              Expanded(
-                                  child: ListView.separated(
-                                      controller: scrollController,
-                                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 30),
-                                      itemCount: _macros.length,
-                                      separatorBuilder: (_,__) => const SizedBox(height: 10),
-                                      itemBuilder: (context, index) {
-                                          final macro = _macros[index];
-                                          final isSelected = _selectedMacro?.id == macro.id;
-                                          return InkWell(
-                                              onTap: () {
-                                                  Navigator.pop(context);
-                                                  _applyMacroWithAI(macro);
-                                              },
-                                              borderRadius: BorderRadius.circular(12),
-                                              child: Container(
-                                                  padding: const EdgeInsets.all(12),
-                                                  decoration: BoxDecoration(
-                                                      color: isSelected ? AppTheme.accent.withOpacity(0.1) : const Color(0xFF2C2C2C),
-                                                      borderRadius: BorderRadius.circular(12),
-                                                      border: Border.all(color: isSelected ? AppTheme.accent : Colors.white10),
-                                                  ),
-                                                  child: Row(
-                                                      children: [
-                                                          Icon(
-                                                              isSelected ? Icons.check_circle : (macro.isFavorite ? Icons.star : Icons.article),
-                                                              size: 18,
-                                                              color: isSelected ? AppTheme.accent : (macro.isFavorite ? Colors.amber : Colors.white38),
-                                                          ),
-                                                          const SizedBox(width: 12),
-                                                          Expanded(
-                                                              child: Column(
-                                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                                  children: [
-                                                                      Text(macro.trigger, style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14)),
-                                                                      if (macro.aiInstruction != null && macro.aiInstruction!.isNotEmpty)
-                                                                      Text(macro.aiInstruction!, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.inter(color: Colors.white54, fontSize: 11)),
-                                                                  ],
-                                                              ),
-                                                          ),
-                                                          Icon(Icons.arrow_forward_ios, size: 12, color: Colors.white12),
-                                                      ],
-                                                  ),
-                                              ),
-                                          );
-                                      },
-                                  ),
-                              ),
-                          ],
-                      );
-                  }
-              );
-          }
-      );
-  }
+  // _showAllTemplates() removed to show inline instead
 
   @override
   Widget build(BuildContext context) {
@@ -801,7 +765,15 @@ class _EditorScreenState extends State<EditorScreen> {
     _isKeyboardVisible = bottomInset > 0;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF121212), // Dark gray background
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: AppBar(
+        title: Text(
+          widget.noteNumber > 0 ? 'NO-${widget.noteNumber}' : 'Draft Note',
+          style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
       body: SafeArea(
         child: Stack(
           children: [
@@ -839,9 +811,9 @@ class _EditorScreenState extends State<EditorScreen> {
                const Positioned.fill(
                  child: ProcessingOverlay(
                    cyclingMessages: [
-                      'Processing Note...',
-                      'Consulting AI...',
-                      'Structuring Note...',
+                      'جاري معالجة الملاحظة...',
+                      'التواصل مع الذكاء الاصطناعي...',
+                      'تنسيق وهيكلة الملاحظة...',
                    ],
                  ),
                ),
@@ -852,11 +824,12 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Widget _buildOriginalNoteCard() {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF1C1C1C),
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF2A2A2A)),
+        border: Border.all(color: colorScheme.outline.withValues(alpha: 0.4)),
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -864,34 +837,31 @@ class _EditorScreenState extends State<EditorScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.description_outlined, color: Colors.white70, size: 18),
+              Icon(Icons.description_outlined, color: colorScheme.onSurface.withValues(alpha: 0.6), size: 18),
               const SizedBox(width: 8),
-              Text("Original Note", style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+              Text("Original Note", style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: colorScheme.onSurface)),
               const SizedBox(width: 8),
               // Status Badge
               Container(
                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                  decoration: BoxDecoration(
-                     color: Colors.green.withOpacity(0.1),
+                     color: Colors.green.withValues(alpha: 0.1),
                      borderRadius: BorderRadius.circular(4),
-                     border: Border.all(color: Colors.green.withOpacity(0.3)),
+                     border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
                  ),
                  child: Text("READY", style: GoogleFonts.inter(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold)),
               ),
               const Spacer(),
-              // Use Raw Text Button
               InkWell(
                 onTap: () {
                     Clipboard.setData(ClipboardData(text: _sourceController.text));
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Copied raw text"), duration: Duration(seconds: 1)));
                 },
-                child: Text("Use Raw Text", style: GoogleFonts.inter(fontSize: 12, color: AppTheme.accent, fontWeight: FontWeight.w500)),
+                child: Text("Use Raw Text", style: GoogleFonts.inter(fontSize: 12, color: colorScheme.primary, fontWeight: FontWeight.w500)),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          
-          // Collapsible Text View
           InkWell(
             onTap: () => setState(() => _isSourceExpanded = !_isSourceExpanded),
             child: Column(
@@ -901,13 +871,13 @@ class _EditorScreenState extends State<EditorScreen> {
                    _sourceController.text,
                    maxLines: _isSourceExpanded ? null : 3,
                    overflow: _isSourceExpanded ? null : TextOverflow.ellipsis,
-                   style: GoogleFonts.inter(fontSize: 14, color: Colors.white70, height: 1.5),
+                   style: GoogleFonts.inter(fontSize: 14, color: colorScheme.onSurface.withValues(alpha: 0.7), height: 1.5),
                  ),
                  const SizedBox(height: 8),
                  Row(
                    mainAxisAlignment: MainAxisAlignment.center,
                    children: [
-                     Icon(_isSourceExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 16, color: Colors.white38),
+                     Icon(_isSourceExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 16, color: colorScheme.onSurface.withValues(alpha: 0.3)),
                    ],
                  )
               ],
@@ -919,127 +889,268 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Widget _buildTemplateSelectorCard() {
-    return Container(
+    final colorScheme = Theme.of(context).colorScheme;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOutCubic,
       decoration: BoxDecoration(
-        color: const Color(0xFF1C1C1C),
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF2A2A2A)),
+        border: Border.all(
+          color: _isTemplateCardExpanded
+              ? colorScheme.primary.withValues(alpha: 0.5)
+              : colorScheme.outline.withValues(alpha: 0.3),
+          width: _isTemplateCardExpanded ? 1.5 : 1.0,
+        ),
+        boxShadow: _isTemplateCardExpanded ? [
+          BoxShadow(
+            color: colorScheme.primary.withValues(alpha: 0.08),
+            blurRadius: 12,
+            spreadRadius: 0,
+          )
+        ] : [],
       ),
-      padding: const EdgeInsets.symmetric(vertical: 16), // Vertical padding only
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-           Padding(
-             padding: const EdgeInsets.symmetric(horizontal: 16),
-             child: Row(
-               children: [
-                 const Icon(Icons.extension_outlined, color: Colors.white70, size: 18),
-                 const SizedBox(width: 8),
-                 Text("Choose Template", style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
-                 const Spacer(),
-                 InkWell(
-                   onTap: _showAllTemplates,
-                   child: Text("All Templates", style: GoogleFonts.inter(fontSize: 12, color: AppTheme.accent, fontWeight: FontWeight.w500)),
-                 )
-               ],
-             ),
-           ),
-           const SizedBox(height: 12),
-           
-           // Horizontal Chips
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+          // ── Header — always visible, tappable to toggle ──
+          InkWell(
+            onTap: () => setState(() => _isTemplateCardExpanded = !_isTemplateCardExpanded),
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
               child: Row(
-                children: _macros.take(5).map((macro) {
-                   final isSelected = _selectedMacro?.id == macro.id;
-                   return Padding(
-                     padding: const EdgeInsets.only(right: 8),
-                     child: FilterChip(
-                       label: Text(macro.trigger),
-                       selected: isSelected,
-                       onSelected: (bool selected) {
-                          if (selected) _applyMacroWithAI(macro);
-                       },
-                       backgroundColor: const Color(0xFF2A2A2A),
-                       selectedColor: AppTheme.accent.withOpacity(0.2),
-                       checkmarkColor: AppTheme.accent,
-                       labelStyle: GoogleFonts.inter(
-                         fontSize: 13, 
-                         color: isSelected ? AppTheme.accent : Colors.white70,
-                         fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal
+                children: [
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    child: Icon(
+                      _isTemplateCardExpanded ? Icons.extension : Icons.extension_outlined,
+                      key: ValueKey(_isTemplateCardExpanded),
+                      color: _isTemplateCardExpanded
+                          ? colorScheme.primary
+                          : colorScheme.onSurface.withValues(alpha: 0.5),
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    "Choose Template",
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: colorScheme.onSurface,
+                    ),
+                  ),
+                  // Show selected macro name when collapsed
+                  if (!_isTemplateCardExpanded && _selectedMacro != null) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _selectedMacro!.trigger,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: colorScheme.primary,
+                          fontWeight: FontWeight.w500,
                         ),
-                       shape: RoundedRectangleBorder(
-                         borderRadius: BorderRadius.circular(20),
-                         side: BorderSide(color: isSelected ? AppTheme.accent : Colors.transparent),
-                       ),
-                       showCheckmark: true,
-                     ),
-                   );
-                }).toList(),
+                      ),
+                    ),
+                  ] else const Spacer(),
+                  // Just a standard arrow icon showing state
+                  Icon(
+                    _isTemplateCardExpanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    size: 18,
+                    color: colorScheme.onSurface.withValues(alpha: 0.4),
+                  ),
+                ],
               ),
-            )
+            ),
+          ),
+          // ── Content — only visible when expanded ──
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 300),
+            crossFadeState: _isTemplateCardExpanded
+                ? CrossFadeState.showFirst
+                : CrossFadeState.showSecond,
+            firstChild: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: SizedBox(
+                width: double.infinity,
+                child: Wrap(
+                  spacing: 8.0,
+                  runSpacing: 8.0,
+                  children: _macros.map((macro) {
+                    final isSelected = _selectedMacro?.id == macro.id;
+                    return FilterChip(
+                      label: Text(macro.trigger),
+                      selected: isSelected,
+                      onSelected: (bool selected) {
+                        if (selected) _applyMacroWithAI(macro);
+                      },
+                      backgroundColor: colorScheme.surface,
+                      selectedColor: colorScheme.primary.withValues(alpha: 0.15),
+                      checkmarkColor: colorScheme.primary,
+                      labelStyle: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: isSelected
+                            ? colorScheme.primary
+                            : colorScheme.onSurface.withValues(alpha: 0.7),
+                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        side: BorderSide(
+                          color: isSelected
+                              ? colorScheme.primary
+                              : colorScheme.outline.withValues(alpha: 0.4),
+                        ),
+                      ),
+                      showCheckmark: true,
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+            secondChild: const SizedBox(width: double.infinity, height: 0),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildGeneratedNoteCard() {
-    return Container(
+    final colorScheme = Theme.of(context).colorScheme;
+    final hasContent = _finalController.text.isNotEmpty;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOutCubic,
       decoration: BoxDecoration(
-        color: const Color(0xFF1C1C1C),
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF2A2A2A)),
+        border: Border.all(
+          color: _isGeneratedCardExpanded
+              ? colorScheme.primary.withValues(alpha: 0.5)
+              : colorScheme.outline.withValues(alpha: 0.3),
+          width: _isGeneratedCardExpanded ? 1.5 : 1.0,
+        ),
+        boxShadow: _isGeneratedCardExpanded ? [
+          BoxShadow(
+            color: colorScheme.primary.withValues(alpha: 0.08),
+            blurRadius: 12,
+            spreadRadius: 0,
+          )
+        ] : [],
       ),
-      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-               const Icon(Icons.auto_awesome, color: AppTheme.accent, size: 18),
-               const SizedBox(width: 8),
-               Text("Generated Note", style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
-            ],
+          // ── Header — always visible, tappable to toggle ──
+          InkWell(
+            onTap: hasContent
+                ? () => setState(() => _isGeneratedCardExpanded = !_isGeneratedCardExpanded)
+                : null,
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
+              child: Row(
+                children: [
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    child: Icon(
+                      _isGeneratedCardExpanded ? Icons.auto_awesome : Icons.auto_awesome_outlined,
+                      key: ValueKey(_isGeneratedCardExpanded),
+                      color: _isGeneratedCardExpanded
+                          ? colorScheme.primary
+                          : colorScheme.onSurface.withValues(alpha: 0.4),
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    "Generated Note",
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: colorScheme.onSurface,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (hasContent)
+                    Icon(
+                      _isGeneratedCardExpanded
+                          ? Icons.keyboard_arrow_up
+                          : Icons.keyboard_arrow_down,
+                      size: 18,
+                      color: colorScheme.onSurface.withValues(alpha: 0.4),
+                    )
+                  else
+                    Text(
+                      "Select a template above",
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: colorScheme.onSurface.withValues(alpha: 0.3),
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ),
-          const SizedBox(height: 16),
-          
-          if (_isProcessing)
-             const SizedBox(height: 100) // Placeholder while overlay is active
-          else
-             TextField(
-               controller: _finalController,
-               maxLines: null,
-               style: GoogleFonts.inter(fontSize: 14, color: Colors.white, height: 1.6),
-               decoration: const InputDecoration(
-                 border: InputBorder.none,
-                 isDense: true,
-                 contentPadding: EdgeInsets.zero,
-                 hintText: "AI generated note will appear here...",
-                 hintStyle: TextStyle(color: Colors.white24)
-               ),
-               onTap: _handleTextFieldTap,
-             ),
+          // ── Content — only visible when expanded ──
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 300),
+            crossFadeState: _isGeneratedCardExpanded
+                ? CrossFadeState.showFirst
+                : CrossFadeState.showSecond,
+            firstChild: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: _isProcessing
+                  ? const SizedBox(height: 60, width: double.infinity)
+                  : TextField(
+                      controller: _finalController,
+                      maxLines: null,
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: colorScheme.onSurface,
+                        height: 1.6,
+                      ),
+                      decoration: InputDecoration(
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
+                        hintText: "AI generated note will appear here...",
+                        hintStyle: TextStyle(
+                          color: colorScheme.onSurface.withValues(alpha: 0.25),
+                        ),
+                      ),
+                      onTap: _handleTextFieldTap,
+                    ),
+            ),
+            secondChild: const SizedBox(width: double.infinity, height: 0),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildStickyActionDock() {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
         padding: const EdgeInsets.all(16),
-        decoration: const BoxDecoration(
-            color: Color(0xFF1C1C1C),
-            border: Border(top: BorderSide(color: Color(0xFF2A2A2A), width: 1)),
+        decoration: BoxDecoration(
+            color: colorScheme.surface,
+            border: Border(top: BorderSide(color: colorScheme.outline.withValues(alpha: 0.4), width: 1)),
         ),
         child: ElevatedButton.icon(
             onPressed: () {
                  _copyCleanText();
             },
             icon: const Icon(Icons.content_copy_rounded, size: 18),
-            label: const Text("SMART COPY"),
+            label: const Text("SMART COPY / INJECT"),
             style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.accent,
+                backgroundColor: colorScheme.primary,
                 foregroundColor: Colors.white,
                 minimumSize: const Size(double.infinity, 48),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),

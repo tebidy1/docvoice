@@ -90,9 +90,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
     // Enable resizing temporarily to animate/change size
     await windowManager.setResizable(true);
     if (expanded) {
-      await windowManager
-          .setSize(const Size(500, 600)); // Comfortable Settings Size
-      await windowManager.center();
+      await WindowManagerHelper.expandToCustomSizeBottomRight(500, 600); // Comfortable Settings Size
     } else {
       await windowManager
           .setSize(const Size(350, 56)); // Restore to Native Utility Toolbar

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme.dart';
 import 'package:flutter/services.dart';
 import '../../models/note_model.dart';
 import '../../services/inbox_service.dart';
+import '../../services/macro_service.dart';
 import '../editor/editor_screen.dart';
 import 'archive_screen.dart';
 import '../../core/utils/date_helper.dart';
@@ -19,16 +21,24 @@ class InboxScreenState extends State<InboxScreen> {
   final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
   final List<NoteModel> _notes = []; // Active Notes
   final List<NoteModel> _archivedNotes = []; // Archived Notes
+  final _macroService = MacroService();
+  List<MacroModel> _allMacros = [];
 
   @override
   void initState() {
     super.initState();
+    _loadMacros();
     // Initial Mock Data (Same as before)
     _notes.addAll([
       NoteModel()..title="Patient H.M."..content="History of amnesia..."..status=NoteStatus.processed..createdAt=DateTime.now().subtract(const Duration(minutes: 5)),
       NoteModel()..title="Follow-up: Sarah J."..content="Prescription renewal..."..status=NoteStatus.ready..createdAt=DateTime.now().subtract(const Duration(hours: 1)),
       NoteModel()..title="Dr. Notes"..content="Staff meeting at 5 PM"..status=NoteStatus.draft..createdAt=DateTime.now().subtract(const Duration(days: 1)),
     ]);
+  }
+
+  Future<void> _loadMacros() async {
+    final all = await _macroService.getMacros();
+    if (mounted) setState(() => _allMacros = all);
   }
 
   void addNote(NoteModel note) {
@@ -81,6 +91,8 @@ class InboxScreenState extends State<InboxScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -89,9 +101,74 @@ class InboxScreenState extends State<InboxScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("Inbox", style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold)),
+              // Branded Logo Area
+              Row(
+                textDirection: TextDirection.ltr,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: colorScheme.onSurface.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: SvgPicture.asset(
+                      'assets/images/logo_icon.svg',
+                      height: 28,
+                      width: 28,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      RichText(
+                        text: TextSpan(
+                          children: [
+                            TextSpan(
+                              text: 'Sout',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: colorScheme.onSurface,
+                              ),
+                            ),
+                            TextSpan(
+                              text: 'Note',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      RichText(
+                        text: TextSpan(
+                          style: GoogleFonts.tajawal(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                            color: colorScheme.onSurface.withOpacity(0.9),
+                            height: 1.0,
+                          ),
+                          children: [
+                            const TextSpan(text: 'صوت '),
+                            TextSpan(
+                              text: 'ن',
+                              style: TextStyle(color: colorScheme.primary),
+                            ),
+                            const TextSpan(text: 'وت'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
               IconButton(
-                icon: const Icon(Icons.inventory_2_outlined, color: Colors.white70),
+                icon: Icon(Icons.inventory_2_outlined, color: colorScheme.onSurface.withOpacity(0.7)),
                 tooltip: 'View Archive',
                 onPressed: _openArchive,
               )
@@ -144,8 +221,8 @@ class InboxScreenState extends State<InboxScreen> {
                           padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
                           child: Text(
                             DateHelper.formatGroupingDate(notes[index].createdAt).toUpperCase(),
-                            style: const TextStyle(
-                              color: AppTheme.accent, 
+                            style: TextStyle(
+                              color: colorScheme.primary, 
                               fontWeight: FontWeight.bold, 
                               fontSize: 12,
                               letterSpacing: 1.2
@@ -160,7 +237,7 @@ class InboxScreenState extends State<InboxScreen> {
                         header,
                         // The _buildAnimatedItem wrapper is removed as per instruction.
                         // The _archiveNote call needs to be updated to use the note from the stream.
-                        _buildNoteCard(context, notes[index], index: index), // Removed animation wrapper for now
+                        _buildNoteCard(context, notes[index], index: index, noteNumber: notes.length - index), // Removed animation wrapper for now
                       ],
                     );
                   },
@@ -191,81 +268,146 @@ class InboxScreenState extends State<InboxScreen> {
     );
   }
 
-  Widget _buildNoteCard(BuildContext context, NoteModel note, {int? index}) {
+  Widget _buildNoteCard(BuildContext context, NoteModel note, {int? index, int noteNumber = 0}) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final bool isDraft = note.formattedText.isEmpty;
+
+    // Find applied template name
+    String? templateName = note.summary;
+    if ((templateName == null || templateName.isEmpty) && _allMacros.isNotEmpty) {
+      final macroId = note.appliedMacroId ?? note.suggestedMacroId;
+      if (macroId != null) {
+        final macro = _allMacros.where((m) => m.id == macroId).firstOrNull;
+        templateName = macro?.trigger;
+      }
+    }
+
+    // Badge label: template name if processed, else "Draft"
+    final String badgeLabel;
+    if (note.status == NoteStatus.ready) {
+      badgeLabel = 'Ready';
+    } else if (note.status == NoteStatus.copied) {
+      badgeLabel = 'Copied';
+    } else if (note.formattedText.isNotEmpty) {
+      badgeLabel = (templateName != null && templateName.isNotEmpty) ? templateName : 'Processed';
+    } else {
+      badgeLabel = 'Draft';
+    }
+
     Color statusColor;
     IconData statusIcon;
-    String statusText;
 
     switch (note.status) {
       case NoteStatus.ready:
         statusColor = AppTheme.success;
         statusIcon = Icons.check_circle;
-        statusText = "Ready";
         break;
       case NoteStatus.copied:
         statusColor = Colors.blue;
-        statusIcon = Icons.copy_all; // or Icons.done_all
-        statusText = "Copied";
+        statusIcon = Icons.copy_all;
         break;
       case NoteStatus.processed:
       case NoteStatus.draft:
       default:
-        statusColor = AppTheme.draft;
+        statusColor = isDraft ? Colors.orange : AppTheme.draft;
         statusIcon = Icons.edit_note;
-        statusText = "Draft";
         break;
     }
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      color: AppTheme.surface,
-      elevation: 4, 
+      color: colorScheme.surface,
+      elevation: isDraft ? 2 : 4,
       shadowColor: Colors.black45,
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => EditorScreen(draftNote: note)),
+            MaterialPageRoute(builder: (_) => EditorScreen(draftNote: note, noteNumber: noteNumber)),
           );
         },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                   CircleAvatar(
-                    radius: 16,
-                    backgroundColor: statusColor.withOpacity(0.2),
-                    child: Icon(statusIcon, color: statusColor, size: 18),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(note.title, style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 16)),
-                  ),
-                  if (index != null) // Only show Copy button if index is known (active list)
-                    IconButton(
-                      icon: const Icon(Icons.copy, color: Colors.white70, size: 20),
-                      tooltip: 'Copy & Archive',
-                      onPressed: () => _copyAndMarkCopied(note),
-                    )
-                ],
+              // Left accent bar
+              Container(
+                width: 4,
+                color: statusColor,
               ),
-              const SizedBox(height: 8),
-              Text(note.content, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70, height: 1.4)),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  const Icon(Icons.access_time, size: 12, color: Colors.grey),
-                  const SizedBox(width: 4),
-                  Text(
-                    "${note.createdAt.hour}:${note.createdAt.minute.toString().padLeft(2, '0')}",
-                    style: const TextStyle(color: Colors.grey, fontSize: 12),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                           CircleAvatar(
+                            radius: 16,
+                            backgroundColor: statusColor.withOpacity(0.2),
+                            child: Icon(statusIcon, color: statusColor, size: 18),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              noteNumber > 0 ? 'NO-$noteNumber' : 'Draft Note',
+                              style: TextStyle(
+                                fontWeight: isDraft ? FontWeight.w500 : FontWeight.w600,
+                                color: isDraft
+                                    ? colorScheme.onSurface.withOpacity(0.5)
+                                    : colorScheme.onSurface,
+                                fontSize: 16,
+                                fontStyle: isDraft ? FontStyle.italic : FontStyle.normal,
+                              ),
+                            ),
+                          ),
+                          if (index != null)
+                            IconButton(
+                              icon: Icon(Icons.subdirectory_arrow_left, 
+                                color: isDraft 
+                                  ? colorScheme.onSurface.withOpacity(0.2)
+                                  : colorScheme.onSurface.withOpacity(0.6), 
+                                size: 20),
+                              tooltip: isDraft ? 'Select a template first' : 'Copy & Inject',
+                              onPressed: isDraft ? null : () => _copyAndMarkCopied(note),
+                            )
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        note.formattedText.isNotEmpty ? note.formattedText : note.content,
+                        maxLines: 2, overflow: TextOverflow.ellipsis, 
+                        style: TextStyle(color: isDraft ? colorScheme.onSurface.withOpacity(0.4) : colorScheme.onSurface.withOpacity(0.7), height: 1.4),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Icon(Icons.access_time, size: 12, color: colorScheme.onSurface.withOpacity(0.4)),
+                          const SizedBox(width: 4),
+                          Text(
+                            "${note.createdAt.hour}:${note.createdAt.minute.toString().padLeft(2, '0')}",
+                            style: TextStyle(color: colorScheme.onSurface.withOpacity(0.4), fontSize: 12),
+                          ),
+                          const Spacer(),
+                          // Status badge pill
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: statusColor.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              badgeLabel,
+                              style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                  const Spacer(),
-                  Text(statusText, style: TextStyle(color: statusColor, fontSize: 12, fontWeight: FontWeight.bold)),
-                ],
+                ),
               ),
             ],
           ),

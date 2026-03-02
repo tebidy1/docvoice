@@ -40,7 +40,7 @@ class MacroService {
       final hasMarkdown = firstMacro?.content.contains('**') ?? false;
 
       // Force update: wipe old macros and seed the new CBAHI ones
-      if (count != 5 || hasMarkdown) {
+      if (count != 6 || hasMarkdown) {
         print("MacroService: DB state needs update (count: $count, hasMarkdown: $hasMarkdown). Clearing and re-seeding...");
         await isar.writeTxn(() async {
           await isar.macros.clear();
@@ -98,6 +98,14 @@ class MacroService {
         category: "Admin"
       );
       print("MacroService: ✓ Added 'Sick Leave'");
+
+      // 6. Free Note
+      await addMacro(
+        "✨ Free Note", 
+        AIPromptConstants.templateFreeNote, 
+        category: "General"
+      );
+      print("MacroService: ✓ Added 'Free Note'");
       
       final isar = await _dbService.isar;
       final finalCount = await isar.macros.count();

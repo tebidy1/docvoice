@@ -22,7 +22,7 @@ class FooterSection extends StatelessWidget {
                 ? Column(
                     children: [
                       Text(
-                        "© MedNote AI — 2026",
+                        "© SoutNote — 2026",
                         style: Theme.of(context).textTheme.bodyMedium!.copyWith(
                           color: MedColors.textMuted,
                         ),
@@ -42,7 +42,7 @@ class FooterSection extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        "© MedNote AI — 2026",
+                        "© SoutNote — 2026",
                         style: Theme.of(context).textTheme.bodyMedium!.copyWith(
                           color: MedColors.textMuted,
                         ),

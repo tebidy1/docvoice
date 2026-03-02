@@ -64,11 +64,27 @@ class WindowManagerHelper {
     }
   }
 
-  /// Restores the window to a centered dialog size (for Macro Manager etc)
+  /// Restores the window to a dialog size and places it on the bottom right
   static Future<void> centerDialog() async {
-    await windowManager.setSize(const Size(900, 700));
-    await windowManager.center();
+    await expandToCustomSizeBottomRight(900, 700);
     await windowManager.setAlwaysOnTop(false);
+  }
+
+  /// Expands to a custom size but keeps it aligned bottom-right like the sidebar and pill
+  static Future<void> expandToCustomSizeBottomRight(double width, double height) async {
+    if (kIsWeb) return;
+    try {
+      final primaryDisplay = await screenRetriever.getPrimaryDisplay();
+      final screenSize = primaryDisplay.size;
+      
+      await windowManager.setSize(Size(width, height));
+      
+      final x = screenSize.width - width - 20; // 20px padding from right
+      final y = screenSize.height - height - 80; // 80px padding from bottom
+      await windowManager.setPosition(Offset(x, y));
+    } catch (e) {
+      print("Error expanding: $e");
+    }
   }
 
   static bool _isTransparencyLocked = false;

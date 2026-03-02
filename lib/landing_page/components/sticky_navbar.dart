@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:google_fonts/google_fonts.dart';
+
 
 import '../theme/app_colors.dart';
 
@@ -69,28 +72,76 @@ class _StickyNavbarState extends State<StickyNavbar> {
         children: [
           // Logo Area
           Row(
+            textDirection: TextDirection.ltr, // Keep Icon on the Left of Text
             children: [
+              // 1. Icon
               Container(
-                width: 40,
-                height: 40,
+                padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
-                  color: MedColors.primary.withOpacity(0.1),
-                  shape: BoxShape.circle,
+                  color: Colors.white.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.mic, color: MedColors.primary),
-              ),
-              if (MediaQuery.of(context).size.width > 500) ...[
-                const SizedBox(width: 12),
-                const Text(
-                  'MedNote AI',
-                  style: TextStyle(
-                    fontFamily: 'Cairo',
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                    color: MedColors.textMain,
+                child: SvgPicture.asset(
+                  'assets/images/logo_icon.svg',
+                  height: 32,
+                  width: 32,
+                  fit: BoxFit.contain,
+                  placeholderBuilder: (context) => const SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                 ),
-              ],
+              ),
+              const SizedBox(width: 12),
+              // 2. Bilingual Text
+              if (MediaQuery.of(context).size.width > 500)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    RichText(
+                      text: TextSpan(
+                        children: [
+                          TextSpan(
+                            text: 'Sout',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                              color: Colors.white,
+                            ),
+                          ),
+                          TextSpan(
+                            text: 'Note',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                              color: const Color(0xFF06B6D4), // Cyan
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    RichText(
+                      text: TextSpan(
+                        style: GoogleFonts.tajawal(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: Colors.white.withOpacity(0.9),
+                          height: 1.0,
+                        ),
+                        children: [
+                          const TextSpan(text: 'صوت '),
+                          const TextSpan(
+                            text: 'ن',
+                            style: TextStyle(color: Color(0xFF06B6D4)), // Cyan 'N'
+                          ),
+                          const TextSpan(text: 'وت'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
             ],
           ),
 

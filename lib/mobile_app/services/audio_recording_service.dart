@@ -39,15 +39,17 @@ class AudioRecordingService {
           path = '${appDocDir.path}/recording_$timestamp.wav';
           _currentPath = path;
         } else {
-           // On Web, path is ignored or handled internally by browser/recorder
-           _currentPath = null; 
+           // On Web, use a meaningful filename — the record_web package
+           // may fail to return a blob URL if the path is empty.
+           path = 'recording_${DateTime.now().millisecondsSinceEpoch}.webm';
+           _currentPath = path; 
         }
 
         // Configure recording parameters
         RecordConfig config;
         
         if (kIsWeb) {
-           // On Web/PWA, we MUST use Opus (or allow browser default, but explicit Opus is safer)
+           // On Web/PWA, use Opus encoding (widely supported in browsers)
            config = const RecordConfig(
              encoder: AudioEncoder.opus,
            ); 
@@ -60,15 +62,9 @@ class AudioRecordingService {
           );
         }
 
-        // Start recording to file
-        if (path != null) {
-          await _audioRecorder!.start(config, path: path);
-          debugPrint("Started recording to: $path");
-        } else {
-           // Web stream / blob
-           await _audioRecorder!.start(config, path: ''); 
-           debugPrint("Started recording (Web)");
-        }
+        // Start recording
+        await _audioRecorder!.start(config, path: path);
+        debugPrint("Started recording to: $path (isWeb: $kIsWeb)");
       } else {
         debugPrint("Microphone permission denied");
         throw Exception("Microphone permission denied");
@@ -81,9 +77,21 @@ class AudioRecordingService {
 
   Future<String?> stopRecording() async {
     try {
-      if (_audioRecorder == null) return null;
+      if (_audioRecorder == null) {
+        debugPrint("⚠️ stopRecording: _audioRecorder is null");
+        return null;
+      }
+      final isActive = await _audioRecorder!.isRecording();
+      debugPrint("stopRecording: isRecording=$isActive");
+      
       final path = await _audioRecorder!.stop();
-      debugPrint("Stopped recording. Saved to: $path");
+      debugPrint("Stopped recording. Saved to: $path (type: ${path.runtimeType})");
+      
+      // On web, if stop() returns null or empty but we have a stored path
+      if ((path == null || path.isEmpty) && _currentPath != null) {
+        debugPrint("⚠️ stop() returned null/empty. _currentPath was: $_currentPath");
+      }
+      
       return path;
     } catch (e) {
       debugPrint("Error stopping recording: $e");

@@ -132,7 +132,7 @@ class _CreateCompanyDialogState extends State<CreateCompanyDialog> {
                   children: [
                     Expanded(
                       child: DropdownButtonFormField<String>(
-                        value: _planType,
+                        initialValue: _planType,
                         decoration: const InputDecoration(
                           labelText: 'Plan Type',
                           labelStyle: TextStyle(color: Colors.grey),
@@ -155,7 +155,7 @@ class _CreateCompanyDialogState extends State<CreateCompanyDialog> {
                     const SizedBox(width: 16),
                     Expanded(
                       child: DropdownButtonFormField<String>(
-                        value: _status,
+                        initialValue: _status,
                         decoration: const InputDecoration(
                           labelText: 'Status',
                           labelStyle: TextStyle(color: Colors.grey),

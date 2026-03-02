@@ -1,14 +1,11 @@
+// ignore_for_file: deprecated_member_use
 import 'dart:async';
-import 'dart:math';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../mobile_app/core/theme.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
-import 'dart:js_interop';
-import 'dart:js_interop_unsafe';
 // Models & Services
 import '../../mobile_app/models/note_model.dart';
 import '../../mobile_app/services/macro_service.dart'; 
@@ -17,17 +14,16 @@ import '../../mobile_app/services/groq_service.dart';
 import '../../services/api_service.dart';
 import '../../widgets/pattern_highlight_controller.dart'; 
 import '../../widgets/processing_overlay.dart';
-import '../../desktop/macro_explorer_dialog.dart'; 
-import '../../models/macro.dart' as DesktopMacro;
-// ✅ Core AI Brain — centralized services (Phase 1 refactor)
 import '../../core/ai/ai_regex_patterns.dart';
 import '../../core/ai/text_processing_service.dart';
 import '../../services/ai/ai_processing_service.dart';
+import '../services/extension_injection_service.dart';
 
 class ExtensionEditorScreen extends StatefulWidget {
   final NoteModel draftNote;
+  final int noteNumber;
 
-  const ExtensionEditorScreen({super.key, required this.draftNote});
+  const ExtensionEditorScreen({super.key, required this.draftNote, this.noteNumber = 0});
 
   @override
   State<ExtensionEditorScreen> createState() => _ExtensionEditorScreenState();
@@ -69,6 +65,8 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
   bool _isGenerating = false;
   bool _isRawTextExpanded = false; // Collapsed by default
   bool _isLoading = true; // For audio processing
+  bool _isTemplateCardExpanded = true;  // Template card: expanded by default
+  bool _isGeneratedCardExpanded = false; // Generated note card: collapsed by default
 
   // AI Processing Animation
   final List<String> _statusMessages = [
@@ -80,9 +78,15 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
   @override
   void initState() {
     super.initState();
-    _rawText = widget.draftNote.originalText ?? widget.draftNote.content ?? "";
+    _rawText = widget.draftNote.originalText;
+    if (_rawText.isEmpty) _rawText = widget.draftNote.content;
     if (widget.draftNote.formattedText.isNotEmpty) {
       _finalNoteController.text = widget.draftNote.formattedText;
+      _isTemplateCardExpanded = false;
+      _isGeneratedCardExpanded = true;
+    } else {
+      _isTemplateCardExpanded = true;
+      _isGeneratedCardExpanded = false;
     }
     
     _loadMacros();
@@ -112,21 +116,34 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
     });
     
     if (mounted) {
-      setState(() => _quickMacros = macros);
-      
-      // Restore last selected macro if none selected
+      // Restore selected macro
+      MacroModel? restoredMacro;
       if (_selectedMacro == null) {
-          final prefs = await SharedPreferences.getInstance();
-          final lastId = prefs.getInt('last_selected_macro_id');
-          if (lastId != null) {
+          if (widget.draftNote.appliedMacroId != null) {
               try {
-                  final lastMacro = macros.firstWhere((m) => m.id == lastId);
-                  setState(() => _selectedMacro = lastMacro);
-              } catch (_) {
-                  // Macro might have been deleted or not found
+                  restoredMacro = macros.firstWhere((m) => m.id == widget.draftNote.appliedMacroId);
+              } catch (_) {}
+          } else {
+              final prefs = await SharedPreferences.getInstance();
+              final lastId = prefs.getInt('last_selected_macro_id');
+              if (lastId != null) {
+                  try {
+                      restoredMacro = macros.firstWhere((m) => m.id == lastId);
+                  } catch (_) {}
               }
           }
       }
+
+      // Move the applied/restored macro to the front of the list
+      if (restoredMacro != null) {
+          macros.remove(restoredMacro);
+          macros.insert(0, restoredMacro);
+      }
+
+      setState(() {
+          _quickMacros = macros;
+          if (restoredMacro != null) _selectedMacro = restoredMacro;
+      });
     }
   }
 
@@ -160,16 +177,18 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
       try {
         final prefs = await SharedPreferences.getInstance();
         final localGroqKey = prefs.getString('groq_api_key');
+        final sttEngine = prefs.getString('stt_engine_pref') ?? 'oracle_live';
         
-        // 1. Try Direct Groq (if key exists locally)
-        if (localGroqKey != null && localGroqKey.isNotEmpty) {
+        bool transcribed = false;
+
+        // 1. Try Direct Groq (if key exists AND user selected Groq)
+        if (sttEngine == 'groq' && localGroqKey != null && localGroqKey.isNotEmpty) {
            print("DEBUG: Using Local Groq Key (Direct Mode)");
            final groqService = GroqService(apiKey: localGroqKey);
            final transcript = await groqService.transcribe(bytes, filename: 'recording.webm');
            
            if (transcript.startsWith("Error:")) {
-               // Fallback if direct fails? Or just throw?
-               // Let's log it and try backend as backup or throw.
+               // Fallback if direct fails
                print("Direct Groq Failed: $transcript");
                if (transcript.contains("401")) {
                    throw "Invalid Groq API Key";
@@ -184,40 +203,44 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                    });
                    _saveDraft();
                }
-               return; // Exit, handled by Groq
+               transcribed = true;
            }
         }
 
-        // 2. Fallback to Backend Proxy
-        final apiService = ApiService();
-        await apiService.init(); 
-        print("DEBUG: Transcribing via Backend... Token present: ${apiService.hasToken}"); 
-        
-        final result = await apiService.multipartPost(
-          '/audio/transcribe',
-          fileBytes: bytes,
-          filename: 'recording.webm',
-        );
+        // 2. Use Backend Proxy (for Oracle, Native, or if Direct Groq failed/unselected)
+        if (!transcribed) {
+            final apiService = ApiService();
+            await apiService.init(); 
+            print("DEBUG: Transcribing via Backend ($sttEngine)... Token present: ${apiService.hasToken}"); 
+            
+            final result = await apiService.multipartPost(
+              '/audio/transcribe',
+              fileBytes: bytes,
+              filename: 'recording.webm',
+            );
 
-        if (result['status'] == true) {
-           final transcript = result['payload']['text'] ?? "";
-           if (mounted) {
-               setState(() {
-                   _rawText = transcript.trim();
-                   _isLoading = false;
-                   _isRawTextExpanded = _finalNoteController.text.isEmpty; 
-               });
-               _saveDraft();
-           }
-        } else {
-           throw result['message'] ?? 'Transcription failed';
+            if (result['status'] == true) {
+               final transcript = result['payload']['text'] ?? "";
+               if (mounted) {
+                   setState(() {
+                       _rawText = transcript.trim();
+                       _isLoading = false;
+                       _isRawTextExpanded = _finalNoteController.text.isEmpty; 
+                   });
+                   _saveDraft();
+               }
+            } else {
+               throw result['message'] ?? 'Transcription failed';
+            }
         }
       } catch (e) {
           _showError("Transcription failed: $e");
-          setState(() {
-              _rawText = "Transcription Failed";
-              _isLoading = false;
-          });
+          if (mounted) {
+              setState(() {
+                  _rawText = "Transcription Failed";
+                  _isLoading = false;
+              });
+          }
       }
   }
 
@@ -228,6 +251,8 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                   widget.draftNote.id,
                   rawText: _rawText,
                   formattedText: _finalNoteController.text,
+                  summary: _selectedMacro?.trigger,
+                  suggestedMacroId: _selectedMacro?.id is int ? _selectedMacro?.id as int : null,
               );
           } else {
               // Create new if generic ID
@@ -237,10 +262,12 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
               final newId = await _inboxService.addNote(
                   _rawText,
                   formattedText: _finalNoteController.text,
-                  patientName: widget.draftNote.title ?? "Extension Note",
+                  patientName: widget.draftNote.title,
+                  summary: _selectedMacro?.trigger,
+                  suggestedMacroId: _selectedMacro?.id is int ? _selectedMacro?.id as int : null,
               );
               // Update local model
-               if (newId != null) widget.draftNote.id = newId;
+               widget.draftNote.id = newId;
           }
       } catch (e) {
           print("Auto-save failed: $e");
@@ -251,9 +278,10 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
        setState(() {
           _isGenerating = true;
           _selectedMacro = macro;
-          // _elapsedSeconds = 0; // Removed
-          // _statusMessageIndex = 0; // Removed
-          _isRawTextExpanded = false; 
+          _isRawTextExpanded = false;
+          // Set state for AI loading and card expansion
+          _isTemplateCardExpanded = false; // Collapse template
+          _isGeneratedCardExpanded = true; // Expand final note
        });
        
        
@@ -298,85 +326,29 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
         }
   }
 
-  String _getCleanText() {
-    // ✅ Use TextProcessingService.applySmartCopy (Phase 1 refactor)
-    // FIXED: Removes placeholder tokens inline, NOT entire lines
-    return TextProcessingService.applySmartCopy(_finalNoteController.text);
-  }
 
   Future<void> _smartCopyAndInject() async {
-      // 1. Get Clean Text (Filter placeholders)
-      final cleanText = _getCleanText();
+      final rawText = _finalNoteController.text;
       
-      if (cleanText.isEmpty && _finalNoteController.text.isNotEmpty) {
-           _showError("No clean text to copy. All lines appear to be placeholders.");
-           return;
-      }
-      if (cleanText.isEmpty) return;
+      final result = await ExtensionInjectionService.smartCopyAndInject(rawText);
 
-      // 2. Copy Clean Text to Clipboard
-      await Clipboard.setData(ClipboardData(text: cleanText));
-      
-      bool injected = false;
-      
-      // 3. Try Smart Inject (Web Extension Only)
-      if (kIsWeb) {
-          try {
-             // Access the global window.scribeflow object defined in extension_interop.js
-             final scribeflow = globalContext['scribeflow'];
-             if (scribeflow != null) {
-                 final jsObj = scribeflow as JSObject;
-                 // Call injectTextToActiveTab(cleanText)
-                 final promise = jsObj.callMethod('injectTextToActiveTab'.toJS, cleanText.toJS) as JSPromise;
-                 final result = await promise.toDart;
-                 injected = (result as JSBoolean).toDart;
-             }
-          } catch (e) {
-             print("Injection failed: $e");
-          }
+      if (result.status == InjectionStatus.failed) {
+          _showError(result.message);
+          return;
       }
 
-      String message = injected 
-          ? "✅ Injected & Clean Copied" 
-          : "✅ Clean Text Copied";
-          
-      if (!injected && kIsWeb) {
-          message += " (Injection failed)";
+      if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(result.message),
+              backgroundColor: result.status == InjectionStatus.success ? Colors.green : Colors.blue,
+              duration: const Duration(seconds: 2),
+          ));
       }
-          
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(message),
-          backgroundColor: injected ? Colors.green : Colors.blue,
-          duration: const Duration(seconds: 2),
-      ));
       
       // Update Status
       if (widget.draftNote.id > 0) {
           await _inboxService.updateStatus(widget.draftNote.id, NoteStatus.copied);
       }
-      
-      // We do NOT pop here, allowing user to keep working or press Back manually
-      // Navigator.pop(context, cleanText); 
-  }
-
-  Future<void> _markAsReady() async {
-      if (_finalNoteController.text.isEmpty) return;
-      
-      // Save content first
-      await _saveDraft();
-      
-      // Update Status
-      if (widget.draftNote.id > 0) {
-           await _inboxService.updateStatus(widget.draftNote.id, NoteStatus.ready);
-      }
-      
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text("✅ Marked as Ready"),
-          backgroundColor: Colors.green,
-      ));
-      
-      
-      Navigator.pop(context);
   }
 
   // Removed _copyCleanText as it is merged into _smartCopyAndInject
@@ -442,7 +414,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                                     constraints: const BoxConstraints(),
                                 ),
                                 const SizedBox(width: 8),
-                                const Text("Original Note", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+                                Text(widget.noteNumber > 0 ? "NO-${widget.noteNumber}" : "Draft Note", style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
                                 const SizedBox(width: 8),
                                 _buildStatusBadge(),
                                 const Spacer(),
@@ -504,9 +476,9 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
        return Container(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
           decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: color.withOpacity(0.3)),
+              border: Border.all(color: color.withValues(alpha: 0.3)),
           ),
           child: Text(text, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
       );
@@ -547,147 +519,234 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
   }
 
   Widget _buildTemplateSelectorCard() {
-    // Ensure we don't crash if macros list is empty or null
-    final displayedMacros = _quickMacros.take(10).toList();
 
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOutCubic,
       decoration: BoxDecoration(
         color: const Color(0xFF1C1C1C),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF2A2A2A)),
+        border: Border.all(
+          color: _isTemplateCardExpanded
+              ? AppTheme.accent.withValues(alpha: 0.5)
+              : const Color(0xFF2A2A2A),
+          width: _isTemplateCardExpanded ? 1.5 : 1.0,
+        ),
+        boxShadow: _isTemplateCardExpanded ? [
+          BoxShadow(
+            color: AppTheme.accent.withValues(alpha: 0.08),
+            blurRadius: 12,
+            spreadRadius: 0,
+          )
+        ] : [],
       ),
-      padding: const EdgeInsets.symmetric(vertical: 16), // Vertical padding only
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-           Padding(
-             padding: const EdgeInsets.symmetric(horizontal: 16),
-             child: Row(
-               children: [
-                 const Icon(Icons.extension_outlined, color: Colors.white70, size: 18),
-                 const SizedBox(width: 8),
-                 const Text("Choose Template", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
-                 const Spacer(),
-                 // Show All Button
-                 InkWell(
-                   onTap: () async {
-                         final result = await showDialog<DesktopMacro.Macro>(
-                           context: context,
-                           builder: (context) => const MacroExplorerDialog(),
-                         );
-                         
-                         if (result != null) {
-                             // Convert to Mobile MacroModel
-                             final macroModel = MacroModel(
-                                 id: result.id,
-                                 trigger: result.trigger,
-                                 content: result.content,
-                                 isFavorite: result.isFavorite,
-                                 category: result.category,
-                                 isAiMacro: result.isAiMacro,
-                                 aiInstruction: result.aiInstruction,
-                             );
-                             _applyTemplate(macroModel);
-                         }
-                   },
-                   child: const Text("All Templates", style: TextStyle(fontSize: 12, color: AppTheme.accent, fontWeight: FontWeight.w500)),
-                 )
-               ],
-             ),
-           ),
-           const SizedBox(height: 12),
-           
-           // Horizontal Chips
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+          // ── Header — always visible, tappable to toggle ──
+          InkWell(
+            onTap: () => setState(() => _isTemplateCardExpanded = !_isTemplateCardExpanded),
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
               child: Row(
-                children: displayedMacros.map((macro) {
-                   final isSelected = _selectedMacro?.id == macro.id;
-                   return Padding(
-                     padding: const EdgeInsets.only(right: 8),
-                     child: FilterChip(
-                       label: Text(macro.trigger),
-                       selected: isSelected,
-                       onSelected: (bool selected) {
-                          if (selected) _applyTemplate(macro);
-                       },
-                       backgroundColor: const Color(0xFF2A2A2A),
-                       selectedColor: AppTheme.accent.withOpacity(0.2),
-                       checkmarkColor: AppTheme.accent,
-                       labelStyle: TextStyle(
-                         fontSize: 13, 
-                         color: isSelected ? AppTheme.accent : Colors.white70,
-                         fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                         fontFamily: 'Inter' // Assuming Inter is available or fallback
+                children: [
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    child: Icon(
+                      _isTemplateCardExpanded ? Icons.extension : Icons.extension_outlined,
+                      key: ValueKey(_isTemplateCardExpanded),
+                      color: _isTemplateCardExpanded
+                          ? AppTheme.accent
+                          : Colors.white54,
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    "Choose Template",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
+                  ),
+                  if (!_isTemplateCardExpanded && _selectedMacro != null) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _selectedMacro!.trigger,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppTheme.accent,
+                          fontWeight: FontWeight.w500,
                         ),
-                       shape: RoundedRectangleBorder(
-                         borderRadius: BorderRadius.circular(20),
-                         side: BorderSide(color: isSelected ? AppTheme.accent : Colors.transparent),
-                       ),
-                       showCheckmark: true,
-                     ),
-                   );
-                }).toList(),
+                      ),
+                    ),
+                  ] else const Spacer(),
+                  Icon(
+                    _isTemplateCardExpanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    size: 18,
+                    color: Colors.white38,
+                  ),
+                ],
               ),
-            )
+            ),
+          ),
+          // ── Content — only visible when expanded ──
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 300),
+            crossFadeState: _isTemplateCardExpanded
+                ? CrossFadeState.showFirst
+                : CrossFadeState.showSecond,
+            firstChild: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: SizedBox(
+                width: double.infinity,
+                child: Wrap(
+                  spacing: 8.0,
+                  runSpacing: 8.0,
+                  children: _quickMacros.map((macro) {
+                    final isSelected = _selectedMacro?.id == macro.id;
+                    return FilterChip(
+                      label: Text(macro.trigger),
+                      selected: isSelected,
+                      onSelected: (bool selected) {
+                        if (selected) _applyTemplate(macro);
+                      },
+                      backgroundColor: const Color(0xFF2A2A2A),
+                      selectedColor: AppTheme.accent.withValues(alpha: 0.2),
+                      checkmarkColor: AppTheme.accent,
+                      labelStyle: TextStyle(
+                        fontSize: 13,
+                        color: isSelected ? AppTheme.accent : Colors.white70,
+                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                        fontFamily: 'Inter',
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        side: BorderSide(
+                          color: isSelected ? AppTheme.accent : Colors.transparent,
+                        ),
+                      ),
+                      showCheckmark: true,
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+            secondChild: const SizedBox(width: double.infinity, height: 0),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildGeneratedNoteCard() {
-    return Container(
-      width: double.infinity, // Ensure full width
+    final hasContent = _finalNoteController.text.isNotEmpty;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOutCubic,
+      width: double.infinity,
       decoration: BoxDecoration(
-        color: const Color(0xFF1C1C1C), // Unified background color
+        color: const Color(0xFF1C1C1C),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF2A2A2A)),
+        border: Border.all(
+          color: _isGeneratedCardExpanded
+              ? AppTheme.accent.withValues(alpha: 0.5)
+              : const Color(0xFF2A2A2A),
+          width: _isGeneratedCardExpanded ? 1.5 : 1.0,
+        ),
+        boxShadow: _isGeneratedCardExpanded ? [
+          BoxShadow(
+            color: AppTheme.accent.withValues(alpha: 0.08),
+            blurRadius: 12,
+            spreadRadius: 0,
+          )
+        ] : [],
       ),
-      padding: EdgeInsets.zero, // Remove inner padding from main container
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Section
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                 const Icon(Icons.auto_awesome, color: AppTheme.accent, size: 18),
-                 const SizedBox(width: 8),
-                 const Text("Generated Note", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
-              ],
+          // ── Header — always visible, tappable to toggle ──
+          InkWell(
+            onTap: hasContent
+                ? () => setState(() => _isGeneratedCardExpanded = !_isGeneratedCardExpanded)
+                : null,
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
+              child: Row(
+                children: [
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    child: Icon(
+                      _isGeneratedCardExpanded ? Icons.auto_awesome : Icons.auto_awesome_outlined,
+                      key: ValueKey(_isGeneratedCardExpanded),
+                      color: _isGeneratedCardExpanded ? AppTheme.accent : Colors.white38,
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    "Generated Note",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
+                  ),
+                  const Spacer(),
+                  if (hasContent)
+                    Icon(
+                      _isGeneratedCardExpanded
+                          ? Icons.keyboard_arrow_up
+                          : Icons.keyboard_arrow_down,
+                      size: 18,
+                      color: Colors.white38,
+                    )
+                  else
+                    const Text(
+                      "Select a template above",
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.white24,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
-          
-          if (_isGenerating)
-             const SizedBox(height: 100) 
-          else
-             Container(
-               width: double.infinity,
-               // REMOVED color property to let it be transparent/inherit from parent
-               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0), 
-               child: TextField(
-                 controller: _finalNoteController,
-                 maxLines: null,
-                 style: const TextStyle(fontSize: 14, color: Colors.white, height: 1.6),
-                 decoration: const InputDecoration(
-                   border: InputBorder.none,
-                   focusedBorder: InputBorder.none,
-                   enabledBorder: InputBorder.none,
-                   errorBorder: InputBorder.none,
-                   disabledBorder: InputBorder.none,
-                   isDense: true,
-                   contentPadding: EdgeInsets.only(bottom: 16), // Add bottom padding for text
-                   hintText: "AI generated note will appear here...",
-                   hintStyle: TextStyle(color: Colors.white24),
-                   fillColor: Colors.transparent,
-                   filled: true,
-                 ),
-                 onTap: _handleEditorTap,
-               ),
-             ),
+          // ── Content — only visible when expanded ──
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 300),
+            crossFadeState: _isGeneratedCardExpanded
+                ? CrossFadeState.showFirst
+                : CrossFadeState.showSecond,
+            firstChild: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: _isGenerating
+                  ? const SizedBox(height: 60)
+                  : TextField(
+                      controller: _finalNoteController,
+                      maxLines: null,
+                      style: const TextStyle(fontSize: 14, color: Colors.white, height: 1.6),
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        errorBorder: InputBorder.none,
+                        disabledBorder: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.only(bottom: 16),
+                        hintText: "AI generated note will appear here...",
+                        hintStyle: TextStyle(color: Colors.white24),
+                        fillColor: Colors.transparent,
+                        filled: true,
+                      ),
+                      onTap: _handleEditorTap,
+                    ),
+            ),
+            secondChild: const SizedBox(width: double.infinity, height: 0),
+          ),
         ],
       ),
     );

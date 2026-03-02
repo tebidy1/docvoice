@@ -41,6 +41,7 @@ class MacroService {
     await addMacro("📞 SBAR Consult", AIPromptConstants.templateSbar, category: "Referral");
     await addMacro("📄 ER Discharge", AIPromptConstants.templateDischarge, category: "Emergency");
     await addMacro("🤒 Sick Leave", AIPromptConstants.templateSickLeave, category: "Admin");
+    await addMacro("✨ Free Note", AIPromptConstants.templateFreeNote, category: "General");
     
     print("MacroService (Web): ✅ Default macros seeded in memory (${_inMemoryMacros.length} total)");
   }

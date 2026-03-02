@@ -13,7 +13,7 @@ class OciCredentials {
 }
 
 void main() async {
-  final creds = OciCredentials(
+  final creds = const OciCredentials(
     tenancyId: 'ocid1.tenancy.oc1..aaaaaaaadt3eulxchu6ygrisqsai4z6qji5dyqiam7tgwgd6rrxe2wsocp2a',
     userId: 'ocid1.user.oc1..aaaaaaaa3ykq2ykgaixlhze3yip5m3fxrsbkghnzecezym7c7neqk57fupdq',
     fingerprint: 'a6:24:f0:9f:9a:f0:77:18:c5:85:2d:03:90:02:6d:c2',
@@ -59,7 +59,7 @@ cQBOFhw1ZkYvxx4A6HSNxyae
   final bodyBytes = Uint8List.fromList(utf8.encode(body));
 
   final url = "https://speech.aiservice.me-riyadh-1.oci.oraclecloud.com/20220101/actions/realtimeSessionToken";
-  print("\\n--- Testing URL: " + url + " ---");
+  print("\\n--- Testing URL: $url ---");
   try {
     final signedHeaders = signer.signRequest(
       method: 'POST',
@@ -71,9 +71,9 @@ cQBOFhw1ZkYvxx4A6HSNxyae
       headers: signedHeaders,
       body: bodyBytes,
     );
-    print("Status Code: " + response.statusCode.toString());
-    print("Body: " + response.body);
+    print("Status Code: ${response.statusCode}");
+    print("Body: ${response.body}");
   } catch (e) {
-    print("Error: " + e.toString());
+    print("Error: $e");
   }
 }

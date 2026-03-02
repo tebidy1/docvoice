@@ -6,9 +6,9 @@ class PatternHighlightController extends TextEditingController {
   final Map<RegExp, TextStyle> patternStyles;
 
   PatternHighlightController({
-    String? text,
+    super.text,
     required this.patternStyles,
-  }) : super(text: text);
+  });
 
   @override
   TextSpan buildTextSpan({

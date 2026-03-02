@@ -3,59 +3,79 @@
 
 // Define a namespace to avoid collisions
 window.scribeflow = {
-    // Inject text into the active tab's focused element
+    // Inject text into the active tab's focused element using Content Script
     injectTextToActiveTab: async function (text) {
+        console.log("ScribeFlow: Attempting to inject text via Message Passing...");
+
+        async function sendMessageToTab(tabId, message) {
+            return new Promise((resolve, reject) => {
+                chrome.tabs.sendMessage(tabId, message, (response) => {
+                    if (chrome.runtime.lastError) {
+                        reject(chrome.runtime.lastError);
+                    } else {
+                        resolve(response);
+                    }
+                });
+            });
+        }
+
         try {
-            // We need to find the active tab first
+            // Find the active tab first
+            // We use lastFocusedWindow to get the main browser window when side panel is open
             const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
             if (!tab) {
                 console.error("ScribeFlow: No active tab found.");
                 return false;
             }
 
-            // Execute script in the active tab
-            // This requires the "scripting" permission in manifest.json
-            await chrome.scripting.executeScript({
-                target: { tabId: tab.id },
-                func: (textToInsert) => {
-                    // This function runs IN the context of the web page
-                    const activeElement = document.activeElement;
+            // Send Message to Content Script
+            // The content script tracks the last focused element and will handle insertion.
+            try {
+                const response = await sendMessageToTab(tab.id, {
+                    action: "SCRIBEFLOW_INJECT",
+                    text: text
+                });
 
-                    if (activeElement) {
-                        // Check if it's an input or textarea
-                        if (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA') {
-                            const start = activeElement.selectionStart;
-                            const end = activeElement.selectionEnd;
-                            const value = activeElement.value;
+                if (response && response.status === true) {
+                    console.log("ScribeFlow: Text injected successfully via content script.");
+                    return true;
+                }
 
-                            // Insert text at cursor
-                            activeElement.value = value.substring(0, start) + textToInsert + value.substring(end);
+                console.warn("ScribeFlow: Content script failed to inject (Response: " + JSON.stringify(response) + ")");
+                return false;
 
-                            // Move cursor to end of inserted text
-                            activeElement.selectionStart = activeElement.selectionEnd = start + textToInsert.length;
+            } catch (err) {
+                console.warn("ScribeFlow: Content script not found or error occurred (" + err.message + "). Attempting to dynamically inject content script...");
 
-                            // Dispatch input event to trigger any listeners (e.g. React/Vue state updates)
-                            activeElement.dispatchEvent(new Event('input', { bubbles: true }));
-                            return true;
-                        }
-                        // Check for contenteditable
-                        else if (activeElement.isContentEditable) {
-                            // Use execCommand for broader compatibility in contenteditable
-                            document.execCommand('insertText', false, textToInsert);
-                            return true;
-                        }
+                // Fallback: Dynamically inject the content script if it's missing (e.g. after extension reload)
+                try {
+                    await chrome.scripting.executeScript({
+                        target: { tabId: tab.id },
+                        files: ['content_script.js']
+                    });
+
+                    // Small delay to allow script to initialize focus tracking
+                    await new Promise(r => setTimeout(r, 100));
+
+                    const retryResponse = await sendMessageToTab(tab.id, {
+                        action: "SCRIBEFLOW_INJECT",
+                        text: text
+                    });
+
+                    if (retryResponse && retryResponse.status === true) {
+                        console.log("ScribeFlow: Text injected successfully after dynamic injection.");
+                        return true;
                     }
-                    console.warn("ScribeFlow: No suitable active element found to inject text.");
-                    return false;
-                },
-                args: [text]
-            });
+                } catch (injectErr) {
+                    console.error("ScribeFlow: Failed to dynamically inject content script:", injectErr);
+                }
+            }
 
-            console.log("ScribeFlow: Text injected successfully.");
-            return true;
+            return false;
 
         } catch (e) {
             console.error("ScribeFlow Injection Error:", e);
+            // This usually happens if the content script isn't loaded on the active tab
             return false;
         }
     }

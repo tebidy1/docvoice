@@ -3,18 +3,35 @@ import '../../core/theme.dart';
 import '../../models/note_model.dart';
 import '../../core/utils/date_helper.dart';
 
+import 'package:flutter/foundation.dart';
+import 'dart:io' show Platform;
+import 'package:window_manager/window_manager.dart';
+
 class ArchiveScreen extends StatelessWidget {
   final List<NoteModel> archivedNotes;
   final VoidCallback onClearAll;
 
   const ArchiveScreen({super.key, required this.archivedNotes, required this.onClearAll});
 
+  void _startDragging() {
+    if (!kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
+      windowManager.startDragging();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
-        title: const Text("Archived Messages", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: GestureDetector(
+          onPanStart: (details) => _startDragging(),
+          child: Container(
+            color: Colors.transparent, // Ensure hit testing
+            width: double.infinity,
+            child: const Text("Archived Messages", style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ),
         backgroundColor: AppTheme.background,
         leading: const BackButton(color: Colors.white),
         actions: [

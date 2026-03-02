@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
 import '../../mobile_app/services/websocket_service.dart' as unified_ws;
 import 'package:provider/provider.dart';
@@ -24,7 +23,6 @@ class _ExtensionLoginScreenState extends State<ExtensionLoginScreen> {
   bool _isLoading = true;
   String? _errorMessage;
   final ApiService _apiService = ApiService();
-  final AuthService _authService = AuthService();
   StreamSubscription? _wsSubscription;
   Timer? _refreshTimer;
 
@@ -177,9 +175,9 @@ class _ExtensionLoginScreenState extends State<ExtensionLoginScreen> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
+                    color: Colors.blue.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                    border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
                   ),
                   child: Column(
                     children: [
@@ -212,7 +210,7 @@ class _ExtensionLoginScreenState extends State<ExtensionLoginScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.1),
+                      color: Colors.red.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Column(
@@ -242,7 +240,7 @@ class _ExtensionLoginScreenState extends State<ExtensionLoginScreen> {
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.blue.withOpacity(0.3),
+                          color: Colors.blue.withValues(alpha: 0.3),
                           blurRadius: 20,
                           spreadRadius: 2,
                         ),

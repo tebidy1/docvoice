@@ -9,7 +9,10 @@ import '../utils/window_manager_helper.dart';
 import '../screens/settings_dialog.dart';
 import 'inbox_card.dart';
 import 'macro_manager_dialog.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../../mobile_app/features/inbox/archive_screen.dart';
 import '../../widgets/animated_record_button.dart';
 import '../../widgets/listening_mode_view.dart';
 
@@ -36,7 +39,6 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
   final _inboxService = InboxService();
   final _macroService = MacroService();
   List<Macro> _quickMacros = [];
-  int _selectedTab = 0;
 
   // ── Local recording state (drives UI updates) ──
   bool _localIsRecording = false;
@@ -67,12 +69,8 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
 
   Future<void> _loadMacros() async {
     await _macroService.init();
-    var macros = await _macroService.getMostUsed(limit: 10);
-    if (macros.isEmpty) {
-      final all = await _macroService.getAllMacros();
-      macros = all.take(10).toList();
-    }
-    if (mounted) setState(() => _quickMacros = macros);
+    final all = await _macroService.getAllMacros();
+    if (mounted) setState(() => _quickMacros = all);
   }
 
   @override
@@ -130,6 +128,23 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
     );
   }
 
+  void _openArchive() async {
+    final archivedNotes = await _inboxService.getArchivedNotes();
+    if (!mounted) return;
+    await WindowManagerHelper.centerDialog();
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ArchiveScreen(
+          archivedNotes: archivedNotes,
+          onClearAll: () {},
+        ),
+      ),
+    );
+    if (!mounted) return;
+    await WindowManagerHelper.expandToSidebar(context);
+  }
+
   // ──────────────────────────────────────────────
   // HEADER
   // ──────────────────────────────────────────────
@@ -141,47 +156,81 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
         borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
       ),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            child: Icon(
-              _localIsRecording ? Icons.graphic_eq : Icons.inbox_outlined,
-              color: _localIsRecording
-                  ? const Color(0xFF00A6FB)
-                  : colorScheme.primary,
-              size: 22,
-              key: ValueKey(_localIsRecording),
+          Expanded(
+            child: Directionality(
+              textDirection: TextDirection.ltr,
+              child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: colorScheme.onSurface.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: SvgPicture.asset(
+                    'assets/images/logo_icon.svg',
+                    height: 28,
+                    width: 28,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    RichText(
+                      text: TextSpan(
+                        children: [
+                          TextSpan(
+                            text: 'Sout',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: colorScheme.onSurface,
+                            ),
+                          ),
+                          TextSpan(
+                            text: 'Note',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: colorScheme.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    RichText(
+                      text: TextSpan(
+                        style: GoogleFonts.tajawal(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          color: colorScheme.onSurface.withValues(alpha: 0.9),
+                          height: 1.0,
+                        ),
+                        children: [
+                          const TextSpan(text: 'صوت '),
+                          TextSpan(
+                            text: 'ن',
+                            style: TextStyle(color: colorScheme.primary),
+                          ),
+                          const TextSpan(text: 'وت'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              child: _localIsRecording
-                  ? Text(
-                      "Recording...",
-                      key: ValueKey("recording"),
-                      style: const TextStyle(
-                        color: Color(0xFF00A6FB),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: 0.3,
-                      ),
-                    )
-                  : Container(
-                      key: const ValueKey('tabs'),
-                      height: 34,
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.25),
-                        borderRadius: BorderRadius.circular(17),
-                        border: Border.all(color: Colors.grey[700]!),
-                      ),
-                      child: Row(children: [
-                        _buildTab(0, 'Notes', colorScheme),
-                        _buildTab(1, 'Archive', colorScheme),
-                      ]),
-                    ),
-            ),
+          ),
+          IconButton(
+            icon: Icon(Icons.inventory_2_outlined, color: colorScheme.onSurface.withValues(alpha: 0.7)),
+            tooltip: 'View Archive',
+            onPressed: _openArchive,
           ),
           IconButton(
             icon: Icon(Icons.close, color: Colors.grey[500], size: 20),
@@ -218,9 +267,7 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
   Widget _buildNotesList(ColorScheme colorScheme, {Key? key}) {
     return StreamBuilder<List<NoteModel>>(
       key: key,
-      stream: _selectedTab == 0
-          ? _inboxService.watchPendingNotes()
-          : _inboxService.watchArchivedNotes(),
+      stream: _inboxService.watchPendingNotes(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return Center(
@@ -248,9 +295,7 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  _selectedTab == 0
-                      ? 'Tap the mic to start recording'
-                      : 'No archived notes yet',
+                  'Tap the mic to start recording',
                   style: TextStyle(color: Colors.grey[600], fontSize: 13),
                 ),
               ],
@@ -278,12 +323,24 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
           groupedNotes.putIfAbsent(key, () => []).add(note);
         }
 
+        // Compute total for reversed numbering (oldest = NO-1)
+        final totalNotes = notes.length;
+        int runningOffset = 0;
+
         return ListView.builder(
           padding: const EdgeInsets.symmetric(vertical: 10),
           itemCount: groupedNotes.length,
           itemBuilder: (context, index) {
             final dateKey = groupedNotes.keys.elementAt(index);
             final groupNotes = groupedNotes[dateKey]!;
+            
+            // Calculate the starting offset for this group
+            // Groups are newest-first, so we need to count notes AFTER this group
+            int notesAfterThisGroup = 0;
+            for (int i = index + 1; i < groupedNotes.length; i++) {
+              notesAfterThisGroup += groupedNotes.values.elementAt(i).length;
+            }
+            
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -300,11 +357,17 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
                     ),
                   ),
                 ),
-                ...groupNotes.map((note) => InboxCard(
-                      note: note,
-                      quickMacros: _quickMacros,
-                      onArchived: () {},
-                    )),
+                ...groupNotes.asMap().entries.map((entry) {
+                  // Within each group, newest note is first (index 0)
+                  // noteNumber = notesAfterThisGroup + (groupSize - entryIndex)
+                  final noteNumber = notesAfterThisGroup + (groupNotes.length - entry.key);
+                  return InboxCard(
+                    note: entry.value,
+                    noteNumber: noteNumber,
+                    quickMacros: _quickMacros,
+                    onArchived: () {},
+                  );
+                }),
               ],
             );
           },
@@ -320,11 +383,11 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
     return Container(
       height: 72,
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
+        color: theme.colorScheme.surface,
         borderRadius:
             const BorderRadius.vertical(bottom: Radius.circular(16)),
         border: Border(
-          top: BorderSide(color: Colors.grey[800]!, width: 0.5),
+          top: BorderSide(color: theme.colorScheme.onSurface.withValues(alpha: 0.1), width: 0.5),
         ),
       ),
       child: Stack(
@@ -397,6 +460,7 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
     required String label,
     required VoidCallback onTap,
   }) {
+    final theme = Theme.of(context);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -405,12 +469,12 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: Colors.grey[500], size: 22),
+            Icon(icon, color: theme.colorScheme.onSurface.withValues(alpha: 0.7), size: 22),
             const SizedBox(height: 4),
             Text(
               label,
               style: TextStyle(
-                color: Colors.grey[600],
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                 fontSize: 10,
                 fontWeight: FontWeight.w500,
               ),
@@ -421,35 +485,4 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
     );
   }
 
-  Widget _buildTab(int index, String label, ColorScheme colorScheme) {
-    final isSelected = _selectedTab == index;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          if (mounted) {
-            setState(() => _selectedTab = index);
-          }
-        },
-        child: Container(
-          decoration: BoxDecoration(
-            color: isSelected
-                ? colorScheme.primary.withValues(alpha: 0.2)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(17),
-          ),
-          alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(vertical: 7),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: isSelected ? colorScheme.primary : Colors.grey[500],
-              fontSize: 13,
-              fontWeight:
-                  isSelected ? FontWeight.w600 : FontWeight.normal,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }

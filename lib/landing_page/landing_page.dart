@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'components/pwa_install_banner.dart';
 import 'components/sticky_navbar.dart';
+import 'components/mobile_app_button.dart';
 import 'sections/cinematic_slider_section.dart';
 import 'sections/final_cta_section.dart';
 import 'sections/footer_section.dart';
@@ -19,7 +20,7 @@ class LandingPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'MedNote AI',
+      title: 'SoutNote AI',
       debugShowCheckedModeBanner: false,
       theme: MedTheme.darkTheme,
 
@@ -115,8 +116,8 @@ class _LandingHomeScaffoldState extends State<LandingHomeScaffold> {
             child: StickyNavbar(scrollController: _scrollController),
           ),
 
-          // PWA Install Banner
-          const PwaInstallBanner(),
+          // Mobile Quick Access Button
+          MobileAppButton(onTap: _navigateToLogin),
         ],
       ),
     );
