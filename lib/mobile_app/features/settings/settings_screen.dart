@@ -7,6 +7,8 @@ import '../../../services/auth_service.dart';
 import '../../core/theme.dart';
 import '../../services/macro_service.dart';
 import '../../services/websocket_service.dart';
+import '../../../models/app_theme.dart' as global_theme;
+import '../../../services/theme_service.dart';
 import '../auth/qr_scanner_screen.dart';
 import 'company_settings_screen.dart';
 import 'macro_manager_screen.dart';
@@ -53,24 +55,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _handleLogout() async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text("Log Out?", style: TextStyle(color: Colors.white)),
-        content: const Text(
-          "Are you sure you want to log out?",
-          style: TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("Cancel"),
+      builder: (context) {
+        final colorScheme = Theme.of(context).colorScheme;
+        return AlertDialog(
+          backgroundColor: colorScheme.surface,
+          title: Text("Log Out?", style: TextStyle(color: colorScheme.onSurface)),
+          content: Text(
+            "Are you sure you want to log out?",
+            style: TextStyle(color: colorScheme.onSurface.withOpacity(0.7)),
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text("Log Out", style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text("Cancel"),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text("Log Out", style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        );
+      },
     );
 
     if (confirmed != true) return;
@@ -322,6 +327,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ],
                     ),
             ),
+            const SizedBox(height: 24),
+
+            _buildSectionHeader(context, "Appearance"),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: ValueListenableBuilder<global_theme.AppTheme>(
+                  valueListenable: ThemeService(),
+                  builder: (context, currentTheme, child) {
+                    return Column(
+                      children: [
+                        RadioListTile<String>(
+                          title: const Text("Native Light"),
+                          value: global_theme.AppTheme.lightNative.id,
+                          groupValue: currentTheme.id,
+                          activeColor: AppTheme.accent,
+                          onChanged: (val) {
+                            if (val != null) ThemeService().setTheme(global_theme.AppTheme.lightNative);
+                          },
+                        ),
+                        RadioListTile<String>(
+                          title: const Text("Slate Dark"),
+                          value: global_theme.AppTheme.slateDark.id,
+                          groupValue: currentTheme.id,
+                          activeColor: AppTheme.accent,
+                          onChanged: (val) {
+                            if (val != null) ThemeService().setTheme(global_theme.AppTheme.slateDark);
+                          },
+                        ),
+                        RadioListTile<String>(
+                          title: const Text("Dark Onyx"),
+                          value: global_theme.AppTheme.darkOnyx.id,
+                          groupValue: currentTheme.id,
+                          activeColor: AppTheme.accent,
+                          onChanged: (val) {
+                            if (val != null) ThemeService().setTheme(global_theme.AppTheme.darkOnyx);
+                          },
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ),
+
             const SizedBox(height: 24),
 
             _buildSectionHeader(context, "Server Configuration"),

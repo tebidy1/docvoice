@@ -59,11 +59,19 @@ class AudioRecorderService {
   }
 
   Future<void> stopRecording() async {
+    // ⚠️  Order matters!
+    // 1. Stop the hardware recorder FIRST so it flushes any buffered PCM data
+    //    into the stream before we close it.
+    await _audioRecorder.stop();
+
+    // 2. Cancel the subscription (no more incoming chunks).
     await _recordSubscription?.cancel();
     _recordSubscription = null;
+
+    // 3. Now it is safe to close the StreamController – Oracle/Whisper has
+    //    already received everything.
     await _audioStreamController?.close();
     _audioStreamController = null;
-    await _audioRecorder.stop();
   }
 
   Future<void> startRecordingToFile(String path) async {

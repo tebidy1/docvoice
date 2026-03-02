@@ -45,8 +45,7 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
 
   Future<void> _resizeWindow(bool expanded) async {
     if (expanded) {
-      await windowManager.setSize(const Size(900, 650));
-      await windowManager.center();
+      await WindowManagerHelper.expandToCustomSizeBottomRight(900, 650);
     } else {
       await windowManager.setSize(const Size(300, 60));
     }
@@ -727,13 +726,14 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
                 icon: Icon(Icons.copy_outlined, color: Colors.grey[500], size: 20),
                 onPressed: () async {
                   await Clipboard.setData(ClipboardData(text: macro.content));
-                  Navigator.of(context).pop();
-                  await Future.delayed(const Duration(milliseconds: 200));
-                  await windowManager.hide();
-                  await Future.delayed(const Duration(milliseconds: 100));
+                  // Ensure screen stays open (do not hide/pop)
                   final keyboard = KeyboardService();
                   await keyboard.pasteText(macro.content);
-                  await windowManager.show();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Copied & Injected!"), backgroundColor: Colors.green),
+                    );
+                  }
                 },
                 tooltip: 'Use',
               ),

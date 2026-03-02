@@ -142,6 +142,17 @@ class MacroService {
         }
         // --- END AUTO-MIGRATION LOGIC ---
         
+        // Auto-add Free Note to cloud if missing for existing users
+        if (!macros.any((m) => m.trigger == '✨ Free Note')) {
+           debugPrint("MacroService: '✨ Free Note' missing in Cloud. Auto-adding...");
+           try {
+             final freeNote = _defaultMacros().firstWhere((m) => m.trigger == '✨ Free Note');
+             await addMacro(freeNote);
+             macros.add(freeNote);
+           } catch (e) {
+             debugPrint("Failed to add Free Note to Cloud: $e");
+           }
+        }
         // Cache for offline use
         await _cacheLocally(macros);
         await _updateLastSync();
@@ -330,6 +341,15 @@ class MacroService {
         await _cacheLocally(defaults);
         return defaults;
       }
+
+      // Auto-upgrade: make sure the Free Note exists for users who already have the new defaults
+      if (!macros.any((m) => m.trigger == '✨ Free Note')) {
+        debugPrint("MacroService: '✨ Free Note' missing in cache. Auto-upgrading...");
+        final defaults = _defaultMacros();
+        final freeNoteMacro = defaults.firstWhere((m) => m.trigger == '✨ Free Note');
+        macros.add(freeNoteMacro);
+        await _cacheLocally(macros);
+      }
       
       return macros;
     } catch (e) {
@@ -392,6 +412,14 @@ class MacroService {
         category: 'Admin',
         isFavorite: false,
         content: AIPromptConstants.templateSickLeave,
+        isAiMacro: true,
+      ),
+      MacroModel(
+        id: '6',
+        trigger: '✨ Free Note',
+        category: 'General',
+        isFavorite: false,
+        content: AIPromptConstants.templateFreeNote,
         isAiMacro: true,
       ),
     ];

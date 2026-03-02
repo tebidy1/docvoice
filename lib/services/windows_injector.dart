@@ -23,9 +23,7 @@ class WindowsInjector {
   /// Level 2: Smart Paste (Ctrl+V)
   /// Focuses the previous window and sends Ctrl+V
   Future<void> injectViaPaste(String text) async {
-    // 1. Minimize our app to reveal the EMR/Target Window behind
-    await windowManager.minimize();
-    
+    // 1. DO NOT Minimize our app anymore (UX request)
     // 2. Copy to Clipboard
     await copyToClipboard(text);
 
@@ -34,6 +32,32 @@ class WindowsInjector {
 
     // 4. Send Ctrl+V
     _sendCtrlV();
+  }
+
+  /// Smart Inject: Handles alwaysOnTop toggle + blur + Ctrl+V
+  /// This reliably injects text into the PREVIOUSLY focused window (EMR)
+  /// without minimizing our app.
+  Future<void> smartInject(String text) async {
+    // 1. Copy clean text to clipboard
+    await copyToClipboard(text);
+
+    // 2. Temporarily disable alwaysOnTop so blur() actually works
+    await windowManager.setAlwaysOnTop(false);
+
+    // 3. Blur our window — OS gives focus back to last active window (EMR)
+    await windowManager.blur();
+
+    // 4. Wait for focus switch to complete
+    await Future.delayed(const Duration(milliseconds: 400));
+
+    // 5. Send Ctrl+V into the now-focused EMR window
+    _sendCtrlV();
+
+    // 6. Wait for paste to complete
+    await Future.delayed(const Duration(milliseconds: 300));
+
+    // 7. Restore alwaysOnTop so our app stays visible
+    await windowManager.setAlwaysOnTop(true);
   }
 
   /// Level 3: Typewriter (Simulate Keystrokes)

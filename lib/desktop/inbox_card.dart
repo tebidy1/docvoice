@@ -1,266 +1,231 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:window_manager/window_manager.dart';
 import '../models/inbox_note.dart';
 import '../models/macro.dart';
 import '../services/windows_injector.dart'; // Desktop Injector
 import '../services/inbox_service.dart';
 import 'inbox_note_detail_view.dart';
+import '../mobile_app/core/theme.dart'; // Import AppTheme
+import '../core/ai/text_processing_service.dart';
 
 class InboxCard extends StatelessWidget {
   final NoteModel note;
   final VoidCallback onArchived;
   final List<Macro> quickMacros;
+  final int noteNumber; // 1-based, oldest = 1
 
   const InboxCard({
     super.key,
     required this.note,
     required this.onArchived,
     this.quickMacros = const [],
+    this.noteNumber = 1,
   });
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bool isDraft = note.formattedText.isEmpty;
+    
+    // Find applied template name
+    // Primary: stored in note.title / patientName during processing
+    // Secondary: stored in note.summary during auto-save
+    // Fallback: lookup by macroId in quickMacros
+    String? templateName = note.title;
+    if (templateName.isEmpty || ['Draft Note', 'Unknown Patient', 'Untitled'].contains(templateName)) {
+      templateName = note.summary;
+    }
+
+    if ((templateName == null || templateName.isEmpty) && quickMacros.isNotEmpty) {
+      final macroId = note.appliedMacroId ?? note.suggestedMacroId;
+      if (macroId != null) {
+        final macro = quickMacros.where((m) => m.id == macroId).firstOrNull;
+        templateName = macro?.trigger;
+      }
+    }
+    
+    // Badge label: template name if valid, else "Draft"
+    final String badgeLabel;
+    if (note.status == NoteStatus.ready) {
+      badgeLabel = 'Ready';
+    } else if (note.status == NoteStatus.copied) {
+      badgeLabel = 'Copied';
+    } else if (templateName != null && templateName.isNotEmpty && !['Draft Note', 'Unknown Patient', 'Untitled'].contains(templateName)) {
+      // Show template name instead of "Processed"
+      badgeLabel = templateName;
+    } else {
+      badgeLabel = 'Draft';
+    }
+    
     // Determine status icon/color
     Color statusColor;
     IconData statusIcon;
+    String statusText;
 
     switch (note.status) {
       case NoteStatus.ready:
-        statusColor = Colors.greenAccent;
+        statusColor = AppTheme.success;
         statusIcon = Icons.check_circle;
+        statusText = "Ready";
         break;
       case NoteStatus.copied:
-        statusColor = Colors.blueAccent;
-        statusIcon = Icons.copy_all;
+        statusColor = Colors.blue;
+        statusIcon = Icons.copy_all; 
+        statusText = "Copied";
         break;
       case NoteStatus.processed:
       case NoteStatus.draft:
       default:
-        statusColor = Colors.grey;
+        statusColor = isDraft ? Colors.orange : AppTheme.draft;
         statusIcon = Icons.edit_note;
+        statusText = "Draft";
         break;
     }
 
-    return Container(
+    return Card(
       margin: const EdgeInsets.only(bottom: 12, left: 16, right: 16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF252525),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.05),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          // Main Card Content (Clickable)
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(12)),
-              onTap: () => _openDetailView(context),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Status Icon (Double Check)
-                    Icon(
-                      statusIcon,
-                      size: 18,
-                      color: statusColor,
-                    ),
-                    const SizedBox(width: 12),
-
-                    // Content
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+      color: theme.colorScheme.surface,
+      elevation: isDraft ? 2 : 4,
+      shadowColor: theme.brightness == Brightness.dark ? Colors.black45 : Colors.black12,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _openDetailView(context),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Left accent bar
+              Container(
+                width: 4,
+                color: statusColor,
+              ),
+              // Card content
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
                         children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  (note.patientName.isNotEmpty &&
-                                          !["Unknown Patient", "Untitled"]
-                                              .contains(note.patientName))
-                                      ? note.patientName
-                                      : (note.content.isNotEmpty
-                                          ? note.content
-                                              .replaceAll('\n', ' ')
-                                              .trim()
-                                          : "No Content"),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 15,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                _formatTime(note.createdAt),
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.4),
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
+                           CircleAvatar(
+                            radius: 16,
+                            backgroundColor: statusColor.withValues(alpha: 0.2),
+                            child: Icon(statusIcon, color: statusColor, size: 18),
                           ),
-                          const SizedBox(height: 4),
-                          // Subtitle / Summary
-                          Text(
-                            (note.patientName.isNotEmpty &&
-                                    !["Unknown Patient", "Untitled"]
-                                        .contains(note.patientName))
-                                ? (note.summary ?? note.content.replaceAll('\n', ' ').trim())
-                                : "Audio Note", // If title is content, make subtitle generic or summary
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.6),
-                              fontSize: 13,
-                              height: 1.4,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _getNoteTitle(),
+                              style: TextStyle(
+                                fontWeight: isDraft ? FontWeight.w500 : FontWeight.w600,
+                                color: isDraft
+                                    ? theme.colorScheme.onSurface.withValues(alpha: 0.5)
+                                    : theme.colorScheme.onSurface,
+                                fontSize: 16,
+                                fontStyle: isDraft ? FontStyle.italic : FontStyle.normal,
+                              ),
                             ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
+                          ),
+                          // Inject button — disabled for drafts
+                          IconButton(
+                            icon: Icon(
+                              Icons.subdirectory_arrow_left,
+                              color: isDraft
+                                  ? theme.colorScheme.onSurface.withValues(alpha: 0.2)
+                                  : theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                              size: 20,
+                            ),
+                            tooltip: isDraft ? 'Select a template first' : 'Smart Copy & Inject',
+                            onPressed: isDraft ? null : () => _injectNote(context),
+                          )
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        (note.patientName.isNotEmpty &&
+                                !['Unknown Patient', 'Untitled', 'Draft Note'].contains(note.patientName))
+                            ? (note.formattedText.isNotEmpty
+                                ? note.formattedText.replaceAll('\n', ' ').trim()
+                                : (note.summary ?? note.content.replaceAll('\n', ' ').trim()))
+                            : (note.formattedText.isNotEmpty
+                                ? note.formattedText.replaceAll('\n', ' ').trim()
+                                : note.content.replaceAll('\n', ' ').trim()),
+                        maxLines: 2, overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: isDraft
+                              ? theme.colorScheme.onSurface.withValues(alpha: 0.4)
+                              : theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Icon(Icons.access_time, size: 12, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+                          const SizedBox(width: 4),
+                          Text(
+                            _formatTime(note.createdAt),
+                            style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.5), fontSize: 12),
+                          ),
+                          const Spacer(),
+                          // Status badge pill
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: statusColor.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              badgeLabel,
+                              style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
                           ),
                         ],
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
-
-          // Action Bar (Inject + Macros)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.02),
-              borderRadius:
-                  const BorderRadius.vertical(bottom: Radius.circular(12)),
-              border: Border(
-                  top: BorderSide(color: Colors.white.withOpacity(0.05))),
-            ),
-            child: Row(
-              children: [
-                // Inject Button (Primary Action)
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () => _injectNote(context),
-                    borderRadius: BorderRadius.circular(4),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                          color: Colors.blueAccent.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(
-                              color: Colors.blueAccent.withOpacity(0.3))),
-                      child: Row(
-                        children: [
-                          Icon(Icons.input,
-                              size: 14, color: Colors.blueAccent.shade100),
-                          const SizedBox(width: 6),
-                          Text("INJECT",
-                              style: TextStyle(
-                                  color: Colors.blueAccent.shade100,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(width: 12),
-
-                // Quick Macros (if any)
-                if (quickMacros.isNotEmpty) ...[
-                  Container(
-                      width: 1,
-                      height: 20,
-                      color: Colors.white.withOpacity(0.1)),
-                  const SizedBox(width: 12),
-                  const Icon(Icons.flash_on, size: 14, color: Colors.amber),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      physics: const BouncingScrollPhysics(),
-                      child: Row(
-                        children: quickMacros.map((macro) {
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: InkWell(
-                              onTap: () => _openDetailView(context,
-                                  autoStartMacro: macro),
-                              borderRadius: BorderRadius.circular(20),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 5),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(12),
-                                  color: Colors.white.withOpacity(0.05),
-                                ),
-                                child: Text(
-                                  macro.trigger,
-                                  style: TextStyle(
-                                    color: Colors.white.withOpacity(0.9),
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
+  String _getNoteTitle() {
+    return 'NO-$noteNumber';
+  }
   Future<void> _injectNote(BuildContext context) async {
-    // 1. Feedback
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-      content: Text("Injecting to EMR... (Focus target window now!)",
-          style: TextStyle(color: Colors.white)),
-      backgroundColor: Colors.blueAccent,
-      duration: Duration(seconds: 2),
-    ));
-
-    // 2. Inject
-    // Wait small bit for user to theoretically focus, though usually they focus first then click inject?
-    // Actually for desktop app -> EMR, the flow is:
-    // User clicks "Inject" on our app -> We minimize -> User clicks EMR text field?
-    // OR: User clicks "Inject" -> We copy to clipboard -> User pastes.
-    // The "Smart Paste" in WindowsInjector does: Copy -> Wait -> Send Ctrl+V.
-    // So user should have EMR open in background.
-
-    // Let's minimize our app first to reveal EMR?
-    // Or just assume user will Alt+Tab?
-    // For now, simple injection.
-
-    await WindowsInjector().injectViaPaste(note.rawText);
+    final availableText = note.formattedText.isNotEmpty ? note.formattedText : note.rawText;
+    final textToInject = TextProcessingService.applySmartCopy(availableText);
     
-    // 3. Mark as Copied
+    if (textToInject.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("No content to inject. Select a template first."),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 2),
+        ));
+      }
+      return;
+    }
+    
+    // Use smartInject: handles alwaysOnTop toggle + blur + Ctrl+V
+    await WindowsInjector().smartInject(textToInject);
+    
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text("✅ Injected into EMR",
+            style: TextStyle(color: Colors.white)),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 2),
+      ));
+    }
+    
+    // Mark as Copied
     try {
       await InboxService().updateStatus(note.id, NoteStatus.copied);
     } catch (e) {
@@ -275,6 +240,7 @@ class InboxCard extends StatelessWidget {
       barrierDismissible: true,
       builder: (context) => InboxNoteDetailView(
         note: note,
+        noteNumber: noteNumber,
         autoStartMacro: autoStartMacro,
       ),
     );

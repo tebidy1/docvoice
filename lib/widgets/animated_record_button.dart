@@ -53,6 +53,14 @@ class _AnimatedRecordButtonState extends State<AnimatedRecordButton> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    // Idle styling: background from theme surface, border from theme outline
+    final idleBg = colorScheme.surface;
+    final idleBorder = colorScheme.outline;
+    // Recording: always red (semantic color, not theme-dependent)
+    const recordingBg = Color(0xFFE53935);
+    const recordingBorder = Color(0xFFEF5350);
+
     return GestureDetector(
       onTap: _localIsProcessing
           ? null
@@ -90,39 +98,35 @@ class _AnimatedRecordButtonState extends State<AnimatedRecordButton> {
         height: 60,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: _localIsRecording
-              ? const Color(0xFFE53935)
-              : const Color(0xFF303030),
+          color: _localIsRecording ? recordingBg : idleBg,
           border: Border.all(
-            color: _localIsRecording
-                ? const Color(0xFFEF5350)
-                : Colors.grey[700]!,
+            color: _localIsRecording ? recordingBorder : idleBorder,
             width: 2.5,
           ),
           boxShadow: [
             if (_localIsRecording)
               BoxShadow(
-                color: const Color(0xFFE53935).withValues(alpha: 0.5),
+                color: recordingBg.withValues(alpha: 0.5),
                 blurRadius: 16,
                 spreadRadius: 2,
               )
             else
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.4),
+                color: Colors.black.withValues(alpha: 0.2),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
           ],
         ),
         child: _localIsProcessing
-            ? const Padding(
-                padding: EdgeInsets.all(16),
+            ? Padding(
+                padding: const EdgeInsets.all(16),
                 child: CircularProgressIndicator(
-                    strokeWidth: 2.5, color: Colors.white),
+                    strokeWidth: 2.5, color: colorScheme.primary),
               )
             : Icon(
                 _localIsRecording ? Icons.stop_rounded : Icons.mic_none_rounded,
-                color: Colors.white,
+                color: _localIsRecording ? Colors.white : colorScheme.onSurface,
                 size: 28,
               ),
       ),

@@ -14,6 +14,7 @@ import 'landing_page/landing_page.dart';
 import 'landing_page/theme/app_theme.dart';
 import 'mobile_app/features/auth/login_screen.dart' as unified_login;
 import 'mobile_app/features/home/home_screen.dart' as unified_mobile;
+import 'mobile_app/features/splash/splash_screen.dart' as unified_splash;
 import 'mobile_app/services/websocket_service.dart' as unified_ws;
 import 'models/app_theme.dart';
 import 'screens/admin_dashboard_screen.dart'
@@ -117,13 +118,28 @@ class _ScribeFlowAppState extends State<ScribeFlowApp> {
                 currentTheme.isDark ? Brightness.dark : Brightness.light,
             scaffoldBackgroundColor: currentTheme.backgroundColor,
             fontFamily: 'Inter',
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: currentTheme.micIdleIcon,
+            colorScheme: ColorScheme(
               brightness:
                   currentTheme.isDark ? Brightness.dark : Brightness.light,
+              // Primary — used for active icons, header text accents
+              primary: currentTheme.micIdleIcon,
+              onPrimary: Colors.white,
+              primaryContainer: currentTheme.micIdleBackground,
+              onPrimaryContainer: currentTheme.iconColor,
+              // Secondary
+              secondary: currentTheme.micIdleIcon,
+              onSecondary: Colors.white,
+              secondaryContainer: currentTheme.hoverColor,
+              onSecondaryContainer: currentTheme.iconColor,
+              // Surface — used for Cards, BottomAppBar, FAB
               surface: currentTheme.micIdleBackground,
               onSurface: currentTheme.iconColor,
-              primary: currentTheme.micIdleIcon,
+              // Error
+              error: currentTheme.micRecordingBackground,
+              onError: Colors.white,
+              // Outline — used for card borders, text field borders, FAB border
+              outline: currentTheme.borderColor,
+              outlineVariant: currentTheme.dividerColor,
             ),
             elevatedButtonTheme: ElevatedButtonThemeData(
               style: ElevatedButton.styleFrom(
@@ -137,6 +153,20 @@ class _ScribeFlowAppState extends State<ScribeFlowApp> {
                     const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
               ),
             ),
+            cardTheme: CardThemeData(
+              color: currentTheme.micIdleBackground,
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: currentTheme.borderColor.withValues(alpha: 0.4)),
+              ),
+            ),
+            iconTheme: IconThemeData(
+              color: currentTheme.iconColor,
+            ),
+            dividerTheme: DividerThemeData(
+              color: currentTheme.dividerColor,
+            ),
             inputDecorationTheme: InputDecorationTheme(
               filled: true,
               fillColor: currentTheme.isDark
@@ -148,38 +178,15 @@ class _ScribeFlowAppState extends State<ScribeFlowApp> {
               ),
               contentPadding: const EdgeInsets.all(16),
               hintStyle:
-                  TextStyle(color: currentTheme.iconColor.withOpacity(0.5)),
+                  TextStyle(color: currentTheme.iconColor.withValues(alpha: 0.5)),
             ),
             useMaterial3: true,
           ),
           onGenerateRoute: (settings) {
-            // Root route - check authentication
+            // Root route - always start with the Splash Screen
             if (settings.name == '/' || settings.name == null) {
               return MaterialPageRoute(
-                builder: (context) => FutureBuilder<bool>(
-                  future: _authService.isAuthenticated(),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Scaffold(
-                          body: Center(child: CircularProgressIndicator()));
-                    }
-                    final isAuth = snapshot.data ?? false;
-                    if (isAuth) {
-                      return AuthGuard(
-                        child: isDesktop
-                            ? const DesktopApp()
-                            : const unified_mobile.HomeScreen(),
-                      );
-                    }
-                    return Theme(
-                      data: MedTheme.darkTheme,
-                      child: const Directionality(
-                        textDirection: TextDirection.rtl,
-                        child: LandingHomeScaffold(),
-                      ),
-                    );
-                  },
-                ),
+                builder: (_) => const unified_splash.SplashScreen(),
               );
             }
 

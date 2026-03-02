@@ -13,7 +13,7 @@ if (Test-Path "build/web") {
 # We use --web-renderer html for max compatibility
 # We use --csp because extensions require Content Security Policy compliance
 Write-Host "Compiling Flutter (Target: main_extension.dart)..." -ForegroundColor Yellow
-flutter build web -t lib/main_extension.dart --web-renderer html --csp --no-tree-shake-icons --pwa-strategy=none
+flutter build web -t lib/main_extension.dart --csp --no-tree-shake-icons --pwa-strategy=none
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Build Failed!" -ForegroundColor Red
@@ -35,8 +35,17 @@ Copy-Item "$extDir/manifest.json" "$buildDir/manifest.json" -Force
 # Add background.js (Service Worker)
 Copy-Item "$extDir/background.js" "$buildDir/background.js" -Force
 
-# Add extension_loader_v2.js
+# Add extension JS files needed for injection
 Copy-Item "$extDir/extension_loader_v2.js" "$buildDir/extension_loader_v2.js" -Force
+Copy-Item "$extDir/extension_interop.js" "$buildDir/extension_interop.js" -Force
+
+# Add content_script.js (If it's in web/ and not web_extension/, we fetch it from web/)
+if (Test-Path "web/content_script.js") {
+    Copy-Item "web/content_script.js" "$buildDir/content_script.js" -Force
+}
+elseif (Test-Path "$extDir/content_script.js") {
+    Copy-Item "$extDir/content_script.js" "$buildDir/content_script.js" -Force
+}
 
 # Add icons if missing (Flutter usually copies what's in web/icons, but extension might need generic ones)
 if (Test-Path "$extDir/icons") {

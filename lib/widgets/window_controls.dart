@@ -41,7 +41,7 @@ class _WindowControlsState extends State<WindowControls> {
 
   @override
   Widget build(BuildContext context) {
-    final bgColor = widget.backgroundColor ?? const Color(0xFF1E293B).withOpacity(0.8);
+    final bgColor = widget.backgroundColor ?? const Color(0xFF1E293B).withValues(alpha: 0.8);
     final iconColor = widget.iconColor ?? Colors.grey[400]!;
     final height = widget.height ?? 32.0;
 
@@ -51,7 +51,7 @@ class _WindowControlsState extends State<WindowControls> {
         color: bgColor,
         border: Border(
           bottom: BorderSide(
-            color: Colors.white.withOpacity(0.1),
+            color: Colors.white.withValues(alpha: 0.1),
             width: 1,
           ),
         ),
@@ -71,7 +71,7 @@ class _WindowControlsState extends State<WindowControls> {
                 width: 46,
                 height: height,
                 color: _isMinimizeHovered
-                    ? Colors.white.withOpacity(0.1)
+                    ? Colors.white.withValues(alpha: 0.1)
                     : Colors.transparent,
                 child: Icon(
                   Icons.remove,
@@ -93,7 +93,7 @@ class _WindowControlsState extends State<WindowControls> {
                 width: 46,
                 height: height,
                 color: _isMaximizeHovered
-                    ? Colors.white.withOpacity(0.1)
+                    ? Colors.white.withValues(alpha: 0.1)
                     : Colors.transparent,
                 child: FutureBuilder<bool>(
                   future: windowManager.isMaximized(),
@@ -121,7 +121,7 @@ class _WindowControlsState extends State<WindowControls> {
                 width: 46,
                 height: height,
                 color: _isCloseHovered
-                    ? Colors.red.withOpacity(0.2)
+                    ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
                     : Colors.transparent,
                 child: Icon(
                   Icons.close,

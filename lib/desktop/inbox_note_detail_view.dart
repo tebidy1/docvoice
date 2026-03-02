@@ -18,14 +18,16 @@ import '../widgets/pattern_highlight_controller.dart';
 import '../core/ai/ai_regex_patterns.dart';
 import '../core/ai/text_processing_service.dart';
 import '../services/ai/ai_processing_service.dart';
+import '../services/windows_injector.dart';
 
 class InboxNoteDetailView extends StatefulWidget {
   final NoteModel note;
   final Macro? autoStartMacro;
   final Stream<String>? pendingTextStream; // New: For instant open
+  final int noteNumber; // 1-based, oldest = 1
 
   const InboxNoteDetailView(
-      {super.key, required this.note, this.autoStartMacro, this.pendingTextStream});
+      {super.key, required this.note, this.autoStartMacro, this.pendingTextStream, this.noteNumber = 0});
 
   @override
   State<InboxNoteDetailView> createState() => _InboxNoteDetailViewState();
@@ -58,8 +60,8 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   );
   Macro? _selectedMacro;
   bool _isGenerating = false;
-  bool _isArchiveExpanded = false;
-  bool _isTemplatesExpanded = false; // Controls macro list expansion
+  bool _isTemplateCardExpanded = true;  // Accordion: template card expanded by default
+  bool _isGeneratedCardExpanded = false; // Accordion: generated card collapsed by default
   List<SmartSuggestion> _suggestions = [];
   List<Macro> _quickMacros = [];
 
@@ -130,6 +132,11 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     // 2. Initial Load from passed widget (Fast) - Only if not loading stream
     if (widget.note.formattedText.isNotEmpty && !_isLoadingText) {
       _finalNoteController.text = widget.note.formattedText;
+      _isTemplateCardExpanded = false;
+      _isGeneratedCardExpanded = true;
+    } else {
+      _isTemplateCardExpanded = true;
+      _isGeneratedCardExpanded = false;
     }
     
     // 3. Fresh Fetch from Database (Robust)
@@ -154,6 +161,8 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
              // 1. Update Text if empty (or force update if needed, but usually we trust local if user is typing)
              if (_finalNoteController.text.isEmpty && freshNote.formattedText.isNotEmpty) {
                  _finalNoteController.text = freshNote.formattedText;
+                 _isTemplateCardExpanded = false;
+                 _isGeneratedCardExpanded = true;
              }
              
              // 2. Restore Selected Macro
@@ -218,15 +227,23 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     }
 
     if (mounted) {
+      final macroList = combinedMap.values.toList();
+      
+      // Restore selected macro and move to front
+      Macro? restoredMacro;
+      if (_selectedMacro == null && widget.note.appliedMacroId != null) {
+          if (combinedMap.containsKey(widget.note.appliedMacroId)) {
+              restoredMacro = combinedMap[widget.note.appliedMacroId];
+              if (restoredMacro != null) {
+                  macroList.remove(restoredMacro);
+                  macroList.insert(0, restoredMacro);
+              }
+          }
+          }
+
       setState(() {
-         _quickMacros = combinedMap.values.toList();
-         
-         // Restore selected macro if we have one saved in the note
-         if (_selectedMacro == null && widget.note.appliedMacroId != null) {
-             if (combinedMap.containsKey(widget.note.appliedMacroId)) {
-                 _selectedMacro = combinedMap[widget.note.appliedMacroId];
-             }
-         }
+         _quickMacros = macroList;
+         if (restoredMacro != null) _selectedMacro = restoredMacro;
       });
     }
   }
@@ -259,7 +276,9 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
       _selectedMacro = macro;
       _elapsedSeconds = 0;
       _statusMessageIndex = 0;
-      _isRawTextExpanded = false; // COLLAPSE RAW TEXT ON MACRO START
+      _isRawTextExpanded = false;       // COLLAPSE RAW TEXT ON MACRO START
+      _isTemplateCardExpanded = false;  // Collapse template accordion
+      _isGeneratedCardExpanded = true;  // Expand generated note accordion
     });
 
     // Start timer for AI Processing Ring
@@ -319,7 +338,7 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
         await _inboxService.updateNote(
           widget.note.id,
           formattedText: content,
-          // We don't overwrite rawText here as it's the source
+          summary: macro.trigger, // Store template name for badge display
           suggestedMacroId: macro.id, 
         );
         
@@ -380,26 +399,19 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     }
 
     try {
-      // 1. Copy Clean Text
-      await Clipboard.setData(ClipboardData(text: cleanText));
-      
-      // 2. Inject Process (Desktop specific: Hide -> Paste -> Show)
-      await windowManager.hide();
-      await Future.delayed(const Duration(milliseconds: 200));
-      await _keyboard.pasteText(cleanText); // Paste Clean Text
-      await Future.delayed(const Duration(milliseconds: 100));
+      // Use smartInject: handles alwaysOnTop toggle + blur + Ctrl+V
+      await WindowsInjector().smartInject(cleanText);
       
       // SET STATUS TO COPIED
       await _inboxService.updateStatus(widget.note.id, NoteStatus.copied);
 
       if (mounted) {
-        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("✅ Copied & Injected into EMR"), backgroundColor: Colors.green),
+        );
       }
-
-      await windowManager.show();
     } catch (e) {
       _showError("Inject failed: $e");
-      await windowManager.show();
     }
   }
 
@@ -520,34 +532,26 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
               
               // 1. Source Text Accordion
               _buildSourceAccordion(theme),
+              
+              const SizedBox(height: 8),
 
-              // 2. Editor Area (Toolbar + WhitePaper)
+              // 2. Template Selector Accordion Card
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: _buildTemplateSelectorCard(theme),
+              ),
+
+              const SizedBox(height: 8),
+
+              // 3. Generated Note Accordion Card
               Expanded(
-                child: Container(
-                    margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                    decoration: BoxDecoration(
-                        color: theme.colorScheme.surface, // Match Source Accordion
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(8)), // Match radius 8
-                        border: Border.all(color: Colors.white.withOpacity(0.05)), // Match border
-                        boxShadow: [
-                            BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 2, offset: const Offset(0, 1)),
-                        ],
-                    ),
-                    // Removed inner generic Container decoration to rely on parent or new unification
-                    child: ClipRRect( // Clip to give rounded corners to the whole block (Toolbar + Editor)
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-                        child: Column(
-                            children: [
-                                _buildEditorToolbar(theme),
-                                // Removed Divider or made it invisible/matching to unify
-                                Expanded(child: _buildWhitePaperEditor(theme)),
-                            ],
-                        ),
-                    ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                  child: _buildGeneratedNoteCard(theme),
                 ),
               ),
               
-              // 3. Action Dock
+              // 4. Action Dock
               _buildActionDock(theme),
             ],
           ),
@@ -596,9 +600,11 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    widget.note.patientName.isNotEmpty
-                        ? widget.note.patientName
-                        : 'Unknown Patient',
+                    widget.noteNumber > 0 
+                        ? 'NO-${widget.noteNumber}'
+                        : (widget.note.patientName.isNotEmpty
+                            ? widget.note.patientName
+                            : 'Unknown Patient'),
                     style: theme.textTheme.titleMedium?.copyWith(
                       color: theme.colorScheme.onSurface,
                       fontWeight: FontWeight.bold,
@@ -777,106 +783,216 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     );
   }
 
-  Widget _buildEditorToolbar(ThemeData theme) {
-    final List<Macro> displayedMacros = _quickMacros.take(10).toList(); // Show top 10
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      // Use the same color as the editor background to make it look like one piece
-      color: theme.colorScheme.surface, 
-      child: Row(
+  Widget _buildTemplateSelectorCard(ThemeData theme) {
+    final colorScheme = theme.colorScheme;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOutCubic,
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: _isTemplateCardExpanded
+              ? colorScheme.primary.withOpacity(0.5)
+              : colorScheme.outline.withOpacity(0.3),
+          width: _isTemplateCardExpanded ? 1.5 : 1.0,
+        ),
+        boxShadow: _isTemplateCardExpanded
+            ? [BoxShadow(color: colorScheme.primary.withOpacity(0.06), blurRadius: 10)]
+            : [],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-            // 1. Templates List
-            Expanded(
-              child: ScrollConfiguration(
-                behavior: ScrollConfiguration.of(context).copyWith(
-                  dragDevices: {
-                    PointerDeviceKind.touch,
-                    PointerDeviceKind.mouse,
-                  },
-                ),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                        children: [
-                            Text("TEMPLATES:", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey[400])),
-                            const SizedBox(width: 8),
-                            ...displayedMacros.map((macro) {
-                                final isSelected = _selectedMacro?.id == macro.id;
-                                return Padding(
-                                    padding: const EdgeInsets.only(right: 6),
-                                    child: InkWell(
-                                        onTap: () => _applyTemplate(macro),
-                                        borderRadius: BorderRadius.circular(4),
-                                        child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                            decoration: BoxDecoration(
-                                                color: isSelected ? theme.colorScheme.primary : Colors.white,
-                                                borderRadius: BorderRadius.circular(4),
-                                                border: Border.all(color: isSelected ? theme.colorScheme.primary : Colors.grey[300]!)
-                                            ),
-                                            child: Text(
-                                                macro.trigger,
-                                                style: TextStyle(
-                                                    fontSize: 11, 
-                                                    fontWeight: FontWeight.w500,
-                                                    color: isSelected ? Colors.white : Colors.grey[700]
-                                                ),
-                                            ),
-                                        ),
-                                    ),
-                                );
-                            }).toList(),
-                            
-                            // More Button
-                            IconButton(
-                                icon: Icon(Icons.more_horiz, size: 16, color: Colors.grey[500]),
-                                onPressed: () async {
-                                    await WindowManagerHelper.centerDialog();
-                                    final macro = await showDialog<Macro>(
-                                      context: context,
-                                      builder: (context) => const MacroExplorerDialog(),
-                                    );
-                                    if (mounted) await WindowManagerHelper.expandToSidebar(context);
-                                    if (macro != null) _applyTemplate(macro);
-                                },
-                                tooltip: "All Templates",
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
-                            )
-                        ],
+          // Header — always visible
+          InkWell(
+            onTap: () => setState(() => _isTemplateCardExpanded = !_isTemplateCardExpanded),
+            borderRadius: BorderRadius.circular(10),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+              child: Row(
+                children: [
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    child: Icon(
+                      _isTemplateCardExpanded ? Icons.extension : Icons.extension_outlined,
+                      key: ValueKey(_isTemplateCardExpanded),
+                      color: _isTemplateCardExpanded
+                          ? colorScheme.primary
+                          : colorScheme.onSurface.withOpacity(0.5),
+                      size: 16,
                     ),
-                ),
-            ),
-            ),
-            
-            // 2. Smart Mode Toggle
-            Container(height: 20, width: 1, color: Colors.grey[300], margin: const EdgeInsets.symmetric(horizontal: 8)),
-            FutureBuilder<bool>(
-                future: SharedPreferences.getInstance().then((prefs) => prefs.getBool('enable_smart_suggestions') ?? true),
-                builder: (context, snapshot) {
-                  final enable = snapshot.data ?? true;
-                  return InkWell(
-                      onTap: () async {
-                         final prefs = await SharedPreferences.getInstance();
-                         await prefs.setBool('enable_smart_suggestions', !enable);
-                         setState(() {});
-                      },
-                      child: Row(
-                          children: [
-                              Icon(enable ? Icons.auto_awesome : Icons.flash_on, size: 14, color: enable ? theme.colorScheme.primary : Colors.grey),
-                              const SizedBox(width: 4),
-                              Text(enable ? "SMART" : "FAST", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: enable ? theme.colorScheme.primary : Colors.grey)),
-                          ],
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    "Choose Template",
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: colorScheme.onSurface,
+                    ),
+                  ),
+                  if (!_isTemplateCardExpanded && _selectedMacro != null) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _selectedMacro!.trigger,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colorScheme.primary,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                  );
-                }
-            )
+                    ),
+                  ] else
+                    const Spacer(),
+                  Icon(
+                    _isTemplateCardExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                    size: 16,
+                    color: colorScheme.onSurface.withOpacity(0.4),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Chips — only visible when expanded
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 300),
+            crossFadeState: _isTemplateCardExpanded
+                ? CrossFadeState.showFirst
+                : CrossFadeState.showSecond,
+            firstChild: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              child: SizedBox(
+                width: double.infinity,
+                child: Wrap(
+                  spacing: 7.0,
+                  runSpacing: 7.0,
+                  children: _quickMacros.map((macro) {
+                    final isSelected = _selectedMacro?.id == macro.id;
+                    return FilterChip(
+                      label: Text(macro.trigger),
+                      selected: isSelected,
+                      onSelected: (bool selected) {
+                        if (selected) _applyTemplate(macro);
+                      },
+                      backgroundColor: colorScheme.surface,
+                      selectedColor: colorScheme.primary.withOpacity(0.15),
+                      checkmarkColor: colorScheme.primary,
+                      labelStyle: TextStyle(
+                        fontSize: 12,
+                        color: isSelected ? colorScheme.primary : colorScheme.onSurface.withOpacity(0.7),
+                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        side: BorderSide(
+                          color: isSelected
+                              ? colorScheme.primary
+                              : colorScheme.outline.withOpacity(0.4),
+                        ),
+                      ),
+                      showCheckmark: true,
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+            secondChild: const SizedBox(width: double.infinity, height: 0),
+          ),
         ],
       ),
     );
   }
 
+  Widget _buildGeneratedNoteCard(ThemeData theme) {
+    final colorScheme = theme.colorScheme;
+    final hasContent = _finalNoteController.text.isNotEmpty;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOutCubic,
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: _isGeneratedCardExpanded
+              ? colorScheme.primary.withOpacity(0.5)
+              : colorScheme.outline.withOpacity(0.2),
+          width: _isGeneratedCardExpanded ? 1.5 : 1.0,
+        ),
+        boxShadow: _isGeneratedCardExpanded
+            ? [BoxShadow(color: colorScheme.primary.withOpacity(0.06), blurRadius: 10)]
+            : [],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header — always visible
+          InkWell(
+            onTap: hasContent
+                ? () => setState(() => _isGeneratedCardExpanded = !_isGeneratedCardExpanded)
+                : null,
+            borderRadius: BorderRadius.circular(10),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+              child: Row(
+                children: [
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    child: Icon(
+                      _isGeneratedCardExpanded ? Icons.auto_awesome : Icons.auto_awesome_outlined,
+                      key: ValueKey(_isGeneratedCardExpanded),
+                      color: _isGeneratedCardExpanded
+                          ? colorScheme.primary
+                          : colorScheme.onSurface.withOpacity(0.4),
+                      size: 16,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    "Generated Note",
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: colorScheme.onSurface,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (!hasContent && !_isGenerating)
+                    Text(
+                      "Select a template above",
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: colorScheme.onSurface.withOpacity(0.4),
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  if (_isGenerating)
+                    SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 1.5, color: colorScheme.primary),
+                    ),
+                  if (!_isGenerating)
+                    Icon(
+                      _isGeneratedCardExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                      size: 16,
+                      color: colorScheme.onSurface.withOpacity(0.4),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          // Content — only visible when expanded
+          if (_isGeneratedCardExpanded)
+            Expanded(child: _buildWhitePaperEditor(theme)),
+        ],
+      ),
+    );
+  }
 
 
   Widget _buildWhitePaperEditor(ThemeData theme) {

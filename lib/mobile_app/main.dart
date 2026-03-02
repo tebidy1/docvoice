@@ -42,19 +42,19 @@ void main() async {
       providers: [
         Provider<WebSocketService>(create: (_) => WebSocketService()),
       ],
-      child: ScribeFlowMobileApp(initialRoute: isAuthenticated ? '/' : '/login'),
+      child: SoutNoteMobileApp(initialRoute: isAuthenticated ? '/' : '/login'),
     ),
   );
 }
 
-class ScribeFlowMobileApp extends StatelessWidget {
+class SoutNoteMobileApp extends StatelessWidget {
   final String initialRoute;
-  const ScribeFlowMobileApp({super.key, required this.initialRoute});
+  const SoutNoteMobileApp({super.key, required this.initialRoute});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'ScribeFlow Mobile',
+      title: 'SoutNote Mobile',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
       themeMode: ThemeMode.dark,

@@ -134,20 +134,20 @@ class _HeroSectionState extends State<HeroSection> with SingleTickerProviderStat
           mainAxisSize: MainAxisSize.min,
           children: [
              // 1. Strong Short H1
-             Text(
-              "سجّل ملاحظتك الطبية… وخذها جاهزة للصق خلال ثوانٍ",
-              textAlign: align,
-              textDirection: TextDirection.rtl,
-              style: Theme.of(context).textTheme.displayLarge!.copyWith(
-                fontSize: 42,
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                height: 1.2,
-                shadows: [
-                  Shadow(color: Colors.black.withOpacity(0.5), blurRadius: 10, offset: const Offset(0, 4)),
-                ],
+              Text(
+                "سجّل ملاحظتك الطبية… وخذها جاهزة للصق خلال ثوانٍ",
+                textAlign: align,
+                textDirection: TextDirection.rtl,
+                style: Theme.of(context).textTheme.displayLarge!.copyWith(
+                  fontSize: MediaQuery.of(context).size.width < 600 ? 32 : 42,
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  height: 1.2,
+                  shadows: [
+                    Shadow(color: Colors.black.withOpacity(0.5), blurRadius: 10, offset: const Offset(0, 4)),
+                  ],
+                ),
               ),
-            ),
             const SizedBox(height: 16),
             
             // 2. Animated Highlight Line
@@ -161,7 +161,7 @@ class _HeroSectionState extends State<HeroSection> with SingleTickerProviderStat
               textAlign: align,
               style: Theme.of(context).textTheme.bodyLarge!.copyWith(
                 color: MedColors.textMuted.withOpacity(0.8),
-                fontSize: 18,
+                fontSize: MediaQuery.of(context).size.width < 600 ? 15 : 18,
                 height: 1.6
               ),
             ),

@@ -67,7 +67,22 @@ class InboxService {
       await init();
       final body = <String, dynamic>{};
       
-      if (rawText != null) body['raw_text'] = rawText;
+      // API requires raw_text on PUT. If not provided, fetch the note first.
+      if (rawText == null) {
+        try {
+          final noteResponse = await _apiService.get('/inbox-notes/$noteId');
+          if (noteResponse['status'] == true && noteResponse['payload'] != null) {
+            final noteData = noteResponse['payload'];
+            body['raw_text'] = noteData['raw_text'] ?? noteData['original_text'] ?? '';
+          }
+        } catch (e) {
+          print('Warning: Could not fetch note for raw_text: $e');
+          body['raw_text'] = ''; // Fallback empty string
+        }
+      } else {
+        body['raw_text'] = rawText;
+      }
+      
       if (formattedText != null) body['formatted_text'] = formattedText;
       if (patientName != null) body['patient_name'] = patientName;
       if (summary != null) body['summary'] = summary;
@@ -169,6 +184,11 @@ class InboxService {
       note.appliedMacroId = json['suggested_macro_id'] is int 
           ? json['suggested_macro_id'] 
           : int.tryParse(json['suggested_macro_id'].toString());
+    }
+
+    // Map summary (template name for badge display)
+    if (json['summary'] != null) {
+      note.summary = json['summary'];
     }
     
     return note;

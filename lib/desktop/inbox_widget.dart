@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/inbox_note.dart';
+import '../models/macro.dart';
 import '../services/inbox_service.dart';
+import '../services/macro_service.dart';
 import 'inbox_card.dart';
 
 class InboxWidget extends StatefulWidget {
@@ -16,7 +18,21 @@ class InboxWidget extends StatefulWidget {
 
 class _InboxWidgetState extends State<InboxWidget> {
   final _inboxService = InboxService();
+  final _macroService = MacroService();
   int _selectedTab = 0; // 0: Notes, 1: Archive (Force Update)
+  List<Macro> _allMacros = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMacros();
+  }
+
+  Future<void> _loadMacros() async {
+    await _macroService.init();
+    final macros = await _macroService.getAllMacros();
+    if (mounted) setState(() => _allMacros = macros);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -189,6 +205,8 @@ class _InboxWidgetState extends State<InboxWidget> {
                             itemBuilder: (context, index) {
                               return InboxCard(
                                 note: notes[index],
+                                noteNumber: notes.length - index,
+                                quickMacros: _allMacros,
                                 onArchived: () {
                                   // Card will automatically update via stream
                                 },

@@ -127,4 +127,15 @@ MEDICAL RECOMMENDATION:
 - Additional Restrictions: 
 """;
 
+  // Template 6: Free Text / Open Remark (Optimized for low tokens & high quality)
+  static const String templateFreeNote = """
+FORMAT: PROFESSIONAL FREE TEXT
+TASK: Refine the raw medical transcript into polished clinical prose without strictly following standard templates (like SOAP).
+RULES:
+1. Fix all ASR phonetic errors and correct medical terminology.
+2. Transform fragmented speech into logical, grammatically complete sentences.
+3. Organize thoughts clearly using paragraphs or bullet points where natural.
+4. ZERO HALLUCINATION: Do not invent missing data.
+5. NO FILLERS: Output ONLY the refined text.
+""";
 }

@@ -38,8 +38,8 @@ class PlatformsSection extends StatelessWidget {
                     btnColor: Colors.grey[800]!,
                     glowColor: Colors.cyan,
                     onTap: () => platform_utils.downloadFile(
-                        'apps/ScribeFlow_Extension.zip',
-                        'ScribeFlow_Extension.zip'),
+                        'apps/SoutNote_Extension.zip',
+                        'SoutNote_Extension.zip'),
                   ),
                   _buildCard(
                     context,
@@ -61,7 +61,7 @@ class PlatformsSection extends StatelessWidget {
                     btnColor: Colors.black,
                     glowColor: Colors.green,
                     onTap: () => platform_utils.downloadFile(
-                        'apps/ScribeFlow.apk', 'ScribeFlow.apk'),
+                        'apps/SoutNote.apk', 'SoutNote.apk'),
                   ),
                 ],
               ),

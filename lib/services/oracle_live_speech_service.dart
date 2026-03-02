@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'oci_request_signer.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -254,6 +255,44 @@ class OracleLiveSpeechService {
   // ═══════════════════════════════════════════════════════════════════════════
 
   Future<String> _createRealtimeSessionToken() async {
+    // 🌐 WEB FALLBACK: Browsers block custom Date/Host headers required for OCI Signature.
+    // We must route the token request through the backend proxy.
+    if (kIsWeb) {
+      debugPrint('Fetching Token from Backend Proxy (Web)...');
+      try {
+        // Import ApiService locally or use a global instance. We'll use http directly 
+        // to avoid circular dependencies, pointing to the same endpoint.
+        // Assuming ApiService is available or we use http with the base URL.
+        final prefs = await SharedPreferences.getInstance();
+        final token = prefs.getString('auth_token');
+        // Fallback baseUrl if dotenv not loaded here
+        final baseUrl = 'https://docapi.sootnote.com/api'; 
+        
+        final response = await http.get(
+          Uri.parse('$baseUrl/audio/oracle-token'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            if (token != null) 'Authorization': 'Bearer $token',
+          },
+        );
+
+        if (response.statusCode == 200) {
+          final jsonResponse = jsonDecode(response.body);
+          if (jsonResponse['status'] == true && jsonResponse['token'] != null) {
+             return jsonResponse['token'] as String;
+          }
+          if (jsonResponse['token'] != null) {
+             return jsonResponse['token'] as String; 
+          }
+        }
+        throw Exception('Backend Oracle Token endpoint failed: HTTP ${response.statusCode} - ${response.body}. Hint: Ensure /api/audio/oracle-token exists in Laravel.');
+      } catch (e) {
+        throw Exception('Web Oracle Auth Error: $e');
+      }
+    }
+
+    // 📱 MOBILE/DESKTOP: Direct OCI Signature (works perfectly)
     final signer = OciRequestSigner(
       tenancyId: credentials.tenancyId,
       userId: credentials.userId,

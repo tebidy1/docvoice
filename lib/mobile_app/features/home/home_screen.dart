@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import 'package:record/record.dart'; // For Amplitude
@@ -35,6 +36,8 @@ class _HomeScreenState extends State<HomeScreen> {
   final AudioRecorderService _streamRecorder = AudioRecorderService();
   OracleLiveSpeechService? _oracleService;
   Future<String>? _oracleTranscriptFuture;
+  bool _usingGroqFallback = false; // true when Oracle failed on web and fell back to Groq
+  List<int> _webAudioBuffer = []; // PCM buffer for web Groq fallback
 
   // Native STT
   final stt.SpeechToText _speechToText = stt.SpeechToText();
@@ -58,25 +61,29 @@ class _HomeScreenState extends State<HomeScreen> {
     _initSpeech();
   }
 
-  void _initSpeech() async {
-    _speechEnabled = await _speechToText.initialize(
-      onError: (errorNotification) {
-        print('SpeechToText Error: $errorNotification');
-        if (mounted) {
-           setState(() => _isRecording = false);
-        }
-      },
-      onStatus: (status) {
-        print('SpeechToText Status: $status');
-        if (status == 'done' || status == 'notListening') {
-           if (mounted && _isRecording) {
+  void _initSpeech() {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      _speechEnabled = await _speechToText.initialize(
+        onError: (errorNotification) {
+          print('SpeechToText Error: $errorNotification');
+          if (mounted) {
+            setState(() => _isRecording = false);
+          }
+        },
+        onStatus: (status) {
+          print('SpeechToText Status: $status');
+          if (status == 'done' || status == 'notListening') {
+            if (mounted && _isRecording) {
               // The system stopped listening automatically. We should handle the stop logic.
               _stopNativeRecording();
-           }
-        }
-      },
-    );
-    setState(() {});
+            }
+          }
+        },
+      );
+      if (mounted) {
+        setState(() {});
+      }
+    });
   }
 
   void _onItemTapped(int index) {
@@ -124,7 +131,34 @@ class _HomeScreenState extends State<HomeScreen> {
           setState(() => _isRecording = false);
        }
     } else if (sttEngine == 'oracle_live') {
-      // ── Oracle OCI Live Speech ────────────────────────────────────────────
+      // ── Oracle OCI Live Speech ──────────────────────────────────────────
+      _usingGroqFallback = false;
+
+      // ⚠️ Web: Oracle needs a backend proxy (/api/audio/oracle-token) which
+      // is not yet available. Skip Oracle entirely and use Groq as fallback.
+      if (kIsWeb) {
+        debugPrint('🔄 Web: Oracle needs backend proxy — using Groq instead');
+        _usingGroqFallback = true;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Oracle غير متاح على الويب حالياً — يتم استخدام Groq'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        // Use Groq file recording
+        try {
+          await _audioService.startRecording();
+        } catch (e) {
+          debugPrint('Groq web recording failed: $e');
+          if (mounted) setState(() => _isRecording = false);
+        }
+        return;
+      }
+
+      // ── Desktop/Mobile: Oracle works directly ──────────────────────────
       final hasPermission = await _streamRecorder.hasPermission();
       if (!hasPermission) {
         if (mounted) {
@@ -201,7 +235,7 @@ cQBOFhw1ZkYvxx4A6HSNxyae
         // Start streaming recorder (PCM 16kHz Mono)
         final audioStream = await _streamRecorder.startRecording();
 
-        // Begin the Oracle session — returns a Future<String> that resolves on final result
+        // Begin the Oracle session
         _oracleTranscriptFuture = _oracleService!.startSession(audioStream);
       } catch (e) {
         debugPrint('Oracle STT start error: $e');
@@ -248,49 +282,49 @@ cQBOFhw1ZkYvxx4A6HSNxyae
     // Stop Recording manually when the user taps
     if (sttEngine == 'system_native') {
        await _stopNativeRecording();
-    } else if (sttEngine == 'oracle_live') {
-      // ── Oracle stop: flush audio stream, await final result ───────────────
+    } else if (sttEngine == 'oracle_live' && !_usingGroqFallback) {
+      // ── Oracle stop (successful Oracle session) ───────────────────────
       setState(() => _isRecording = false);
-      await _streamRecorder.stopRecording();
 
-      if (_oracleService == null || _oracleTranscriptFuture == null) return;
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('⏳ Waiting for Oracle final transcription...'),
-            duration: Duration(seconds: 30),
-          ),
-        );
+      if (_oracleService == null || _oracleTranscriptFuture == null) {
+        await _streamRecorder.stopRecording();
+        return;
       }
 
-      try {
-        final transcript = await _oracleService!.stopSession();
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        if (transcript.isNotEmpty) {
-          _processAndNavigate(nativeText: transcript);
-        } else {
+      final oracleService = _oracleService!;
+      final oracleFuture = _oracleTranscriptFuture!;
+      _oracleService = null;
+      _oracleTranscriptFuture = null;
+
+      final transcriptFuture = () async {
+        try {
+          final transcript = await oracleService.stopSession();
+          await _streamRecorder.stopRecording();
+          return transcript;
+        } catch (e) {
+          await _streamRecorder.stopRecording();
+          rethrow;
+        }
+      }();
+
+      _processAndNavigate(oracleTranscriptFuture: transcriptFuture);
+    } else {
+       // ── Groq flow (explicit selection or Oracle web fallback) ────────
+       _usingGroqFallback = false; // Reset for next recording
+       final audioPath = await _audioService.stopRecording();
+       debugPrint('Groq stopRecording returned: $audioPath');
+       if (audioPath != null && audioPath.isNotEmpty) {
+          _processAndNavigate(audioPath: audioPath);
+       } else {
+          debugPrint('⚠️ Groq recording returned null/empty path');
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('No speech detected by Oracle'), backgroundColor: Colors.orange),
+              const SnackBar(
+                content: Text('لم يتم التقاط الصوت بشكل صحيح، يرجى المحاولة مرة أخرى'),
+                backgroundColor: Colors.orange,
+              ),
             );
           }
-        }
-      } catch (e) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Oracle transcription failed: $e'), backgroundColor: Colors.red),
-          );
-        }
-      } finally {
-        _oracleService = null;
-        _oracleTranscriptFuture = null;
-      }
-    } else {
-       final audioPath = await _audioService.stopRecording();
-       if (audioPath != null) {
-          _processAndNavigate(audioPath: audioPath);
        }
     }
   }
@@ -309,7 +343,7 @@ cQBOFhw1ZkYvxx4A6HSNxyae
     }
   }
 
-  Future<void> _processAndNavigate({String? audioPath, String? nativeText}) async {
+  Future<void> _processAndNavigate({String? audioPath, String? nativeText, Future<String>? oracleTranscriptFuture}) async {
       // Create Real Draft Note
       final draft = NoteModel()
         ..uuid = const Uuid().v4()
@@ -325,7 +359,7 @@ cQBOFhw1ZkYvxx4A6HSNxyae
         // Navigate to Editor and wait for result
         final result = await Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => EditorScreen(draftNote: draft)),
+          MaterialPageRoute(builder: (_) => EditorScreen(draftNote: draft, oracleTranscriptFuture: oracleTranscriptFuture)),
         );
 
         // If note returned, animate it into inbox
@@ -345,8 +379,10 @@ cQBOFhw1ZkYvxx4A6HSNxyae
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: Stack(
           children: [
@@ -388,7 +424,8 @@ cQBOFhw1ZkYvxx4A6HSNxyae
       bottomNavigationBar: BottomAppBar(
         shape: const CircularNotchedRectangle(),
         notchMargin: 8.0,
-        color: const Color(0xFF1E1E1E), // Dark Grey
+        color: colorScheme.surface,
+        elevation: 8,
         child: SizedBox(
           height: 60.0,
           child: Row(
@@ -397,7 +434,9 @@ cQBOFhw1ZkYvxx4A6HSNxyae
               // Left Tab: Inbox
               IconButton(
                 icon: const Icon(Icons.inbox),
-                color: _selectedIndex == 0 ? const Color(0xFF4A90E2) : const Color(0xFF757575),
+                color: _selectedIndex == 0
+                    ? colorScheme.primary
+                    : colorScheme.onSurface.withOpacity(0.5),
                 onPressed: () => _onItemTapped(0),
                 tooltip: 'Inbox',
                 iconSize: 28,
@@ -408,7 +447,9 @@ cQBOFhw1ZkYvxx4A6HSNxyae
               // Right Tab: Settings
               IconButton(
                 icon: const Icon(Icons.settings),
-                color: _selectedIndex == 1 ? const Color(0xFF4A90E2) : const Color(0xFF757575),
+                color: _selectedIndex == 1
+                    ? colorScheme.primary
+                    : colorScheme.onSurface.withOpacity(0.5),
                 onPressed: () => _onItemTapped(1),
                 tooltip: 'Settings',
                 iconSize: 28,

@@ -17,7 +17,11 @@
     },
     "action": {
         "default_title": "ScribeFlow",
-        "default_icon": "icons/Icon-192.png"
+        "default_icon": {
+            "16": "icons/Icon-16.png",
+            "48": "icons/Icon-48.png",
+            "128": "icons/Icon-128.png"
+        }
     },
     "side_panel": {
         "default_path": "index.html"
@@ -33,12 +37,16 @@
             "run_at": "document_end"
         }
     ],
-    "icons": {
-        "16": "icons/Icon-192.png",
-        "48": "icons/Icon-192.png",
-        "128": "icons/Icon-192.png"
-    },
     "content_security_policy": {
         "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
+    },
+    "background_color": "#ffffff",
+    "theme_color": "#0F172A",
+    "icons": {
+        "16": "icons/Icon-16.png",
+        "48": "icons/Icon-48.png",
+        "128": "icons/Icon-128.png",
+        "192": "icons/Icon-192.png",
+        "512": "icons/Icon-512.png"
     }
 }
