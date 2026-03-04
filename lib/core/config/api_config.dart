@@ -1,7 +1,18 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 /// API Configuration for ScribeFlow Backend Integration
 class ApiConfig {
-  // Base URL for the Laravel backend
-  static const String baseUrl = 'https://docapi.sootnote.com/api';
+  // Base URL for the Laravel backend - strictly from .env
+  static String get baseUrl {
+    final url = dotenv.env['API_BASE_URL'];
+    if (url == null || url.isEmpty) {
+      // In production/testing, if env is missing, it's a fatal configuration error
+      // but we return empty to let the caller handle it or fail naturally.
+      // Strict commitment: No hardcoded fallback.
+      return '';
+    }
+    return url;
+  }
 
   // API Endpoints
   static const String macrosEndpoint = '/macros';

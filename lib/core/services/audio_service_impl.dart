@@ -1,17 +1,18 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
-import 'package:http/http.dart' as http;
-import 'package:path/path.dart' as path;
+
 import 'package:crypto/crypto.dart';
+import 'package:path/path.dart' as path;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../services/api_service.dart';
+import '../config/api_config.dart';
+import '../error/app_error.dart';
 import '../interfaces/audio_service.dart';
 import '../interfaces/base_service.dart';
 import '../models/audio_models.dart';
-import '../error/app_error.dart';
-import '../../services/api_service.dart';
 
 /// Concrete implementation of AudioService for handling audio upload and transcription
 class AudioServiceImpl extends AudioService with ServiceLifecycle {
@@ -448,9 +449,7 @@ class AudioServiceImpl extends AudioService with ServiceLifecycle {
   // Private helper methods
 
   Future<String> _getBaseUrl() async {
-    // Get base URL from environment or use default
-    const baseUrl = String.fromEnvironment('API_BASE_URL',
-        defaultValue: 'https://docapi.sootnote.com/api');
+    final baseUrl = ApiConfig.baseUrl;
     return baseUrl.endsWith('/')
         ? baseUrl.substring(0, baseUrl.length - 1)
         : baseUrl;

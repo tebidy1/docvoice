@@ -1,24 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter_animate/flutter_animate.dart';
-import 'package:provider/provider.dart';
-import 'package:record/record.dart'; // For Amplitude
-import 'package:universal_io/io.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
-import '../../services/websocket_service.dart';
-import '../../core/theme.dart';
-import '../../models/note_model.dart';
-import '../editor/editor_screen.dart';
-import '../inbox/inbox_screen.dart';
-import '../settings/settings_screen.dart';
-import '../../services/audio_recording_service.dart';
 import 'package:uuid/uuid.dart';
+
+import '../../../services/audio_recorder_service.dart';
+import '../../../services/oracle_live_speech_service.dart';
 import '../../../utils/permission_fixer.dart';
 import '../../../widgets/animated_record_button.dart';
 import '../../../widgets/listening_mode_view.dart';
-import '../../../services/oracle_live_speech_service.dart';
-import '../../../services/audio_recorder_service.dart';
+import '../../models/note_model.dart';
+import '../../services/audio_recording_service.dart';
+import '../editor/editor_screen.dart';
+import '../inbox/inbox_screen.dart';
+import '../settings/settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -36,7 +30,8 @@ class _HomeScreenState extends State<HomeScreen> {
   final AudioRecorderService _streamRecorder = AudioRecorderService();
   OracleLiveSpeechService? _oracleService;
   Future<String>? _oracleTranscriptFuture;
-  bool _usingGroqFallback = false; // true when Oracle failed on web and fell back to Groq
+  bool _usingGroqFallback =
+      false; // true when Oracle failed on web and fell back to Groq
   List<int> _webAudioBuffer = []; // PCM buffer for web Groq fallback
 
   // Native STT
@@ -44,7 +39,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _speechEnabled = false;
   String _nativeTranscript = '';
   double _nativeAmplitude = -160.0;
-  
+
   // Key to control Inbox state
   final GlobalKey<InboxScreenState> _inboxKey = GlobalKey<InboxScreenState>();
 
@@ -97,66 +92,49 @@ class _HomeScreenState extends State<HomeScreen> {
     final sttEngine = prefs.getString('stt_engine_pref') ?? 'oracle_live';
 
     if (sttEngine == 'system_native') {
-       if (!_speechEnabled) {
-           _speechEnabled = await _speechToText.initialize();
-       }
-       if (_speechEnabled) {
-          setState(() {
-            _nativeTranscript = '';
-            _nativeAmplitude = -160.0;
-          });
-          await _speechToText.listen(
-             onResult: (result) {
-               setState(() {
-                 _nativeTranscript = result.recognizedWords;
-               });
-             },
-             onSoundLevelChange: (level) {
-               // level is mapped from -50 to 50 broadly, let's normalize roughly to our expected -160 to 0 range for the animation
-               setState(() {
-                 _nativeAmplitude = (level * 2) - 100; // e.g., level 50 -> 0, level 0 -> -100
-               });
-             },
-             listenFor: const Duration(minutes: 60), // Allow very long recording sessions
-             pauseFor: const Duration(minutes: 5), // Don't stop immediately on pause
-             localeId: 'ar_SA', // Arabic for medical context
-             listenOptions: stt.SpeechListenOptions(
-               partialResults: true,
-               cancelOnError: true,
-               listenMode: stt.ListenMode.dictation,
-             ),
-          );
-       } else {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Speech recognition not available")));
-          setState(() => _isRecording = false);
-       }
+      if (!_speechEnabled) {
+        _speechEnabled = await _speechToText.initialize();
+      }
+      if (_speechEnabled) {
+        setState(() {
+          _nativeTranscript = '';
+          _nativeAmplitude = -160.0;
+        });
+        await _speechToText.listen(
+          onResult: (result) {
+            setState(() {
+              _nativeTranscript = result.recognizedWords;
+            });
+          },
+          onSoundLevelChange: (level) {
+            // level is mapped from -50 to 50 broadly, let's normalize roughly to our expected -160 to 0 range for the animation
+            setState(() {
+              _nativeAmplitude =
+                  (level * 2) - 100; // e.g., level 50 -> 0, level 0 -> -100
+            });
+          },
+          listenFor:
+              const Duration(minutes: 60), // Allow very long recording sessions
+          pauseFor:
+              const Duration(minutes: 5), // Don't stop immediately on pause
+          localeId: 'ar_SA', // Arabic for medical context
+          listenOptions: stt.SpeechListenOptions(
+            partialResults: true,
+            cancelOnError: true,
+            listenMode: stt.ListenMode.dictation,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Speech recognition not available")));
+        setState(() => _isRecording = false);
+      }
     } else if (sttEngine == 'oracle_live') {
       // ── Oracle OCI Live Speech ──────────────────────────────────────────
       _usingGroqFallback = false;
 
-      // ⚠️ Web: Oracle needs a backend proxy (/api/audio/oracle-token) which
-      // is not yet available. Skip Oracle entirely and use Groq as fallback.
-      if (kIsWeb) {
-        debugPrint('🔄 Web: Oracle needs backend proxy — using Groq instead');
-        _usingGroqFallback = true;
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Oracle غير متاح على الويب حالياً — يتم استخدام Groq'),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
-        // Use Groq file recording
-        try {
-          await _audioService.startRecording();
-        } catch (e) {
-          debugPrint('Groq web recording failed: $e');
-          if (mounted) setState(() => _isRecording = false);
-        }
-        return;
-      }
+      // ⚠️ Note: On Web, the OracleLiveSpeechService will automatically use
+      // the backend proxy (/api/audio/oracle-token) to fetch the session token.
 
       // ── Desktop/Mobile: Oracle works directly ──────────────────────────
       final hasPermission = await _streamRecorder.hasPermission();
@@ -181,10 +159,13 @@ class _HomeScreenState extends State<HomeScreen> {
       try {
         final useWhisper = prefs.getBool('oracle_use_whisper_model') ?? true;
         final creds = OciCredentials(
-          tenancyId: 'ocid1.tenancy.oc1..aaaaaaaadt3eulxchu6ygrisqsai4z6qji5dyqiam7tgwgd6rrxe2wsocp2a',
-          userId: 'ocid1.user.oc1..aaaaaaaa3ykq2ykgaixlhze3yip5m3fxrsbkghnzecezym7c7neqk57fupdq',
+          tenancyId:
+              'ocid1.tenancy.oc1..aaaaaaaadt3eulxchu6ygrisqsai4z6qji5dyqiam7tgwgd6rrxe2wsocp2a',
+          userId:
+              'ocid1.user.oc1..aaaaaaaa3ykq2ykgaixlhze3yip5m3fxrsbkghnzecezym7c7neqk57fupdq',
           fingerprint: 'a6:24:f0:9f:9a:f0:77:18:c5:85:2d:03:90:02:6d:c2',
-          compartmentId: 'ocid1.tenancy.oc1..aaaaaaaadt3eulxchu6ygrisqsai4z6qji5dyqiam7tgwgd6rrxe2wsocp2a',
+          compartmentId:
+              'ocid1.tenancy.oc1..aaaaaaaadt3eulxchu6ygrisqsai4z6qji5dyqiam7tgwgd6rrxe2wsocp2a',
           privateKeyPem: '''-----BEGIN PRIVATE KEY-----
 MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC9aeoZKxpjh42c
 Gy5DFMUe/Qu9zn5e+jI2uFZ28liFl+K5vok6dUW/pG0H3htbNH03pdo2419nBZ5W
@@ -217,7 +198,9 @@ cQBOFhw1ZkYvxx4A6HSNxyae
 
         _oracleService = OracleLiveSpeechService(
           credentials: creds,
-          model: useWhisper ? OracleSTTModel.whisperGeneric : OracleSTTModel.oracleMedical,
+          model: useWhisper
+              ? OracleSTTModel.whisperGeneric
+              : OracleSTTModel.oracleMedical,
           language: 'ar-SA',
           onError: (e) {
             if (mounted) {
@@ -241,7 +224,9 @@ cQBOFhw1ZkYvxx4A6HSNxyae
         debugPrint('Oracle STT start error: $e');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to start Oracle STT: $e'), backgroundColor: Colors.red),
+            SnackBar(
+                content: Text('Failed to start Oracle STT: $e'),
+                backgroundColor: Colors.red),
           );
           setState(() => _isRecording = false);
         }
@@ -250,26 +235,26 @@ cQBOFhw1ZkYvxx4A6HSNxyae
       // --- GROQ FLOW ---
       final success = await _audioService.hasPermission();
       if (!success) {
-         if (mounted) {
-           ScaffoldMessenger.of(context).showSnackBar(
-             SnackBar(
-               content: const Text("Microphone permission required"),
-               backgroundColor: Colors.orange,
-               action: SnackBarAction(
-                 label: "FIX PERMISSION",
-                 textColor: Colors.white,
-                 onPressed: () {
-                   openPermissionFixPage();
-                 },
-               ),
-               duration: const Duration(seconds: 10),
-             ),
-           );
-           setState(() => _isRecording = false);
-         }
-         return;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text("Microphone permission required"),
+              backgroundColor: Colors.orange,
+              action: SnackBarAction(
+                label: "FIX PERMISSION",
+                textColor: Colors.white,
+                onPressed: () {
+                  openPermissionFixPage();
+                },
+              ),
+              duration: const Duration(seconds: 10),
+            ),
+          );
+          setState(() => _isRecording = false);
+        }
+        return;
       }
-      
+
       // Start Recording
       await _audioService.startRecording();
     }
@@ -281,7 +266,7 @@ cQBOFhw1ZkYvxx4A6HSNxyae
 
     // Stop Recording manually when the user taps
     if (sttEngine == 'system_native') {
-       await _stopNativeRecording();
+      await _stopNativeRecording();
     } else if (sttEngine == 'oracle_live' && !_usingGroqFallback) {
       // ── Oracle stop (successful Oracle session) ───────────────────────
       setState(() => _isRecording = false);
@@ -309,25 +294,27 @@ cQBOFhw1ZkYvxx4A6HSNxyae
 
       _processAndNavigate(oracleTranscriptFuture: transcriptFuture);
     } else {
-       // ── Groq flow (explicit selection or Oracle web fallback) ────────
-       _usingGroqFallback = false; // Reset for next recording
-       final audioPath = await _audioService.stopRecording();
-       debugPrint('Groq stopRecording returned: $audioPath');
-       if (audioPath != null && audioPath.isNotEmpty) {
-          _processAndNavigate(audioPath: audioPath);
-       } else {
-          debugPrint('⚠️ Groq recording returned null/empty path');
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('لم يتم التقاط الصوت بشكل صحيح، يرجى المحاولة مرة أخرى'),
-                backgroundColor: Colors.orange,
-              ),
-            );
-          }
-       }
+      // ── Groq flow (explicit selection or Oracle web fallback) ────────
+      _usingGroqFallback = false; // Reset for next recording
+      final audioPath = await _audioService.stopRecording();
+      debugPrint('Groq stopRecording returned: $audioPath');
+      if (audioPath != null && audioPath.isNotEmpty) {
+        _processAndNavigate(audioPath: audioPath);
+      } else {
+        debugPrint('⚠️ Groq recording returned null/empty path');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content:
+                  Text('لم يتم التقاط الصوت بشكل صحيح، يرجى المحاولة مرة أخرى'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
     }
   }
+
   Future<void> _stopNativeRecording() async {
     if (!_isRecording) return;
     setState(() {
@@ -343,38 +330,44 @@ cQBOFhw1ZkYvxx4A6HSNxyae
     }
   }
 
-  Future<void> _processAndNavigate({String? audioPath, String? nativeText, Future<String>? oracleTranscriptFuture}) async {
-      // Create Real Draft Note
-      final draft = NoteModel()
-        ..uuid = const Uuid().v4()
-        ..title = "New Recording"
-        ..content = nativeText ?? "Transcribing..." // Use Native Text if ready
-        ..originalText = nativeText ?? "" 
-        ..audioPath = audioPath ?? ""
-        ..status = NoteStatus.draft
-        ..createdAt = DateTime.now()
-        ..updatedAt = DateTime.now();
+  Future<void> _processAndNavigate(
+      {String? audioPath,
+      String? nativeText,
+      Future<String>? oracleTranscriptFuture}) async {
+    // Create Real Draft Note
+    final draft = NoteModel()
+      ..uuid = const Uuid().v4()
+      ..title = "New Recording"
+      ..content = nativeText ?? "Transcribing..." // Use Native Text if ready
+      ..originalText = nativeText ?? ""
+      ..audioPath = audioPath ?? ""
+      ..status = NoteStatus.draft
+      ..createdAt = DateTime.now()
+      ..updatedAt = DateTime.now();
 
-      if (mounted) {
-        // Navigate to Editor and wait for result
-        final result = await Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => EditorScreen(draftNote: draft, oracleTranscriptFuture: oracleTranscriptFuture)),
-        );
+    if (mounted) {
+      // Navigate to Editor and wait for result
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (_) => EditorScreen(
+                draftNote: draft,
+                oracleTranscriptFuture: oracleTranscriptFuture)),
+      );
 
-        // If note returned, animate it into inbox
-        if (result != null && result is String && result.isNotEmpty) {
-            draft.content = result;
-            draft.title = "Processed Note"; 
-            draft.status = NoteStatus.processed;
-            
-            setState(() => _selectedIndex = 0);
-            
-            Future.delayed(const Duration(milliseconds: 100), () {
-              _inboxKey.currentState?.addNote(draft);
-            });
-        }
+      // If note returned, animate it into inbox
+      if (result != null && result is String && result.isNotEmpty) {
+        draft.content = result;
+        draft.title = "Processed Note";
+        draft.status = NoteStatus.processed;
+
+        setState(() => _selectedIndex = 0);
+
+        Future.delayed(const Duration(milliseconds: 100), () {
+          _inboxKey.currentState?.addNote(draft);
+        });
       }
+    }
   }
 
   @override
@@ -395,7 +388,8 @@ cQBOFhw1ZkYvxx4A6HSNxyae
                 child: ListeningModeView(
                   getAmplitude: () async {
                     final prefs = await SharedPreferences.getInstance();
-                    final sttEngine = prefs.getString('stt_engine_pref') ?? 'oracle_live';
+                    final sttEngine =
+                        prefs.getString('stt_engine_pref') ?? 'oracle_live';
                     if (sttEngine == 'system_native') {
                       return _nativeAmplitude;
                     } else {
@@ -441,9 +435,9 @@ cQBOFhw1ZkYvxx4A6HSNxyae
                 tooltip: 'Inbox',
                 iconSize: 28,
               ),
-              
+
               const SizedBox(width: 48), // Spacer for the FAB
-              
+
               // Right Tab: Settings
               IconButton(
                 icon: const Icon(Icons.settings),
@@ -460,6 +454,4 @@ cQBOFhw1ZkYvxx4A6HSNxyae
       ),
     );
   }
-
-
 }

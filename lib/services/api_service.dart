@@ -1,7 +1,10 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../core/config/api_config.dart';
 
 class ApiService {
   static final ApiService _instance = ApiService._internal();
@@ -16,9 +19,9 @@ class ApiService {
   bool get hasToken => _token != null && _token!.isNotEmpty;
 
   Future<void> init() async {
-    _baseUrl = dotenv.env['API_BASE_URL'] ?? 'https://docapi.sootnote.com/api';
+    _baseUrl = ApiConfig.baseUrl;
     // Ensure base URL doesn't end with a slash to avoid double slashes with endpoint
-    if (_baseUrl!.endsWith('/')) {
+    if (_baseUrl != null && _baseUrl!.endsWith('/')) {
       _baseUrl = _baseUrl!.substring(0, _baseUrl!.length - 1);
     }
     print('ApiService initialized with baseUrl: $_baseUrl');

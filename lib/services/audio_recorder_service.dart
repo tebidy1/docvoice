@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:typed_data';
+
 import 'package:record/record.dart';
 
 class AudioRecorderService {
@@ -29,14 +30,14 @@ class AudioRecorderService {
     // Start recording to stream
     // We use PCM 16-bit for raw data or Opus if supported by the container.
     // For streaming to Whisper, raw PCM or WAV is often easiest to handle if we chunk it manually,
-    // but Opus is better for network. 
+    // but Opus is better for network.
     // Groq Whisper supports: flac, mp3, mp4, mpeg, mpga, m4a, ogg, wav, webm.
     // We will try to stream raw PCM and wrap it or just stream Opus packets if possible.
     // For simplicity in MVP, let's use raw PCM 16bit 16kHz (Whisper standard).
-    
+
     final stream = await _audioRecorder.startStream(
       const RecordConfig(
-        encoder: AudioEncoder.pcm16bits, 
+        encoder: AudioEncoder.pcm16bits,
         sampleRate: 16000,
         numChannels: 1,
       ),
@@ -44,7 +45,10 @@ class AudioRecorderService {
 
     _recordSubscription = stream.listen(
       (data) {
-        _audioStreamController?.add(data);
+        if (_audioStreamController != null &&
+            !_audioStreamController!.isClosed) {
+          _audioStreamController?.add(data);
+        }
       },
       onError: (e) {
         print("Recording error: $e");
@@ -78,7 +82,7 @@ class AudioRecorderService {
     if (!await hasPermission()) {
       throw Exception("Microphone permission denied");
     }
-    
+
     await _audioRecorder.start(
       const RecordConfig(
         encoder: AudioEncoder.wav,
@@ -88,7 +92,7 @@ class AudioRecorderService {
       path: path,
     );
   }
-  
+
   Future<String?> stop() async {
     await _recordSubscription?.cancel();
     await _audioStreamController?.close();
