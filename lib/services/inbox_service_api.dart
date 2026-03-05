@@ -28,12 +28,13 @@ class InboxService {
   // ============================================
 
   /// Add a new note (Legacy signature)
-  Future<int> addNote(
+  Future<NoteModel> addNote(
     String rawText, {
     String? patientName,
     String? summary,
     int? suggestedMacroId,
     String? formattedText,
+    String? audioPath,
   }) async {
     final note = NoteModel();
     note.uuid = DateTime.now().millisecondsSinceEpoch.toString();
@@ -42,6 +43,7 @@ class InboxService {
     note.summary = summary;
     note.suggestedMacroId = suggestedMacroId;
     note.formattedText = formattedText ?? '';
+    note.audioPath = audioPath; // Added audio path map
     note.content = note.formattedText.isNotEmpty ? note.formattedText : note.originalText; // Fix LateInitializationError
     note.status =
         note.formattedText.isNotEmpty ? NoteStatus.processed : NoteStatus.draft;
@@ -49,7 +51,7 @@ class InboxService {
     note.updatedAt = DateTime.now();
 
     final createdNote = await addNoteModel(note);
-    return createdNote.id;
+    return createdNote;
   }
 
   /// Add a new note using NoteModel

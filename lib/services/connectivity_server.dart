@@ -90,10 +90,10 @@ class ConnectivityServer {
                 final InboxService inbox = InboxService();
 
                 // Add as generic note
-                final newId = await inbox.addNote(jsonStr);
+                final newNote = await inbox.addNote(jsonStr);
 
                 // Mark as Processed (Ready)
-                await inbox.updateStatus(newId, NoteStatus.processed);
+                await inbox.updateStatus(newNote.id, NoteStatus.processed);
 
                 _statusController.add("Saved from Mobile (Ready)");
                 webSocket.sink.add("SAVED_ACK");

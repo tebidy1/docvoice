@@ -19,15 +19,31 @@ import '../core/ai/ai_regex_patterns.dart';
 import '../core/ai/text_processing_service.dart';
 import '../services/ai/ai_processing_service.dart';
 import '../services/windows_injector.dart';
+// ⚡ Multimodal AI — Windows Pilot (Phase 1)
+// To remove: delete this import + _applyOneShotAI() + the One-Shot button below
+import '../features/multimodal_ai/multimodal_ai_service.dart';
+import '../features/multimodal_ai/ai_studio_multimodal_service.dart';
+import '../core/ai/ai_prompt_constants.dart';
+import 'dart:io' show File;
 
 class InboxNoteDetailView extends StatefulWidget {
   final NoteModel note;
   final Macro? autoStartMacro;
-  final Stream<String>? pendingTextStream; // New: For instant open
+  final Stream<String>? pendingTextStream; // For instant open after Groq/Oracle recording
   final int noteNumber; // 1-based, oldest = 1
+  /// When provided, the view enters One-Shot mode:
+  /// The template card is shown immediately, and choosing a template sends
+  /// [audio file at oneShotAudioPath] + template prompt to Gemini in one request.
+  final String? oneShotAudioPath;
 
-  const InboxNoteDetailView(
-      {super.key, required this.note, this.autoStartMacro, this.pendingTextStream, this.noteNumber = 0});
+  const InboxNoteDetailView({
+    super.key,
+    required this.note,
+    this.autoStartMacro,
+    this.pendingTextStream,
+    this.noteNumber = 0,
+    this.oneShotAudioPath,
+  });
 
   @override
   State<InboxNoteDetailView> createState() => _InboxNoteDetailViewState();
@@ -60,10 +76,14 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   );
   Macro? _selectedMacro;
   bool _isGenerating = false;
+  bool _isOneShotGenerating = false; // ⚡ One-Shot AI state
   bool _isTemplateCardExpanded = true;  // Accordion: template card expanded by default
   bool _isGeneratedCardExpanded = false; // Accordion: generated card collapsed by default
   List<SmartSuggestion> _suggestions = [];
   List<Macro> _quickMacros = [];
+
+  // ⚡ One-Shot AI: the service instance (swap implementation here for Vertex AI)
+  final MultimodalAIService _multimodalService = AIStudioMultimodalService();
 
   // AI Processing Ring variables
   Timer? _generationTimer;
@@ -86,7 +106,16 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     _dockWindow();
     _loadQuickMacros();
 
-    // 1. Setup Stream (If Instant Open)
+    // ⚡ ONE-SHOT MODE: entered via gemini_oneshot STT engine
+    if (widget.oneShotAudioPath != null) {
+      // Show template selector immediately — no rawText step
+      _isTemplateCardExpanded = true;
+      _isGeneratedCardExpanded = false;
+      _isRawTextExpanded = false; // Hide source text section
+      return; // Skip all other init logic
+    }
+
+    // 1. Setup Stream (If Instant Open after Groq/Oracle recording)
     if (widget.pendingTextStream != null) {
       _isLoadingText = true;
       
@@ -333,6 +362,119 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     }
   }
   
+  // ═══════════════════════════════════════════════════════════════════════
+  // ⚡ ONE-SHOT AI: Audio + Template → Gemini 2.5 Flash (Multimodal)
+  // ═══════════════════════════════════════════════════════════════════════
+  // Sends the saved audio file + the selected template directly to Gemini.
+  // No backend hop required — Browser/App → Google AI Studio directly.
+  //
+  // MIGRATION: To switch to Vertex AI, change _multimodalService assignment
+  // in the field declaration above. UI code here does NOT change.
+  // ═══════════════════════════════════════════════════════════════════════
+  Future<void> _applyOneShotAI(Macro macro) async {
+    // Primary: oneShotAudioPath (when launched from Gemini One-Shot engine)
+    // Fallback: note.audioPath (when manually triggered from an existing note)
+    final audioPath = widget.oneShotAudioPath ?? widget.note.audioPath;
+    if (audioPath == null || audioPath.isEmpty) {
+      _showError(
+        '⚡ One-Shot AI requires an audio file.\n'
+        'Record using the "Gemini One-Shot AI" engine to use this feature.',
+      );
+      return;
+    }
+
+    // Read the audio bytes from disk
+    Uint8List audioBytes;
+    try {
+      final file = File(audioPath);
+      if (!await file.exists()) {
+        _showError('Audio file not found at: $audioPath');
+        return;
+      }
+      audioBytes = await file.readAsBytes();
+    } catch (e) {
+      _showError('Failed to read audio file: $e');
+      return;
+    }
+
+    // Determine MIME type from file extension
+    final ext = audioPath.split('.').last.toLowerCase();
+    final mimeType = switch (ext) {
+      'm4a'  => 'audio/m4a',
+      'mp4'  => 'audio/mp4',
+      'webm' => 'audio/webm',
+      'ogg'  => 'audio/ogg',
+      _      => 'audio/wav', // Windows default
+    };
+
+    setState(() {
+      _isOneShotGenerating = true;
+      _selectedMacro = macro;
+      _isTemplateCardExpanded = false;
+      _isGeneratedCardExpanded = true;
+      _elapsedSeconds = 0;
+      _statusMessageIndex = 0;
+    });
+
+    // Animate while waiting
+    _generationTimer?.cancel();
+    _generationTimer = Timer.periodic(const Duration(milliseconds: 1500), (t) {
+      if (mounted) setState(() {
+        _elapsedSeconds++;
+        _statusMessageIndex = (_statusMessageIndex + 1) % _statusMessages.length;
+      });
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final specialty  = prefs.getString('specialty') ?? 'General Practice';
+      final globalPrmt = prefs.getString('global_ai_prompt')
+          ?? AIPromptConstants.globalMasterPrompt;
+
+      // Single multimodal call — transcription + formatting in one pass
+      final result = await _multimodalService.processAudioNote(
+        audioBytes:   audioBytes,
+        mimeType:     mimeType,
+        macroContent: macro.content,
+        globalPrompt: globalPrmt,
+        specialty:    specialty,
+      );
+
+      if (result.success) {
+        if (mounted) {
+          setState(() {
+            _finalNoteController.text = result.formattedNote;
+            _suggestions = []; // One-Shot mode has no separate suggestions
+          });
+          await _autoSaveGeneratedContent(result.formattedNote, macro);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.bolt, color: Colors.amber, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(
+                    '⚡ One-Shot AI complete (${result.providerName})',
+                    style: const TextStyle(fontSize: 13),
+                  )),
+                ],
+              ),
+              backgroundColor: const Color(0xFF1B5E20),
+              duration: const Duration(seconds: 3),
+            ));
+          }
+        }
+      } else {
+        _showError('⚡ One-Shot AI failed: ${result.errorMessage}');
+      }
+    } catch (e) {
+      _showError('⚡ One-Shot AI error: $e');
+    } finally {
+      _generationTimer?.cancel();
+      if (mounted) setState(() => _isOneShotGenerating = false);
+    }
+  }
+
   Future<void> _autoSaveGeneratedContent(String content, Macro macro) async {
       try {
         await _inboxService.updateNote(
@@ -558,12 +700,14 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
         ),
       ),
         // Overlay for AI Generation/Transcription (New Unified Style)
-        if (_isGenerating || _isLoadingText)
+        if (_isGenerating || _isLoadingText || _isOneShotGenerating)
            Positioned.fill(
              child: ProcessingOverlay(
-               cyclingMessages: _isGenerating 
-                 ? _statusMessages 
-                 : ['Transcribing Audio...', 'Analyzing Speech...', 'Extracting Text...'],
+               cyclingMessages: _isOneShotGenerating
+                 ? ['⚡ Listening to audio...', '⚡ Filling template...', '⚡ Structuring note...']
+                 : _isGenerating 
+                   ? _statusMessages 
+                   : ['Transcribing Audio...', 'Analyzing Speech...', 'Extracting Text...'],
              ),
            ),
        ],
@@ -862,44 +1006,58 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
             crossFadeState: _isTemplateCardExpanded
                 ? CrossFadeState.showFirst
                 : CrossFadeState.showSecond,
-            firstChild: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-              child: SizedBox(
-                width: double.infinity,
-                child: Wrap(
-                  spacing: 7.0,
-                  runSpacing: 7.0,
-                  children: _quickMacros.map((macro) {
-                    final isSelected = _selectedMacro?.id == macro.id;
-                    return FilterChip(
-                      label: Text(macro.trigger),
-                      selected: isSelected,
-                      onSelected: (bool selected) {
-                        if (selected) _applyTemplate(macro);
-                      },
-                      backgroundColor: colorScheme.surface,
-                      selectedColor: colorScheme.primary.withOpacity(0.15),
-                      checkmarkColor: colorScheme.primary,
-                      labelStyle: TextStyle(
-                        fontSize: 12,
-                        color: isSelected ? colorScheme.primary : colorScheme.onSurface.withOpacity(0.7),
-                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                        side: BorderSide(
-                          color: isSelected
-                              ? colorScheme.primary
-                              : colorScheme.outline.withOpacity(0.4),
-                        ),
-                      ),
-                      showCheckmark: true,
-                      visualDensity: VisualDensity.compact,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    );
-                  }).toList(),
+            firstChild: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Template Chips (existing backend path) ────────────────
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: Wrap(
+                      spacing: 7.0,
+                      runSpacing: 7.0,
+                      children: _quickMacros.map((macro) {
+                        final isSelected = _selectedMacro?.id == macro.id;
+                        return FilterChip(
+                          label: Text(macro.trigger),
+                          selected: isSelected,
+                          onSelected: (bool selected) {
+                            if (selected) {
+                              // In One-Shot mode: send audio+template to Gemini directly
+                              // In classic mode: transcribe with backend STT first
+                              if (widget.oneShotAudioPath != null) {
+                                _applyOneShotAI(macro);
+                              } else {
+                                _applyTemplate(macro);
+                              }
+                            }
+                          },
+                          backgroundColor: colorScheme.surface,
+                          selectedColor: colorScheme.primary.withOpacity(0.15),
+                          checkmarkColor: colorScheme.primary,
+                          labelStyle: TextStyle(
+                            fontSize: 12,
+                            color: isSelected ? colorScheme.primary : colorScheme.onSurface.withOpacity(0.7),
+                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                            side: BorderSide(
+                              color: isSelected
+                                  ? colorScheme.primary
+                                  : colorScheme.outline.withOpacity(0.4),
+                            ),
+                          ),
+                          showCheckmark: true,
+                          visualDensity: VisualDensity.compact,
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        );
+                      }).toList(),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
             secondChild: const SizedBox(width: double.infinity, height: 0),
           ),

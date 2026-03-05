@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:screen_retriever/screen_retriever.dart';
@@ -40,6 +39,9 @@ class _DesktopAppState extends State<DesktopApp> {
   // Oracle streaming
   OracleLiveSpeechService? _oracleService;
   Future<String>? _oracleTranscriptFuture;
+
+  // Gemini One-Shot
+  String? _geminiOneShotPath; // Path to the WAV recorded in gemini_oneshot mode
 
   @override
   void initState() {
@@ -201,6 +203,7 @@ class _DesktopAppState extends State<DesktopApp> {
             if (_oracleService != null && _oracleTranscriptFuture != null) {
               // 1. Push Detail Viewer IMMEDIATELY so user gets instant visual feedback.
               final instantTextController = StreamController<String>.broadcast();
+
               final tempNote = NoteModel()
                 ..id = 0
                 ..uuid = 'temp_${DateTime.now().millisecondsSinceEpoch}'
@@ -211,8 +214,6 @@ class _DesktopAppState extends State<DesktopApp> {
                 ..status = NoteStatus.draft
                 ..patientName = 'Untitled';
 
-              // Close InboxManagerDialog if we can (optional but avoids stack mess)
-              // But to be safe and match groq, we just push on top.
               final dialogFuture = showDialog(
                 context: context,
                 barrierDismissible: false,
@@ -258,6 +259,41 @@ class _DesktopAppState extends State<DesktopApp> {
             return; // Skip standard WAV handling
           }
 
+          // --- GEMINI ONE-SHOT STOP: no transcription, just open template picker ---
+          if (sttEngine == 'gemini_oneshot') {
+            final oneShotPath = await _recorder.stop();
+            if (mounted) {
+              setState(() {
+                _isRecording = false;
+                _isProcessing = false;
+              });
+            }
+            if (oneShotPath != null && mounted) {
+              _geminiOneShotPath = oneShotPath;
+              // Save a lightweight draft note to inbox (no rawText yet — audioPath is what matters)
+              final savedNote = NoteModel()
+                ..id = 0
+                ..uuid = 'oneshot_${DateTime.now().millisecondsSinceEpoch}'
+                ..content = ''
+                ..rawText = ''
+                ..audioPath = oneShotPath
+                ..createdAt = DateTime.now()
+                ..updatedAt = DateTime.now()
+                ..status = NoteStatus.draft
+                ..patientName = 'Untitled';
+              // Open detail view in One-Shot mode — user picks a template to trigger Gemini
+              await showDialog(
+                context: context,
+                barrierDismissible: true,
+                builder: (context) => InboxNoteDetailView(
+                  note: savedNote,
+                  oneShotAudioPath: oneShotPath,
+                ),
+              );
+            }
+            return;
+          }
+
           // --- STANDARD GROQ WAV FLOW ---
           final path = await _recorder.stop();
           if (mounted) {
@@ -292,6 +328,7 @@ class _DesktopAppState extends State<DesktopApp> {
               ..uuid = 'temp_${DateTime.now().millisecondsSinceEpoch}'
               ..content = ''
               ..rawText = ''
+              ..audioPath = path
               ..createdAt = DateTime.now()
               ..updatedAt = DateTime.now()
               ..status =
@@ -324,8 +361,9 @@ class _DesktopAppState extends State<DesktopApp> {
                   text,
                   patientName: 'Untitled',
                   summary: null,
+                  audioPath: path,
                 );
-                print("✅ Persisted to Inbox");
+                print("✅ Persisted to Inbox with audio: $path");
               } catch (e) {
                 print("❌ Save failed: $e");
               }
@@ -346,7 +384,7 @@ class _DesktopAppState extends State<DesktopApp> {
               serverSub.cancel();
             }
 
-            // Cleanup File
+            // Cleanup the temp audio file
             await file.delete();
 
             // Wait for dialog to close before finally resetting processing state
@@ -428,10 +466,23 @@ cQBOFhw1ZkYvxx4A6HSNxyae
                   print("Oracle Stream Error: $e");
                },
              );
-             
+
              final audioStream = await _recorder.startRecording();
              _oracleTranscriptFuture = _oracleService!.startSession(audioStream);
 
+             if (mounted) {
+               setState(() {
+                 _isRecording = true;
+               });
+               _openRecordingDialog();
+             }
+          } else if (sttEngine == 'gemini_oneshot') {
+             // --- GEMINI ONE-SHOT START: Record locally to WAV, no streaming ---
+             final dir = await getTemporaryDirectory();
+             final path = '${dir.path}/oneshot_${DateTime.now().millisecondsSinceEpoch}.wav';
+             await _recorder.startRecordingToFile(path);
+             _geminiOneShotPath = path;
+             print("Gemini One-Shot recording started at: $path");
              if (mounted) {
                setState(() {
                  _isRecording = true;

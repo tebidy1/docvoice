@@ -26,6 +26,7 @@ class InboxService {
     int? suggestedMacroId,
     // Add formatted text support as Mobile processes it locally first
     String? formattedText, 
+    String? audioPath,
   }) async {
     try {
       await init();
@@ -37,6 +38,7 @@ class InboxService {
         // Mobile sends the processed text directly if available
         if (formattedText != null) 'formatted_text': formattedText,
         if (formattedText != null) 'status': 'processed', // Auto-mark as processed if we send formatted text
+        if (audioPath != null) 'audio_path': audioPath,
       };
 
       final response = await _apiService.post('/inbox-notes', body: body);
@@ -175,6 +177,7 @@ class InboxService {
         : DateTime.now();
     note.uuid = json['uuid'] ?? json['id'].toString(); // Fallback to ID if UUID missing
     note.content = note.formattedText.isNotEmpty ? note.formattedText : note.originalText; // Populate content
+    note.audioPath = json['audio_path']; // Add this line to map audio path
     note.updatedAt = json['updated_at'] != null 
         ? DateTime.parse(json['updated_at']) 
         : note.createdAt;

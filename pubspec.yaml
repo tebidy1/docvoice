@@ -29,7 +29,12 @@ dependencies:
   
   # AI & Logic
   # AI & Logic (Moved to Backend)
-  # google_generative_ai: ^0.4.6
+  # ─────────────────────────────────────────────────────────
+  # Multimodal AI — Direct Gemini (Windows Pilot, Phase 1)
+  # To REMOVE this feature: comment out the line below and
+  # delete the folder: lib/features/multimodal_ai/
+  # ─────────────────────────────────────────────────────────
+  google_generative_ai: ^0.4.6
   
   # Shared Logic (Moved to Backend)
   # scribe_brain:

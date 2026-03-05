@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import '../../core/ai/text_processing_service.dart';
-import 'smart_inject_stub.dart' if (dart.library.js_interop) 'smart_inject_web.dart';
+
 enum InjectionStatus {
   success,
   copiedOnly,
@@ -16,9 +16,9 @@ class InjectionResult {
 }
 
 class ExtensionInjectionService {
-  /// Cleans the text by removing placeholders and attempts to inject it into the active Chrome tab.
-  /// If injection fails or isn't possible (e.g., outside the web extension environment),
-  /// it falls back to copying the cleaned text to the clipboard.
+  /// Cleans the text by removing placeholders.
+  /// No actual injection occurs on non-web platforms; it strictly falls back
+  /// to copying the cleaned text to the clipboard.
   static Future<InjectionResult> smartCopyAndInject(String rawText) async {
     // 1. Clean the text (Filter placeholders)
     final cleanText = TextProcessingService.applySmartCopy(rawText);
@@ -44,30 +44,10 @@ class ExtensionInjectionService {
       debugPrint("Clipboard copy failed: $e");
     }
 
-    // 3. Try Smart Inject (Web Extension Only)
-    bool injected = false;
-    if (kIsWeb) {
-      injected = await performSmartInject(cleanText);
-    }
-
-    // 4. Determine final result
-    if (injected) {
-      return InjectionResult(
-        status: InjectionStatus.success,
-        message: "✅ Injected & Clean Copied",
-      );
-    } else {
-       if (kIsWeb) {
-           return InjectionResult(
-            status: InjectionStatus.copiedOnly,
-            message: "✅ Clean Text Copied (Injection failed)",
-          );
-       } else {
-           return InjectionResult(
-            status: InjectionStatus.copiedOnly,
-            message: "✅ Clean Text Copied",
-          );
-       }
-    }
+    // Since this is the stub for non-web (or non-extension), injection is disabled.
+    return InjectionResult(
+      status: InjectionStatus.copiedOnly,
+      message: "✅ Clean Text Copied",
+    );
   }
 }

@@ -232,6 +232,12 @@ class _SettingsDialogState extends State<SettingsDialog> {
                               value: 'oracle_live',
                               theme: currentTheme,
                             ),
+                            _buildSttItem(
+                              title: "⚡ Gemini One-Shot AI",
+                              subtitle: "Audio + Template → Note in one step",
+                              value: 'gemini_oneshot',
+                              theme: currentTheme,
+                            ),
                             if (_sttEnginePref == 'oracle_live') ...[
                               Padding(
                                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -269,6 +275,27 @@ class _SettingsDialogState extends State<SettingsDialog> {
                                         final prefs = await SharedPreferences.getInstance();
                                         await prefs.setBool('oracle_use_whisper_model', val);
                                       },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            if (_sttEnginePref == 'gemini_oneshot') ...[
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.info_outline, size: 18, color: Colors.amber),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        'Records audio locally, then sends audio + template to Gemini 2.5 Flash in one request. No intermediate transcription step.',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: currentTheme.iconColor.withOpacity(0.65),
+                                          height: 1.4,
+                                        ),
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -505,11 +532,16 @@ class _SettingsDialogState extends State<SettingsDialog> {
 
   Widget _buildSttItem({
     required String title,
+    String? subtitle,
     required String value,
     required AppTheme theme,
   }) {
     final isSelected = _sttEnginePref == value;
-    final primaryColor = value == 'oracle_live' ? Colors.orange : Colors.blue;
+    final primaryColor = value == 'oracle_live'
+        ? Colors.orange
+        : value == 'gemini_oneshot'
+            ? Colors.amber
+            : Colors.blue;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
@@ -523,6 +555,9 @@ class _SettingsDialogState extends State<SettingsDialog> {
       ),
       child: RadioListTile<String>(
         title: Text(title, style: TextStyle(color: theme.iconColor, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+        subtitle: subtitle != null
+            ? Text(subtitle, style: TextStyle(color: theme.iconColor.withOpacity(0.6), fontSize: 12))
+            : null,
         value: value,
         groupValue: _sttEnginePref,
         activeColor: primaryColor,

@@ -231,6 +231,28 @@ cQBOFhw1ZkYvxx4A6HSNxyae
           setState(() => _isRecording = false);
         }
       }
+    } else if (sttEngine == 'gemini_oneshot') {
+      // ⚡ Gemini One-Shot: record to local file (same mechanism as Groq)
+      final success = await _audioService.hasPermission();
+      if (!success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text("Microphone permission required"),
+              backgroundColor: Colors.orange,
+              action: SnackBarAction(
+                label: "FIX PERMISSION",
+                textColor: Colors.white,
+                onPressed: () => openPermissionFixPage(),
+              ),
+              duration: const Duration(seconds: 10),
+            ),
+          );
+          setState(() => _isRecording = false);
+        }
+        return;
+      }
+      await _audioService.startRecording();
     } else {
       // --- GROQ FLOW ---
       final success = await _audioService.hasPermission();
@@ -293,8 +315,23 @@ cQBOFhw1ZkYvxx4A6HSNxyae
       }();
 
       _processAndNavigate(oracleTranscriptFuture: transcriptFuture);
+    } else if (sttEngine == 'gemini_oneshot') {
+      // ⚡ One-Shot: stop recording and navigate directly to editor in One-Shot mode
+      final audioPath = await _audioService.stopRecording();
+      if (audioPath != null && audioPath.isNotEmpty) {
+        _processOneShotAndNavigate(audioPath: audioPath);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('⚡ لم يتم التقاط الصوت بشكل صحيح، يرجى المحاولة مرة أخرى'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
     } else {
-      // ── Groq flow (explicit selection or Oracle web fallback) ────────
+      // ── Groq flow (explicit selection or Oracle web fallback) ────
       _usingGroqFallback = false; // Reset for next recording
       final audioPath = await _audioService.stopRecording();
       debugPrint('Groq stopRecording returned: $audioPath');
@@ -327,6 +364,41 @@ cQBOFhw1ZkYvxx4A6HSNxyae
 
     if (nativeText.isNotEmpty) {
       _processAndNavigate(nativeText: nativeText);
+    }
+  }
+
+  Future<void> _processOneShotAndNavigate({required String audioPath}) async {
+    // Create draft with audio path — editor will open in One-Shot mode
+    final draft = NoteModel()
+      ..uuid = const Uuid().v4()
+      ..title = "⚡ One-Shot Recording"
+      ..content = ""
+      ..originalText = ""
+      ..audioPath = audioPath
+      ..status = NoteStatus.draft
+      ..createdAt = DateTime.now()
+      ..updatedAt = DateTime.now();
+
+    if (mounted) {
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => EditorScreen(
+            draftNote: draft,
+            oneShotAudioPath: audioPath, // ⚡ triggers One-Shot mode in editor
+          ),
+        ),
+      );
+
+      if (result != null && result is String && result.isNotEmpty) {
+        draft.content = result;
+        draft.title = "⚡ One-Shot Note";
+        draft.status = NoteStatus.processed;
+        setState(() => _selectedIndex = 0);
+        Future.delayed(const Duration(milliseconds: 100), () {
+          _inboxKey.currentState?.addNote(draft);
+        });
+      }
     }
   }
 

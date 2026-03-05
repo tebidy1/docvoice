@@ -1,5 +1,6 @@
 // ignore_for_file: deprecated_member_use
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../../mobile_app/core/theme.dart';
 import 'package:flutter/services.dart';
@@ -18,6 +19,10 @@ import '../../core/ai/ai_regex_patterns.dart';
 import '../../core/ai/text_processing_service.dart';
 import '../../services/ai/ai_processing_service.dart';
 import '../services/extension_injection_service.dart';
+// ⚡ Gemini One-Shot AI
+import '../../features/multimodal_ai/multimodal_ai_service.dart';
+import '../../features/multimodal_ai/ai_studio_multimodal_service.dart';
+import '../../core/ai/ai_prompt_constants.dart';
 
 class ExtensionEditorScreen extends StatefulWidget {
   final NoteModel draftNote;
@@ -63,16 +68,26 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
   List<MacroModel> _quickMacros = []; // Mobile service returns MacroModel
   MacroModel? _selectedMacro;
   bool _isGenerating = false;
+  bool _isOneShotGenerating = false; // ⚡ One-Shot AI state
+  bool _isOneShotMode = false;       // ⚡ True when gemini_oneshot engine is selected
   bool _isRawTextExpanded = false; // Collapsed by default
   bool _isLoading = true; // For audio processing
   bool _isTemplateCardExpanded = true;  // Template card: expanded by default
   bool _isGeneratedCardExpanded = false; // Generated note card: collapsed by default
+
+  // ⚡ One-Shot AI service (same as desktop)
+  final MultimodalAIService _multimodalService = AIStudioMultimodalService();
 
   // AI Processing Animation
   final List<String> _statusMessages = [
     'Processing Note...',
     'Consulting AI...',
     'Structuring Note...',
+  ];
+  final List<String> _oneShotMessages = [
+    '⚡ Sending to Gemini...',
+    '⚡ Transcribing Audio...',
+    '⚡ Applying Template...',
   ];
 
   @override
@@ -88,12 +103,26 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
       _isTemplateCardExpanded = true;
       _isGeneratedCardExpanded = false;
     }
-    
+
     _loadMacros();
-    
-    // Start Audio Processing if needed
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _processAudioIfNeeded();
+
+    // Check if One-Shot mode is active — if so skip transcription
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final prefs = await SharedPreferences.getInstance();
+      final sttEngine = prefs.getString('stt_engine_pref') ?? 'groq';
+      if (sttEngine == 'gemini_oneshot') {
+        // One-Shot mode: skip transcription, show template card directly
+        if (mounted) {
+          setState(() {
+            _isOneShotMode = true;
+            _isLoading = false;
+            _isRawTextExpanded = false;
+            _isTemplateCardExpanded = true;
+          });
+        }
+      } else {
+        _processAudioIfNeeded();
+      }
     });
   }
 
@@ -178,6 +207,12 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
         final prefs = await SharedPreferences.getInstance();
         final localGroqKey = prefs.getString('groq_api_key');
         final sttEngine = prefs.getString('stt_engine_pref') ?? 'oracle_live';
+
+        // gemini_oneshot is handled separately — should not reach here
+        if (sttEngine == 'gemini_oneshot') {
+          if (mounted) setState(() => _isLoading = false);
+          return;
+        }
         
         bool transcribed = false;
 
@@ -242,6 +277,77 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
               });
           }
       }
+  }
+
+  /// ⚡ ONE-SHOT AI: Send audio blob + template to Gemini in a single request
+  Future<void> _applyOneShotAI(MacroModel macro) async {
+    final audioPath = widget.draftNote.audioPath;
+    if (audioPath == null || audioPath.isEmpty) {
+      _showError('⚡ No audio file found. Please re-record with Gemini One-Shot engine.');
+      return;
+    }
+
+    // Fetch audio bytes from blob URL
+    Uint8List audioBytes;
+    try {
+      final response = await http.get(Uri.parse(audioPath));
+      if (response.statusCode != 200) {
+        _showError('⚡ Failed to load audio (HTTP ${response.statusCode})');
+        return;
+      }
+      audioBytes = response.bodyBytes;
+    } catch (e) {
+      _showError('⚡ Failed to read audio: $e');
+      return;
+    }
+
+    setState(() {
+      _isOneShotGenerating = true;
+      _selectedMacro = macro;
+      _isTemplateCardExpanded = false;
+      _isGeneratedCardExpanded = true;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final specialty = prefs.getString('specialty') ?? 'General Practice';
+      final globalPrompt = prefs.getString('global_ai_prompt') ?? AIPromptConstants.globalMasterPrompt;
+
+      // Detect MIME type from blob (webm is the default for Chrome recording)
+      const mimeType = 'audio/webm';
+
+      final result = await _multimodalService.processAudioNote(
+        audioBytes: audioBytes,
+        mimeType: mimeType,
+        macroContent: macro.content,
+        globalPrompt: globalPrompt,
+        specialty: specialty,
+      );
+
+      if (result.success) {
+        if (mounted) {
+          setState(() {
+            _finalNoteController.text = result.formattedNote;
+          });
+          _saveDraft();
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Row(children: [
+              const Icon(Icons.bolt, color: Colors.amber, size: 16),
+              const SizedBox(width: 8),
+              Expanded(child: Text('⚡ One-Shot complete (${result.providerName})', style: const TextStyle(fontSize: 13))),
+            ]),
+            backgroundColor: const Color(0xFF1B5E20),
+            duration: const Duration(seconds: 3),
+          ));
+        }
+      } else {
+        _showError('⚡ One-Shot AI failed: ${result.errorMessage}');
+      }
+    } catch (e) {
+      _showError('⚡ One-Shot AI error: $e');
+    } finally {
+      if (mounted) setState(() => _isOneShotGenerating = false);
+    }
   }
 
   Future<void> _saveDraft() async {
@@ -418,20 +524,24 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                                 const SizedBox(width: 8),
                                 _buildStatusBadge(),
                                 const Spacer(),
-                                // Use Raw Text Button moved to Header
-                                InkWell(
+                                // Use Raw Text button - hidden in One-Shot mode
+                                if (!_isOneShotMode)
+                                  InkWell(
                                     onTap: () {
                                         Clipboard.setData(ClipboardData(text: _rawText));
                                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Copied raw text"), duration: Duration(seconds: 1)));
                                     },
                                     child: const Text("Use Raw Text", style: TextStyle(fontSize: 12, color: AppTheme.accent, fontWeight: FontWeight.w500)),
-                                ),
+                                  ),
                             ],
                           ),
                           const SizedBox(height: 16),
                           
-                          _buildOriginalNoteCard(),
-                          const SizedBox(height: 16),
+                          // Source Text - hidden in One-Shot mode
+                          if (!_isOneShotMode) ...[
+                            _buildOriginalNoteCard(),
+                            const SizedBox(height: 16),
+                          ],
                           _buildTemplateSelectorCard(),
                           const SizedBox(height: 16),
                           _buildGeneratedNoteCard(),
@@ -446,11 +556,19 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
             if (_isLoading)
                const Positioned.fill(child: ProcessingOverlay()),
 
-            // Overlay for AI Generation
+            // Overlay for AI Generation (classic mode)
             if (_isGenerating)
                Positioned.fill(
                  child: ProcessingOverlay(
                    cyclingMessages: _statusMessages,
+                 ),
+               ),
+
+            // ⚡ Overlay for One-Shot AI generation
+            if (_isOneShotGenerating)
+               Positioned.fill(
+                 child: ProcessingOverlay(
+                   cyclingMessages: _oneShotMessages,
                  ),
                ),
           ],
@@ -519,6 +637,10 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
   }
 
   Widget _buildTemplateSelectorCard() {
+    // In One-Shot mode the header shows an amber bolt indicator
+    final headerColor = _isOneShotMode ? Colors.amber : AppTheme.accent;
+    final headerIcon = _isOneShotMode ? Icons.bolt : Icons.extension;
+    final headerTitle = _isOneShotMode ? '⚡ Choose Template (One-Shot)' : 'Choose Template';
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 350),
@@ -528,13 +650,13 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: _isTemplateCardExpanded
-              ? AppTheme.accent.withValues(alpha: 0.5)
+              ? headerColor.withValues(alpha: 0.5)
               : const Color(0xFF2A2A2A),
           width: _isTemplateCardExpanded ? 1.5 : 1.0,
         ),
         boxShadow: _isTemplateCardExpanded ? [
           BoxShadow(
-            color: AppTheme.accent.withValues(alpha: 0.08),
+            color: headerColor.withValues(alpha: 0.08),
             blurRadius: 12,
             spreadRadius: 0,
           )
@@ -554,18 +676,16 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 250),
                     child: Icon(
-                      _isTemplateCardExpanded ? Icons.extension : Icons.extension_outlined,
+                      _isTemplateCardExpanded ? headerIcon : Icons.extension_outlined,
                       key: ValueKey(_isTemplateCardExpanded),
-                      color: _isTemplateCardExpanded
-                          ? AppTheme.accent
-                          : Colors.white54,
+                      color: _isTemplateCardExpanded ? headerColor : Colors.white54,
                       size: 18,
                     ),
                   ),
                   const SizedBox(width: 8),
-                  const Text(
-                    "Choose Template",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
+                  Text(
+                    headerTitle,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
                   ),
                   if (!_isTemplateCardExpanded && _selectedMacro != null) ...[
                     const SizedBox(width: 8),
@@ -573,9 +693,9 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                       child: Text(
                         _selectedMacro!.trigger,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
-                          color: AppTheme.accent,
+                          color: headerColor,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -611,21 +731,28 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                       label: Text(macro.trigger),
                       selected: isSelected,
                       onSelected: (bool selected) {
-                        if (selected) _applyTemplate(macro);
+                        if (selected) {
+                          // Route to correct handler based on mode
+                          if (_isOneShotMode) {
+                            _applyOneShotAI(macro);
+                          } else {
+                            _applyTemplate(macro);
+                          }
+                        }
                       },
                       backgroundColor: const Color(0xFF2A2A2A),
-                      selectedColor: AppTheme.accent.withValues(alpha: 0.2),
-                      checkmarkColor: AppTheme.accent,
+                      selectedColor: headerColor.withValues(alpha: 0.2),
+                      checkmarkColor: headerColor,
                       labelStyle: TextStyle(
                         fontSize: 13,
-                        color: isSelected ? AppTheme.accent : Colors.white70,
+                        color: isSelected ? headerColor : Colors.white70,
                         fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                         fontFamily: 'Inter',
                       ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
                         side: BorderSide(
-                          color: isSelected ? AppTheme.accent : Colors.transparent,
+                          color: isSelected ? headerColor : Colors.transparent,
                         ),
                       ),
                       showCheckmark: true,

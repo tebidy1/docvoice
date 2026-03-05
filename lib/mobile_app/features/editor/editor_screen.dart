@@ -26,14 +26,18 @@ import '../../../core/ai/ai_regex_patterns.dart';
 import '../../../core/ai/text_processing_service.dart';
 import '../../../services/ai/ai_processing_service.dart';
 import '../../../../web_extension/services/extension_injection_service.dart';
+import '../../../../features/multimodal_ai/multimodal_ai_service.dart';
+import '../../../../features/multimodal_ai/ai_studio_multimodal_service.dart';
+import '../../../core/ai/ai_prompt_constants.dart';
 
 
 class EditorScreen extends StatefulWidget {
   final NoteModel? draftNote;
   final Future<String>? oracleTranscriptFuture;
   final int noteNumber;
+  final String? oneShotAudioPath; // ⚡ Non-null = Gemini One-Shot mode
   
-  const EditorScreen({super.key, this.draftNote, this.oracleTranscriptFuture, this.noteNumber = 0});
+  const EditorScreen({super.key, this.draftNote, this.oracleTranscriptFuture, this.noteNumber = 0, this.oneShotAudioPath});
 
   @override
   State<EditorScreen> createState() => _EditorScreenState();
@@ -56,6 +60,11 @@ class _EditorScreenState extends State<EditorScreen> {
   bool _isTemplateCardExpanded = true;  // Template card: expanded by default
   bool _isGeneratedCardExpanded = false; // Generated note card: collapsed by default
   
+  // ⚡ Gemini One-Shot mode
+  bool _isOneShotMode = false;
+  bool _isOneShotGenerating = false;
+  final MultimodalAIService _multimodalService = AIStudioMultimodalService();
+
   // Native STT
   stt.SpeechToText _speechToText = stt.SpeechToText();
   bool _speechEnabled = false;
@@ -70,6 +79,43 @@ class _EditorScreenState extends State<EditorScreen> {
   void initState() {
     super.initState();
     
+    // ⚡ Detect Gemini One-Shot mode
+    if (widget.oneShotAudioPath != null) {
+      _isOneShotMode = true;
+      _isLoading = false;         // No transcription needed
+      _isTemplateCardExpanded = true;  // Open template picker directly
+      _isGeneratedCardExpanded = false;
+
+      // Initialize controllers (required by build())
+      _sourceController = TextEditingController(text: "");
+      _finalController = PatternHighlightController(
+        text: "",
+        patternStyles: {
+          AIRegexPatterns.selectPlaceholderPattern:
+              const TextStyle(color: Colors.orange, backgroundColor: Color(0x33FF9800), fontWeight: FontWeight.bold),
+          AIRegexPatterns.anyBracketPattern:
+              const TextStyle(color: Colors.orange, backgroundColor: Color(0x33FF9800)),
+          AIRegexPatterns.headerPattern: const TextStyle(
+            decoration: TextDecoration.underline, decorationColor: Colors.white,
+            decorationThickness: 2.0, fontWeight: FontWeight.bold, color: Colors.white,
+          ),
+        },
+      );
+      _finalController.addListener(_onManualEdit);
+
+      // Initialize note ID if available
+      if (widget.draftNote != null) {
+        _currentNoteId = (widget.draftNote!.id > 0) ? widget.draftNote!.id : int.tryParse(widget.draftNote!.uuid);
+      }
+
+      // Load macros then wait for user to pick a template
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final macros = await MacroService().getMacros();
+        if (mounted) setState(() => _macros = macros);
+      });
+      return;
+    }
+
     final path = widget.draftNote?.audioPath;
     _isLoading = widget.oracleTranscriptFuture != null || (path != null && path.isNotEmpty);
     
@@ -133,6 +179,89 @@ class _EditorScreenState extends State<EditorScreen> {
     _finalController.dispose();
     _wsSubscription?.cancel();
     super.dispose();
+  }
+
+  /// ⚡ Gemini One-Shot: read audio file bytes → processAudioNote → display result
+  Future<void> _applyOneShotAI(MacroModel macro) async {
+    final audioPath = widget.oneShotAudioPath!;
+    setState(() => _isOneShotGenerating = true);
+
+    try {
+      // ── Load audio bytes: Web → fetch blob URL, Native → read local file ──
+      Uint8List audioBytes;
+      String mimeType;
+
+      if (kIsWeb) {
+        // PWA: stopRecording() returns a blob:// URL — fetch it via HTTP
+        final response = await http.get(Uri.parse(audioPath));
+        if (response.statusCode != 200) {
+          throw Exception('Failed to fetch audio blob (${response.statusCode})');
+        }
+        audioBytes = response.bodyBytes;
+        mimeType = 'audio/webm'; // Chrome/Chromium records as WebM/Opus
+      } else {
+        // Android: audioPath is a local file path
+        final audioFile = File(audioPath);
+        if (!audioFile.existsSync()) throw Exception('Audio file not found: $audioPath');
+        audioBytes = await audioFile.readAsBytes();
+        final ext = audioPath.toLowerCase();
+        mimeType = ext.endsWith('.mp3') ? 'audio/mp3'
+            : ext.endsWith('.m4a') ? 'audio/m4a'
+            : ext.endsWith('.ogg') ? 'audio/ogg'
+            : 'audio/wav';
+      }
+
+      // Load AI context from SharedPreferences (same as extension)
+      final prefs = await SharedPreferences.getInstance();
+      final specialty = prefs.getString('specialty') ?? 'General Practice';
+      final globalPrompt = prefs.getString('global_ai_prompt') ?? AIPromptConstants.globalMasterPrompt;
+
+      final result = await _multimodalService.processAudioNote(
+        audioBytes: audioBytes,
+        mimeType: mimeType,
+        macroContent: macro.content,
+        globalPrompt: globalPrompt,
+        specialty: specialty,
+      );
+
+      if (mounted) {
+        if (result.success) {
+          setState(() {
+            _selectedMacro = macro;
+            _finalController.text = result.formattedNote;
+            _isGeneratedCardExpanded = true;
+            _isTemplateCardExpanded = false;
+            _isOneShotGenerating = false;
+          });
+          await _saveDraftUpdate();
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Row(children: [
+              const Icon(Icons.bolt, color: Colors.amber, size: 16),
+              const SizedBox(width: 8),
+              Expanded(child: Text('⚡ One-Shot complete (${result.providerName})', style: const TextStyle(fontSize: 13))),
+            ]),
+            backgroundColor: const Color(0xFF1B5E20),
+            duration: const Duration(seconds: 3),
+          ));
+        } else {
+          setState(() => _isOneShotGenerating = false);
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('⚡ One-Shot failed: ${result.errorMessage}'),
+            backgroundColor: Colors.red,
+          ));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isOneShotGenerating = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('⚡ Gemini One-Shot error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   void _onManualEdit() {
@@ -785,14 +914,17 @@ class _EditorScreenState extends State<EditorScreen> {
                      padding: const EdgeInsets.all(16),
                      child: Column(
                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                       children: [
-                          _buildOriginalNoteCard(),
-                          const SizedBox(height: 16),
-                          _buildTemplateSelectorCard(),
-                          const SizedBox(height: 16),
-                          _buildGeneratedNoteCard(),
-                          const SizedBox(height: 80), // Space for bottom dock
-                       ],
+                        children: [
+                           // Source Text card — hidden in One-Shot mode (no transcription)
+                           if (!_isOneShotMode) ...[
+                             _buildOriginalNoteCard(),
+                             const SizedBox(height: 16),
+                           ],
+                           _buildTemplateSelectorCard(),
+                           const SizedBox(height: 16),
+                           _buildGeneratedNoteCard(),
+                           const SizedBox(height: 80), // Space for bottom dock
+                        ],
                      ),
                    ),
                  ),
@@ -814,6 +946,19 @@ class _EditorScreenState extends State<EditorScreen> {
                       'جاري معالجة الملاحظة...',
                       'التواصل مع الذكاء الاصطناعي...',
                       'تنسيق وهيكلة الملاحظة...',
+                   ],
+                 ),
+               ),
+
+            // ⚡ One-Shot Overlay
+            if (_isOneShotGenerating)
+               const Positioned.fill(
+                 child: ProcessingOverlay(
+                   cyclingMessages: [
+                      '⚡ إرسال الصوت إلى Gemini...',
+                      '⚡ تحليل الصوت والقالب...',
+                      '⚡ توليد الملاحظة الطبية...',
+                      '⚡ تنسيق النتيجة النهائية...',
                    ],
                  ),
                ),
@@ -933,14 +1078,14 @@ class _EditorScreenState extends State<EditorScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    "Choose Template",
-                    style: GoogleFonts.inter(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: colorScheme.onSurface,
-                    ),
-                  ),
+                   Text(
+                      _isOneShotMode ? "⚡ Choose Template (One-Shot)" : "Choose Template",
+                      style: GoogleFonts.inter(
+                       fontSize: 16,
+                       fontWeight: FontWeight.w600,
+                       color: _isOneShotMode ? Colors.amber : colorScheme.onSurface,
+                     ),
+                   ),
                   // Show selected macro name when collapsed
                   if (!_isTemplateCardExpanded && _selectedMacro != null) ...[
                     const SizedBox(width: 8),
@@ -983,32 +1128,40 @@ class _EditorScreenState extends State<EditorScreen> {
                   runSpacing: 8.0,
                   children: _macros.map((macro) {
                     final isSelected = _selectedMacro?.id == macro.id;
-                    return FilterChip(
-                      label: Text(macro.trigger),
-                      selected: isSelected,
-                      onSelected: (bool selected) {
-                        if (selected) _applyMacroWithAI(macro);
-                      },
-                      backgroundColor: colorScheme.surface,
-                      selectedColor: colorScheme.primary.withValues(alpha: 0.15),
-                      checkmarkColor: colorScheme.primary,
-                      labelStyle: GoogleFonts.inter(
-                        fontSize: 13,
-                        color: isSelected
-                            ? colorScheme.primary
-                            : colorScheme.onSurface.withValues(alpha: 0.7),
-                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                        side: BorderSide(
+                       return FilterChip(
+                        label: Text(macro.trigger),
+                        selected: isSelected,
+                        onSelected: (bool selected) {
+                          if (selected) {
+                            if (_isOneShotMode) {
+                              _applyOneShotAI(macro);
+                            } else {
+                              _applyMacroWithAI(macro);
+                            }
+                          }
+                        },
+                        backgroundColor: colorScheme.surface,
+                        selectedColor: _isOneShotMode
+                            ? Colors.amber.withValues(alpha: 0.15)
+                            : colorScheme.primary.withValues(alpha: 0.15),
+                        checkmarkColor: _isOneShotMode ? Colors.amber : colorScheme.primary,
+                        labelStyle: GoogleFonts.inter(
+                          fontSize: 13,
                           color: isSelected
-                              ? colorScheme.primary
-                              : colorScheme.outline.withValues(alpha: 0.4),
+                              ? (_isOneShotMode ? Colors.amber : colorScheme.primary)
+                              : colorScheme.onSurface.withValues(alpha: 0.7),
+                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                         ),
-                      ),
-                      showCheckmark: true,
-                    );
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          side: BorderSide(
+                            color: isSelected
+                                ? (_isOneShotMode ? Colors.amber : colorScheme.primary)
+                                : colorScheme.outline.withValues(alpha: 0.4),
+                          ),
+                        ),
+                        showCheckmark: true,
+                      );
                   }).toList(),
                 ),
               ),

@@ -477,6 +477,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         }
                       },
                     ),
+                    RadioListTile<String>(
+                      title: const Text("⚡ Gemini One-Shot AI",
+                          style: TextStyle(color: Colors.amber)),
+                      subtitle: const Text("Audio + Template → Note in one step. No transcription."),
+                      value: 'gemini_oneshot',
+                      groupValue: _sttEnginePref,
+                      activeColor: Colors.amber,
+                      onChanged: (val) async {
+                        if (val != null) {
+                          setState(() => _sttEnginePref = val);
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.setString('stt_engine_pref', val);
+                        }
+                      },
+                    ),
                     // A/B Testing Toggle — only visible when Oracle is selected
                     if (_sttEnginePref == 'oracle_live') ...
                       [
@@ -519,6 +534,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         ),
                       ],
+                    // Info block for One-Shot mode
+                    if (_sttEnginePref == 'gemini_oneshot') ...[
+                      const Divider(height: 1),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.info_outline, size: 16, color: Colors.amber),
+                            const SizedBox(width: 8),
+                            const Expanded(
+                              child: Text(
+                                'Records audio, then sends it + template directly to Gemini — skips the transcription step entirely. Ideal for fast, high-quality clinical notes.',
+                                style: TextStyle(fontSize: 12, color: Colors.grey, height: 1.4),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

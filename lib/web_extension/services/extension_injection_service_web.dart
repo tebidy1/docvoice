@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 import '../../core/ai/text_processing_service.dart';
-import 'smart_inject_stub.dart' if (dart.library.js_interop) 'smart_inject_web.dart';
+
 enum InjectionStatus {
   success,
   copiedOnly,
@@ -47,7 +49,23 @@ class ExtensionInjectionService {
     // 3. Try Smart Inject (Web Extension Only)
     bool injected = false;
     if (kIsWeb) {
-      injected = await performSmartInject(cleanText);
+      try {
+        // Access the global window.scribeflow object defined in extension_interop.js
+        final scribeflow = globalContext['scribeflow'];
+        if (scribeflow != null) {
+          final jsObj = scribeflow as JSObject;
+          // Call injectTextToActiveTab(cleanText)
+          final promise =
+              jsObj.callMethod('injectTextToActiveTab'.toJS, cleanText.toJS)
+                  as JSPromise;
+          final result = await promise.toDart;
+          injected = (result as JSBoolean).toDart;
+        } else {
+             debugPrint("Injection failed: window.scribeflow is null. Ensure extension_interop.js is loaded.");
+        }
+      } catch (e) {
+        debugPrint("Injection failed: $e");
+      }
     }
 
     // 4. Determine final result

@@ -38,7 +38,7 @@
         }
     ],
     "content_security_policy": {
-        "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
+        "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' wss://realtime.aiservice.me-riyadh-1.oci.oraclecloud.com https://docapi.sootnote.com;"
     },
     "background_color": "#ffffff",
     "theme_color": "#0F172A",

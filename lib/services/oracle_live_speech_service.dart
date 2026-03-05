@@ -151,14 +151,17 @@ class OracleLiveSpeechService {
         await _openWebSocket(inlineToken: webToken);
       } else {
         // ── MOBILE / DESKTOP FLOW ────────────────────────────────────────
-        // On native, ws_channel can send custom headers, but Oracle's
-        // preferred native flow is: open WS → send token as first message.
+        // Fetch token FIRST, before opening the WS connection,
+        // so we can authenticate immediately and avoid server disconnects.
+        _setState(OracleSpeechState.authenticating);
+        final tokenData = await _createRealtimeSessionToken();
+        final token = tokenData['token'] as String;
+
         _setState(OracleSpeechState.connecting);
         await _openWebSocket();
 
         // Step 2: Send CREDENTIALS authentication message.
-        _setState(OracleSpeechState.authenticating);
-        await _sendCredentials();
+        await _sendCredentials(token);
       }
 
       // Step 3: Start streaming audio.
@@ -256,7 +259,7 @@ class OracleLiveSpeechService {
     if (model == OracleSTTModel.oracleMedical) {
       params.addAll([
         'isAckEnabled=true',
-        'encoding=audio/raw;rate=16000',
+        'encoding=audio%2Fraw%3Brate%3D16000',  // URI-encoded: audio/raw;rate=16000
         'modelType=ORACLE',
         'modelDomain=MEDICAL',
         'languageCode=en-US',
@@ -266,7 +269,7 @@ class OracleLiveSpeechService {
       // Note: Oracle WHISPER uses 'ar' not 'ar-SA' for Arabic
       params.addAll([
         'isAckEnabled=false',
-        'encoding=audio/raw;rate=16000',
+        'encoding=audio%2Fraw%3Brate%3D16000',  // URI-encoded: audio/raw;rate=16000
         'modelType=WHISPER',
         'languageCode=ar',
       ]);
@@ -484,12 +487,8 @@ class OracleLiveSpeechService {
     }
   }
 
-  Future<void> _sendCredentials() async {
+  Future<void> _sendCredentials(String token) async {
     try {
-      final tokenData = await _createRealtimeSessionToken();
-      final token = tokenData['token'] as String;
-      debugPrint('✅ OCI Token acquired successfully (HTTP 200)');
-
       final authMessage = jsonEncode({
         'authenticationType': 'TOKEN',
         'token': token,
@@ -499,7 +498,7 @@ class OracleLiveSpeechService {
       _channel!.sink.add(authMessage);
       debugPrint('✅ OCI TOKEN auth message sent over WebSocket');
     } catch (e) {
-      debugPrint('❌ OCI Token generation failed: $e');
+      debugPrint('❌ OCI Token authentication failed: $e');
       rethrow;
     }
   }
@@ -514,8 +513,12 @@ class OracleLiveSpeechService {
         if (_channel != null &&
             (_state == OracleSpeechState.ready ||
                 _state == OracleSpeechState.finalizing)) {
-          // OCI expects raw binary audio frames over the WebSocket.
-          _channel!.sink.add(chunk);
+          try {
+            _channel!.sink.add(chunk);
+          } catch (e) {
+            debugPrint('Ignored WebSocket write error: $e');
+            // The connection might have closed abruptly before onDone fired.
+          }
         }
       },
       onError: (e) {
