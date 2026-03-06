@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../mobile_app/core/theme.dart';
 import '../../mobile_app/services/audio_recording_service.dart';
 import 'extension_settings_screen.dart';
 import 'extension_inbox_screen.dart'; // New Extension Inbox
@@ -130,8 +129,12 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final backgroundColor = theme.scaffoldBackgroundColor;
+    final surfaceColor = theme.cardTheme.color ?? (theme.brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.white);
+
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: backgroundColor,
       body: SafeArea(
         child: Stack(
           children: [
@@ -167,7 +170,7 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
       bottomNavigationBar: BottomAppBar(
         shape: const CircularNotchedRectangle(),
         notchMargin: 6.0,
-        color: const Color(0xFF1E1E1E),
+        color: surfaceColor,
         child: SizedBox(
           height: 50.0, // Comapct
           child: Row(
@@ -175,14 +178,14 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
             children: [
               IconButton(
                 icon: const Icon(Icons.inbox),
-                color: _selectedIndex == 0 ? const Color(0xFF4A90E2) : const Color(0xFF757575),
+                color: _selectedIndex == 0 ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
                 onPressed: () => _onItemTapped(0),
                 tooltip: 'Inbox',
               ),
               const SizedBox(width: 32),
               IconButton(
                 icon: const Icon(Icons.settings),
-                color: _selectedIndex == 1 ? const Color(0xFF4A90E2) : const Color(0xFF757575),
+                color: _selectedIndex == 1 ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
                 onPressed: () => _onItemTapped(1),
                 tooltip: 'Settings',
               ),

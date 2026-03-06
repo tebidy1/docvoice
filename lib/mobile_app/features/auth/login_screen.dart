@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/brand/brand_colors.dart';
-import '../../../screens/qr_login_screen.dart';
 import '../../../services/auth_service.dart';
 import '../../features/home/home_screen.dart';
 
@@ -196,10 +195,12 @@ class _LoginScreenState extends State<LoginScreen>
                               padding: const EdgeInsets.all(12),
                               margin: const EdgeInsets.only(bottom: 18),
                               decoration: BoxDecoration(
-                                color: BrandColors.error.withValues(alpha: 0.08),
+                                color:
+                                    BrandColors.error.withValues(alpha: 0.08),
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
-                                  color: BrandColors.error.withValues(alpha: 0.25),
+                                  color:
+                                      BrandColors.error.withValues(alpha: 0.25),
                                 ),
                               ),
                               child: Text(
@@ -249,8 +250,8 @@ class _LoginScreenState extends State<LoginScreen>
                               onPressed: _isLoading ? null : _login,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: BrandColors.primaryBlue,
-                                disabledBackgroundColor:
-                                    BrandColors.primaryBlue.withValues(alpha: 0.5),
+                                disabledBackgroundColor: BrandColors.primaryBlue
+                                    .withValues(alpha: 0.5),
                                 foregroundColor: Colors.white,
                                 elevation: 0,
                                 shape: RoundedRectangleBorder(
@@ -276,36 +277,6 @@ class _LoginScreenState extends State<LoginScreen>
                             ),
                           ),
                           const SizedBox(height: 16),
-
-                          // QR login
-                          OutlinedButton.icon(
-                            onPressed: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (_) => const QrLoginScreen()),
-                            ),
-                            icon: const Icon(Icons.qr_code,
-                                color: BrandColors.primaryBlue, size: 20),
-                            label: Text(
-                              'تسجيل عبر QR / Show QR to Login',
-                              style: GoogleFonts.cairo(
-                                color: BrandColors.primaryBlue,
-                                fontSize: 14,
-                              ),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              side: BorderSide(
-                                  color:
-                                      BrandColors.primaryBlue.withValues(alpha: 0.3)),
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 13),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-
                           // Sync
                           TextButton.icon(
                             onPressed: _showSyncDialog,
@@ -411,8 +382,8 @@ class _LoginScreenState extends State<LoginScreen>
           children: [
             Text(
               'احصل على الرمز من الإعدادات > ربط جهاز جديد',
-              style: GoogleFonts.cairo(
-                  color: BrandColors.textMuted, fontSize: 12),
+              style:
+                  GoogleFonts.cairo(color: BrandColors.textMuted, fontSize: 12),
               textDirection: TextDirection.rtl,
             ),
             const SizedBox(height: 16),
@@ -564,7 +535,8 @@ class _LoginLogoPainter extends CustomPainter {
       Paint()..color = BrandColors.darkNavy,
     );
     canvas.drawArc(
-      Rect.fromCenter(center: Offset(bCx, bCy + 1 * s), width: 12 * s, height: 9 * s),
+      Rect.fromCenter(
+          center: Offset(bCx, bCy + 1 * s), width: 12 * s, height: 9 * s),
       0,
       pi,
       false,
@@ -574,8 +546,13 @@ class _LoginLogoPainter extends CustomPainter {
         ..strokeWidth = 2 * s
         ..strokeCap = StrokeCap.round,
     );
-    canvas.drawLine(Offset(bCx, bCy + 6 * s), Offset(bCx, bCy + 10 * s),
-        Paint()..color = BrandColors.darkNavy..strokeWidth = 2 * s..strokeCap = StrokeCap.round);
+    canvas.drawLine(
+        Offset(bCx, bCy + 6 * s),
+        Offset(bCx, bCy + 10 * s),
+        Paint()
+          ..color = BrandColors.darkNavy
+          ..strokeWidth = 2 * s
+          ..strokeCap = StrokeCap.round);
   }
 
   @override

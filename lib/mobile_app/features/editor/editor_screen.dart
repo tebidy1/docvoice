@@ -25,6 +25,8 @@ import '../../services/groq_service.dart'; // Direct Groq for faster Web transcr
 import '../../../core/ai/ai_regex_patterns.dart';
 import '../../../core/ai/text_processing_service.dart';
 import '../../../services/ai/ai_processing_service.dart';
+import '../../../../core/medical_departments.dart';
+import '../../../../services/department_service.dart';
 import '../../../../web_extension/services/extension_injection_service.dart';
 import '../../../../features/multimodal_ai/multimodal_ai_service.dart';
 import '../../../../features/multimodal_ai/ai_studio_multimodal_service.dart';
@@ -110,8 +112,21 @@ class _EditorScreenState extends State<EditorScreen> {
 
       // Load macros then wait for user to pick a template
       WidgetsBinding.instance.addPostFrameCallback((_) async {
-        final macros = await MacroService().getMacros();
-        if (mounted) setState(() => _macros = macros);
+        final allMacros = await MacroService().getMacros();
+        final prefs = await SharedPreferences.getInstance();
+        final deptId = DepartmentService().value ?? prefs.getString('specialty');
+        final deptNameEn = deptId != null ? MedicalDepartments.getById(deptId)?.nameEn : null;
+
+        final filteredMacros = allMacros.where((m) {
+          final cats = m.category.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+          if (cats.isEmpty) return true;
+          if (cats.contains('General') || cats.contains('General Practice')) return true;
+          if (deptId != null && cats.contains(deptId)) return true;
+          if (deptNameEn != null && cats.contains(deptNameEn)) return true;
+          return false;
+        }).toList();
+
+        if (mounted) setState(() => _macros = filteredMacros);
       });
       return;
     }
@@ -213,15 +228,12 @@ class _EditorScreenState extends State<EditorScreen> {
 
       // Load AI context from SharedPreferences (same as extension)
       final prefs = await SharedPreferences.getInstance();
-      final specialty = prefs.getString('specialty') ?? 'General Practice';
-      final globalPrompt = prefs.getString('global_ai_prompt') ?? AIPromptConstants.globalMasterPrompt;
-
       final result = await _multimodalService.processAudioNote(
         audioBytes: audioBytes,
         mimeType: mimeType,
         macroContent: macro.content,
-        globalPrompt: globalPrompt,
-        specialty: specialty,
+        specialty: await AIProcessingService.getEffectiveSpecialty(),
+        globalPrompt: prefs.getString('global_ai_prompt') ?? AIPromptConstants.globalMasterPrompt,
       );
 
       if (mounted) {
@@ -320,7 +332,20 @@ class _EditorScreenState extends State<EditorScreen> {
 
   Future<void> _initStandalone() async {
      final macroService = MacroService();
-     final macros = await macroService.getMacros();
+     final allMacros = await macroService.getMacros();
+     
+     final prefs = await SharedPreferences.getInstance();
+     final deptId = DepartmentService().value ?? prefs.getString('specialty');
+     final deptNameEn = deptId != null ? MedicalDepartments.getById(deptId)?.nameEn : null;
+
+     final macros = allMacros.where((m) {
+       final cats = m.category.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+       if (cats.isEmpty) return true;
+       if (cats.contains('General') || cats.contains('General Practice')) return true;
+       if (deptId != null && cats.contains(deptId)) return true;
+       if (deptNameEn != null && cats.contains(deptNameEn)) return true;
+       return false;
+     }).toList();
      
      // 🚀 FETCH LATEST DATA: But only if we don't have fresh content
      // This prevents cache from overwriting AI-generated results

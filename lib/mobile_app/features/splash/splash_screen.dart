@@ -10,8 +10,7 @@ import '../../../core/brand/brand_colors.dart';
 import '../../../services/auth_service.dart';
 import '../../../desktop/desktop_app.dart'
     if (dart.library.html) '../../../desktop/desktop_app_stub.dart';
-import '../../../landing_page/landing_page.dart';
-import '../../../landing_page/theme/app_theme.dart';
+
 import '../../../widgets/auth_guard.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../auth/login_screen.dart';
@@ -86,42 +85,40 @@ class _SplashScreenState extends State<SplashScreen>
     final isDesktopPlatform = !kIsWeb &&
         (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
 
-    Widget destination;
-    
-    if (firstRun) {
+    Widget? destination;
+
+    if (firstRun && !isDesktopPlatform) {
+      // Onboarding only for mobile first-run; desktop/web go directly to login
       destination = const OnboardingScreen();
     } else if (isAuth) {
       destination = isDesktopPlatform ? const DesktopApp() : const HomeScreen();
     } else {
-      // If unauthenticated: Desktop/Web go to Landing, Mobile goes to LoginScreen
-      if (isDesktopPlatform || kIsWeb) {
-        destination = Theme(
-          data: MedTheme.darkTheme,
-          child: const Directionality(
-            textDirection: TextDirection.rtl,
-            child: LandingHomeScaffold(),
-          ),
-        );
-      } else {
-        destination = const LoginScreen();
-      }
+      destination = null; // Signal to use named route below
     }
 
-    // For DestkopApp, we also need AuthGuard:
+    // For DesktopApp, we also need AuthGuard:
     if (isAuth && destination is DesktopApp) {
-      destination = AuthGuard(child: destination);
+      destination = AuthGuard(child: destination as DesktopApp);
     } else if (isAuth && destination is HomeScreen) {
-      destination = AuthGuard(child: destination);
+      destination = AuthGuard(child: destination as HomeScreen);
     }
 
-    Navigator.of(context).pushReplacement(
-      PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 500),
-        pageBuilder: (_, __, ___) => destination,
-        transitionsBuilder: (_, anim, __, child) =>
-            FadeTransition(opacity: anim, child: child),
-      ),
-    );
+    if (destination != null) {
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          transitionDuration: const Duration(milliseconds: 500),
+          pageBuilder: (_, __, ___) => destination!,
+          transitionsBuilder: (_, anim, __, child) =>
+              FadeTransition(opacity: anim, child: child),
+        ),
+      );
+    } else {
+      // Unauthenticated — let main.dart pick the right LoginScreen for each platform
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        '/login',
+        (route) => false,
+      );
+    }
   }
 
   @override

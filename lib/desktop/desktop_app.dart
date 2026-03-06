@@ -64,11 +64,10 @@ class _DesktopAppState extends State<DesktopApp> {
 
   Future<void> _setInitialWindowSize() async {
     try {
-      // Enforce Capsule Mode Properties
       await windowManager.setResizable(false);
       await windowManager.setAlwaysOnTop(true);
-      // Set window size to match the capsule content (tight fit)
-      await windowManager.setSize(const Size(280, 56));
+      // 300px gives enough room for 7 buttons + Windows window chrome overhead
+      await windowManager.setSize(const Size(300, 56));
     } catch (e) {
       print("Error setting initial window size: $e");
     }
@@ -602,149 +601,25 @@ cQBOFhw1ZkYvxx4A6HSNxyae
                                 boxShadow: theme.shadows, // From Theme
                               ),
                               child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceEvenly,
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 mainAxisSize: MainAxisSize.max,
                                 children: [
-                                  // 1. Close Button (Far Left / End)
-                                  _buildIconButton(
-                                    icon: Icons.close,
-                                    onTap: _closeWindow,
-                                    tooltip: "Close",
-                                    color: theme.iconColor,
-                                    theme: theme,
+                                  // 1. Drag Handle (Far Left — Windows 11 style dots)
+                                  _DragHandleButton(
+                                    dotColor: theme.dragHandleColor,
+                                    hoverColor: theme.hoverColor,
+                                    onDragStart: () => windowManager.startDragging(),
                                   ),
 
-                                  const SizedBox(width: 4), // Spec: 4px gap
+                                  const SizedBox(width: 4),
 
-                                  // 0. Admin/Settings Button (Before Last)
-                                  _buildIconButton(
-                                    icon: Icons.settings,
-                                    onTap: () async {
-                                      await showDialog(
-                                        context: context,
-                                        barrierDismissible: true,
-                                        barrierColor: Colors
-                                            .transparent, // Or semi-transparent if centered
-                                        builder: (context) =>
-                                            const SettingsDialog(),
-                                      );
-                                    },
-                                    tooltip: "Settings",
-                                    color: theme.iconColor,
-                                    theme: theme,
-                                  ),
-
-                                  const SizedBox(width: 4), // Spec: 4px gap
-
-                                  // 2. Lightning Icon (Macros)
-                                  _buildIconButton(
-                                    icon: Icons.flash_on,
-                                    onTap: () async {
-                                      await showDialog(
-                                        context: context,
-                                        barrierDismissible: true,
-                                        barrierColor: Colors.transparent,
-                                        builder: (context) =>
-                                            const MacroManagerDialog(),
-                                      );
-                                    },
-                                    tooltip: "Macros",
-                                    color: theme.iconColor,
-                                    theme: theme,
-                                  ),
-
-                                  const SizedBox(width: 4), // Spec: 4px gap
-
-                                  // 3. Messages Icon (Inbox)
-                                  StreamBuilder<List>(
-                                    stream: _inboxService.watchPendingNotes(),
-                                    builder: (context, snapshot) {
-                                      final count = snapshot.data?.length ?? 0;
-                                      final hasNew = count > _lastViewedCount;
-
-                                      return Stack(
-                                        clipBehavior: Clip.none,
-                                        children: [
-                                          _buildIconButton(
-                                            icon: hasNew
-                                                ? Icons
-                                                    .mark_chat_unread_outlined
-                                                : Icons.chat_bubble_outline,
-                                            onTap: () async {
-                                              // Update last viewed logic
-                                              setState(() =>
-                                                  _lastViewedCount = count);
-
-                                              await WindowManagerHelper
-                                                  .expandToSidebar(context);
-                                              await showDialog(
-                                                context: context,
-                                                barrierDismissible: true,
-                                                barrierColor:
-                                                    Colors.transparent,
-                                                builder: (context) =>
-                                                    InboxManagerDialog(
-                                                      isRecording: _isRecording,
-                                                      isProcessing: _isProcessing,
-                                                      onRecordTap: _toggleRecording,
-                                                      recorderService: _recorder,
-                                                    ),
-                                              );
-                                              await WindowManagerHelper
-                                                  .collapseToPill(context);
-
-                                              // Update again after closing in case changes happened
-                                              final freshNotes =
-                                                  await _inboxService
-                                                      .getPendingNotes();
-                                              if (mounted) {
-                                                setState(() => _lastViewedCount =
-                                                    freshNotes.length);
-                                              }
-                                            },
-                                            tooltip: "Inbox",
-                                            color: hasNew
-                                                ? Colors.orange
-                                                : theme.iconColor,
-                                            theme: theme,
-                                          ),
-                                          if (hasNew)
-                                            Positioned(
-                                              right: 0,
-                                              top: 0,
-                                              child: Container(
-                                                width: 10,
-                                                height: 10,
-                                                decoration: const BoxDecoration(
-                                                  color: Colors.orange,
-                                                  shape: BoxShape.circle,
-                                                ),
-                                              ),
-                                            ),
-                                        ],
-                                      );
-                                    },
-                                  ),
-
-                                  const SizedBox(width: 4), // Spec: 4px gap
-
-                                  // Divider
-                                  Container(
-                                    width: 1,
-                                    height: 20, // Spec: 20px
-                                    color: theme.dividerColor, // From Theme
-                                  ),
-
-                                  const SizedBox(width: 4), // Spec: 4px gap
-
-                                  // 4. Microphone Button (Hero - Rounded Square)
+                                  // 2. Microphone Button (Hero)
                                   MouseRegion(
                                     cursor: SystemMouseCursors.click,
                                     child: GestureDetector(
                                       onTap: _isProcessing
                                           ? null
-                                          : _toggleRecording, // Disable tap when processing
+                                          : _toggleRecording,
                                       child: AnimatedContainer(
                                         duration:
                                             const Duration(milliseconds: 200),
@@ -753,15 +628,13 @@ cQBOFhw1ZkYvxx4A6HSNxyae
                                         decoration: BoxDecoration(
                                           color: _isRecording
                                               ? theme.micRecordingBackground
-                                              : theme
-                                                  .micIdleBackground, // From Theme
-                                          borderRadius: BorderRadius.circular(
-                                              4), // Spec: 4px radius
+                                              : theme.micIdleBackground,
+                                          borderRadius:
+                                              BorderRadius.circular(4),
                                           border: Border.all(
                                               color: _isRecording
                                                   ? theme.micRecordingBorder
-                                                  : theme
-                                                      .micIdleBorder, // From Theme
+                                                  : theme.micIdleBorder,
                                               width: 1),
                                         ),
                                         child: _isProcessing
@@ -780,36 +653,144 @@ cQBOFhw1ZkYvxx4A6HSNxyae
                                                     : Icons.mic,
                                                 color: _isRecording
                                                     ? theme.micRecordingIcon
-                                                    : theme
-                                                        .micIdleIcon, // From Theme
+                                                    : theme.micIdleIcon,
                                                 size: 20,
                                               ),
                                       ),
                                     ),
                                   ),
 
-                                  const SizedBox(width: 4), // Spec: 4px gap
+                                  const SizedBox(width: 4),
 
-                                  // 5. Drag Handle (Far Right - Grid Pattern)
-                                  MouseRegion(
-                                    cursor: SystemMouseCursors.grab,
-                                    child: GestureDetector(
-                                      onPanStart: (details) {
-                                        windowManager.startDragging();
-                                      },
-                                      child: Container(
-                                        width: 32,
-                                        height: 40,
-                                        color: Colors.transparent,
-                                        alignment: Alignment.center,
-                                        child: Icon(
-                                          Icons.grid_view, // Grid dots look
-                                          color: theme
-                                              .dragHandleColor, // From Theme
-                                          size: 18,
-                                        ),
-                                      ),
-                                    ),
+                                  // Divider
+                                  Container(
+                                    width: 1,
+                                    height: 20,
+                                    color: theme.dividerColor,
+                                  ),
+
+                                  const SizedBox(width: 4),
+
+                                  // 3. Messages Icon (Inbox)
+                                  StreamBuilder<List>(
+                                    stream: _inboxService.watchPendingNotes(),
+                                    builder: (context, snapshot) {
+                                      final count = snapshot.data?.length ?? 0;
+                                      final hasNew = count > _lastViewedCount;
+
+                                      return Stack(
+                                        clipBehavior: Clip.none,
+                                        children: [
+                                          _buildIconButton(
+                                            icon: hasNew
+                                                ? Icons.mark_chat_unread_outlined
+                                                : Icons.chat_bubble_outline,
+                                            onTap: () async {
+                                              setState(() =>
+                                                  _lastViewedCount = count);
+
+                                              await WindowManagerHelper
+                                                  .expandToSidebar(context);
+                                              await showDialog(
+                                                context: context,
+                                                barrierDismissible: true,
+                                                barrierColor:
+                                                    Colors.transparent,
+                                                builder: (context) =>
+                                                    InboxManagerDialog(
+                                                      isRecording: _isRecording,
+                                                      isProcessing:
+                                                          _isProcessing,
+                                                      onRecordTap:
+                                                          _toggleRecording,
+                                                      recorderService:
+                                                          _recorder,
+                                                    ),
+                                              );
+                                              await WindowManagerHelper
+                                                  .collapseToPill(context);
+
+                                              final freshNotes =
+                                                  await _inboxService
+                                                      .getPendingNotes();
+                                              if (mounted) {
+                                                setState(() =>
+                                                    _lastViewedCount =
+                                                        freshNotes.length);
+                                              }
+                                            },
+                                            tooltip: "Inbox",
+                                            color: hasNew
+                                                ? const Color(0xFF00A5FE)
+                                                : theme.iconColor,
+                                            theme: theme,
+                                          ),
+                                          if (hasNew)
+                                            Positioned(
+                                              right: 0,
+                                              top: 0,
+                                              child: Container(
+                                                width: 10,
+                                                height: 10,
+                                                decoration:
+                                                    const BoxDecoration(
+                                                  color: Color(0xFF00A5FE),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+
+                                  const SizedBox(width: 4),
+
+                                  // 4. Lightning Icon (Macros)
+                                  _buildIconButton(
+                                    icon: Icons.flash_on,
+                                    onTap: () async {
+                                      await showDialog(
+                                        context: context,
+                                        barrierDismissible: true,
+                                        barrierColor: Colors.transparent,
+                                        builder: (context) =>
+                                            const MacroManagerDialog(),
+                                      );
+                                    },
+                                    tooltip: "Macros",
+                                    color: theme.iconColor,
+                                    theme: theme,
+                                  ),
+
+                                  const SizedBox(width: 4),
+
+                                  // 5. Settings Button
+                                  _buildIconButton(
+                                    icon: Icons.settings,
+                                    onTap: () async {
+                                      await showDialog(
+                                        context: context,
+                                        barrierDismissible: true,
+                                        barrierColor: Colors.transparent,
+                                        builder: (context) =>
+                                            const SettingsDialog(),
+                                      );
+                                    },
+                                    tooltip: "Settings",
+                                    color: theme.iconColor,
+                                    theme: theme,
+                                  ),
+
+                                  const SizedBox(width: 4),
+
+                                  // 6. Close Button (Far Right — RTL order)
+                                  _buildIconButton(
+                                    icon: Icons.close,
+                                    onTap: _closeWindow,
+                                    tooltip: "Close",
+                                    color: theme.iconColor,
+                                    theme: theme,
                                   ),
                                 ],
                               ),
@@ -829,31 +810,115 @@ cQBOFhw1ZkYvxx4A6HSNxyae
   Widget _buildIconButton({
     required IconData icon,
     required VoidCallback onTap,
-    required String tooltip,
+    required String tooltip, // kept for backward compatibility if signature used elsewhere
     required Color color,
     required AppTheme theme,
   }) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(4), // Spec: 4px radius
-          hoverColor: theme.hoverColor, // From Theme
-          child: Container(
-            width: 40, // Spec: 40x40
-            height: 40,
-            alignment: Alignment.center,
-            child: Icon(
-              icon,
-              size: 20,
-              color:
-                  color, // Using passed color (which is likely theme.iconColor)
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(4),
+        hoverColor: theme.hoverColor,
+        child: Container(
+          width: 40,
+          height: 40,
+          alignment: Alignment.center,
+          child: Icon(
+            icon,
+            size: 20,
+            color: color,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Windows 11-style drag handle with 2×3 dot grid ───────────────────────
+class _DragHandleButton extends StatefulWidget {
+  final Color dotColor;
+  final Color hoverColor;
+  final VoidCallback onDragStart;
+
+  const _DragHandleButton({
+    required this.dotColor,
+    required this.hoverColor,
+    required this.onDragStart,
+  });
+
+  @override
+  State<_DragHandleButton> createState() => _DragHandleButtonState();
+}
+
+class _DragHandleButtonState extends State<_DragHandleButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      // grab = open hand cursor — exactly what user expects for dragging
+      cursor: SystemMouseCursors.grab,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onPanStart: (_) => widget.onDragStart(),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 130),
+          width: 36,
+          height: 32,
+          decoration: BoxDecoration(
+            // Always show a faint pill to hint draggability;
+            // on hover it becomes clearly visible
+            color: _hovered
+                ? widget.hoverColor.withValues(alpha: 0.9)
+                : widget.hoverColor.withValues(alpha: 0.35),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: _hovered
+                  ? widget.dotColor.withValues(alpha: 0.35)
+                  : widget.dotColor.withValues(alpha: 0.12),
+              width: 1,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: CustomPaint(
+            size: const Size(12, 18),
+            painter: _DotGridPainter(
+              color: _hovered
+                  ? widget.dotColor
+                  : widget.dotColor.withValues(alpha: 0.5),
             ),
           ),
         ),
       ),
     );
   }
+}
+
+/// Paints a 2-column × 3-row grid of filled circles with fixed dot positions.
+class _DotGridPainter extends CustomPainter {
+  final Color color;
+  const _DotGridPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    const r = 1.8; // dot radius
+    // Fixed 2×3 grid: (left col x=3, right col x=9), rows y=2,9,16 (out of 18)
+    const List<Offset> dots = [
+      Offset(2.5, 2),   Offset(9.5, 2),
+      Offset(2.5, 9),   Offset(9.5, 9),
+      Offset(2.5, 16),  Offset(9.5, 16),
+    ];
+    for (final d in dots) {
+      canvas.drawCircle(d, r, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DotGridPainter old) => old.color != color;
 }

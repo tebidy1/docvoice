@@ -12,6 +12,8 @@ import '../../../services/theme_service.dart';
 import '../auth/qr_scanner_screen.dart';
 import 'company_settings_screen.dart';
 import 'macro_manager_screen.dart';
+import '../../../core/medical_departments.dart';
+import '../../../services/department_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -39,6 +41,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.initState();
     _loadSettings();
     _loadUserProfile();
+    
+    // Listen for department changes
+    DepartmentService().addListener(_onDepartmentChanged);
+  }
+
+  @override
+  void dispose() {
+    DepartmentService().removeListener(_onDepartmentChanged);
+    super.dispose();
+  }
+
+  void _onDepartmentChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadUserProfile() async {
@@ -227,6 +242,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           subtitle: Text(
                               _currentUser?['email'] ?? "Not logged in",
                               style: const TextStyle(fontSize: 12)),
+                        ),
+                        const Divider(height: 1),
+                        // Department Selection
+                        ListTile(
+                          leading: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: (MedicalDepartments.getById(DepartmentService().value)?.color ?? Colors.grey).withOpacity(0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              MedicalDepartments.getById(DepartmentService().value)?.icon ?? Icons.local_hospital,
+                              color: MedicalDepartments.getById(DepartmentService().value)?.color ?? Colors.grey,
+                              size: 20,
+                            ),
+                          ),
+                          title: const Text("Medical Department", 
+                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                          subtitle: Text(
+                            MedicalDepartments.getById(DepartmentService().value)?.nameEn ?? "Tap to select specialty",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: DepartmentService().value == null ? Colors.redAccent : Colors.grey,
+                            ),
+                          ),
+                          trailing: const Icon(Icons.arrow_drop_down),
+                          onTap: _showDepartmentPicker,
+                          dense: true,
                         ),
                         const Divider(height: 1),
                         ListTile(
@@ -617,6 +660,135 @@ class _SettingsScreenState extends State<SettingsScreen> {
             .labelSmall
             ?.copyWith(color: Colors.grey, letterSpacing: 1.2),
       ),
+    );
+  }
+
+  void _showDepartmentPicker() {
+    String searchQuery = '';
+    
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final filteredDepts = MedicalDepartments.all.where((dept) {
+              final q = searchQuery.toLowerCase();
+              return dept.nameEn.toLowerCase().contains(q) || 
+                     dept.nameAr.contains(q);
+            }).toList();
+
+            return DraggableScrollableSheet(
+              initialChildSize: 0.8,
+              minChildSize: 0.5,
+              maxChildSize: 0.95,
+              expand: false,
+              builder: (context, scrollController) {
+                return Column(
+                  children: [
+                    // Handle bar
+                    Container(
+                      margin: const EdgeInsets.symmetric(vertical: 12),
+                      width: 40,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    
+                    // Title
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.local_hospital, color: AppTheme.accent),
+                          const SizedBox(width: 12),
+                          Text("Select Department", 
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // Search bar
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: TextField(
+                        decoration: InputDecoration(
+                          hintText: "Search specialties in English or Arabic...",
+                          prefixIcon: const Icon(Icons.search),
+                          filled: true,
+                          fillColor: Colors.grey.withOpacity(0.1),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                        ),
+                        onChanged: (val) {
+                          setSheetState(() {
+                            searchQuery = val;
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    
+                    // List
+                    Expanded(
+                      child: ListView.builder(
+                        controller: scrollController,
+                        itemCount: filteredDepts.length,
+                        itemBuilder: (context, index) {
+                          final dept = filteredDepts[index];
+                          final isSelected = DepartmentService().value == dept.id;
+                          
+                          return ListTile(
+                            leading: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: dept.color.withOpacity(0.15),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(dept.icon, color: dept.color, size: 24),
+                            ),
+                            title: Text(dept.nameEn, 
+                              style: TextStyle(
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                color: isSelected ? AppTheme.accent : null,
+                              )
+                            ),
+                            subtitle: Text(dept.nameAr, 
+                              style: TextStyle(
+                                fontSize: 13, 
+                                color: Colors.grey.shade600,
+                                fontFamily: 'Cairo', // Assuming an Arabic font is available
+                              )
+                            ),
+                            trailing: isSelected 
+                                ? const Icon(Icons.check_circle, color: AppTheme.accent)
+                                : null,
+                            onTap: () {
+                              DepartmentService().setDepartment(dept.id);
+                              Navigator.pop(context);
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
     );
   }
 }

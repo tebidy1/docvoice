@@ -187,6 +187,9 @@ class MacroService {
     return await isar.macros.where().findAll();
   }
 
+  /// Alias for getAllMacros() - used by cross-platform widgets
+  Future<List<Macro>> getMacros() => getAllMacros();
+
   /// Get macros by category
   Future<List<Macro>> getMacrosByCategory(String category) async {
     await init();

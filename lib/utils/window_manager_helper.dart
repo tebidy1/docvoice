@@ -30,7 +30,7 @@ class WindowManagerHelper {
     try {
       final primaryDisplay = await screenRetriever.getPrimaryDisplay();
       final screenSize = primaryDisplay.size;
-      const pillWidth = 350.0; // Native Utility Width
+      const pillWidth = 300.0; // Matches actual button content width
       const pillHeight = 56.0; // Native Utility Height
       
       // Shrink to pill size
@@ -88,6 +88,9 @@ class WindowManagerHelper {
   }
 
   static bool _isTransparencyLocked = false;
+
+  /// When true, suppresses any window collapse calls (e.g. during logout)
+  static bool isLoggingOut = false;
 
   /// Locks opacity to 1.0 (prevent dimming)
   static void setTransparencyLocked(bool locked) {

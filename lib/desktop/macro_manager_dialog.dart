@@ -7,9 +7,14 @@ import '../services/keyboard_service.dart';
 import '../models/macro.dart';
 import '../models/app_theme.dart';
 import '../services/theme_service.dart';
+import '../services/department_service.dart';
+import '../core/medical_departments.dart';
 import 'dart:async';
 import 'macro_settings_dialog.dart';
 import '../widgets/user_profile_header.dart';
+
+// ─── Primary Blue — consistent with login & light theme ───────────────────
+const Color _kBlue = Color(0xFF00A5FE);
 
 class MacroManagerDialog extends StatefulWidget {
   const MacroManagerDialog({super.key});
@@ -20,93 +25,140 @@ class MacroManagerDialog extends StatefulWidget {
 
 class _MacroManagerDialogState extends State<MacroManagerDialog> {
   final MacroService _macroService = MacroService();
-  List<Macro> _macros = [];
-  bool _isLoading = true;
+
+  // ── state ──────────────────────────────────────────────────────────────
+  List<Macro> _allMacros = [];   // raw full list
+  List<Macro> _macros    = [];   // filtered by selected category
+  bool   _isLoading = true;
   String _selectedCategory = 'All Macros';
+  String _searchQuery = '';
+  String? _userDeptId;           // current user's department id
   final TextEditingController _searchController = TextEditingController();
-  String _searchQuery = "";
+
+
 
   @override
   void initState() {
     super.initState();
-    WindowManagerHelper.setOpacity(1.0); // Enforce full visibility
-    WindowManagerHelper.setTransparencyLocked(true); // Lock opacity
+    WindowManagerHelper.setOpacity(1.0);
+    WindowManagerHelper.setTransparencyLocked(true);
     _resizeWindow(true);
-    _loadMacros();
+    _loadDeptThenMacros();
   }
 
   @override
   void dispose() {
-    WindowManagerHelper.setTransparencyLocked(false); // Unlock opacity
-    _resizeWindow(false);
+    WindowManagerHelper.setTransparencyLocked(false);
     _searchController.dispose();
+    // Capture context before dispose invalidates it
+    final ctx = context;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await WindowManagerHelper.collapseToPill(ctx);
+    });
     super.dispose();
   }
 
   Future<void> _resizeWindow(bool expanded) async {
     if (expanded) {
       await WindowManagerHelper.expandToCustomSizeBottomRight(900, 650);
-    } else {
-      await windowManager.setSize(const Size(300, 60));
     }
+  }
+
+  // ── load ──────────────────────────────────────────────────────────────
+  Future<void> _loadDeptThenMacros() async {
+    _userDeptId = DepartmentService().value;
+    await _loadMacros();
   }
 
   Future<void> _loadMacros() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
-    
+
     try {
-      print("MacroManager: Initializing service...");
       await _macroService.init();
-      
-      List<Macro> macros;
-      print("MacroManager: Fetching macros for category '$_selectedCategory'...");
-      
-      if (_selectedCategory == 'Favorites') {
-        macros = await _macroService.getFavorites();
-      } else if (_selectedCategory == 'Most Used') {
-        macros = await _macroService.getMostUsed(limit: 50);
-      } else if (_selectedCategory == 'All Macros') {
-        macros = await _macroService.getAllMacros();
-      } else {
-        macros = await _macroService.getMacrosByCategory(_selectedCategory);
-      }
-      
-      if (macros.isEmpty && _selectedCategory == 'Favorites') {
-        print("MacroManager: Favorites empty, switching to All Macros...");
-        _selectedCategory = 'All Macros';
-        macros = await _macroService.getAllMacros();
-      }
-      
-      print("MacroManager: Fetched ${macros.length} macros");
-      
+      final all = await _macroService.getAllMacros();
+
+      // ─ Apply department filter (same logic as MacroManagerScreen) ─
+      final deptId = _userDeptId;
+      final deptNameEn = deptId != null
+          ? MedicalDepartments.getById(deptId)?.nameEn
+          : null;
+
+      final filtered = all.where((m) {
+        final cats = m.category.split(',').map((e) => e.trim()).toList();
+        if (cats.isEmpty || cats.contains('General') || cats.contains('General Practice')) return true;
+        if (deptId != null && cats.contains(deptId)) return true;
+        if (deptNameEn != null && cats.contains(deptNameEn)) return true;
+        return false;
+      }).toList();
+
+      _allMacros = all;
+
+      // ─ Now apply category sidebar selection ─
+      final macros = _applyCategory(filtered);
+
       if (mounted) {
         setState(() {
-          _macros = macros;
+          _macros   = macros;
           _isLoading = false;
         });
       }
     } catch (e) {
-      print("MacroManager: Error loading macros: $e");
+      debugPrint('MacroManager: Error: $e');
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _macros = []; // Clear macros on error
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Error loading macros: $e"),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-            action: SnackBarAction(
-              label: 'Retry',
-              textColor: Colors.white,
-              onPressed: _loadMacros,
-            ),
-          ),
-        );
+        setState(() { _isLoading = false; _macros = []; });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error loading macros: $e'),
+          backgroundColor: Colors.red,
+          action: SnackBarAction(label: 'Retry', textColor: Colors.white, onPressed: _loadMacros),
+        ));
       }
     }
+  }
+
+  List<Macro> _applyCategory(List<Macro> pool) {
+    switch (_selectedCategory) {
+      case 'Favorites':  return pool.where((m) => m.isFavorite).toList();
+      case 'Most Used':
+        final sorted = List<Macro>.from(pool);
+        sorted.sort((a, b) => (b.usageCount).compareTo(a.usageCount));
+        return sorted;
+      case 'All Macros': return pool;
+      default:
+        // Department category — filter by name
+        return pool.where((m) {
+          final cats = m.category.split(',').map((e) => e.trim()).toList();
+          return cats.contains(_selectedCategory);
+        }).toList();
+    }
+  }
+
+  // ── helpers ───────────────────────────────────────────────────────────
+  List<Macro> get _filteredMacros {
+    if (_searchQuery.isEmpty) return _macros;
+    final q = _searchQuery.toLowerCase();
+    return _macros.where((m) =>
+        m.trigger.toLowerCase().contains(q) ||
+        m.content.toLowerCase().contains(q)).toList();
+  }
+
+  /// Group _filteredMacros by category string for display — mirrors MacroManagerScreen
+  Map<String, List<Macro>> get _grouped {
+    final Map<String, List<Macro>> groups = {};
+    final favs = _filteredMacros.where((m) => m.isFavorite).toList();
+    if (favs.isNotEmpty) groups['Favorites'] = favs;
+
+    for (final m in _filteredMacros) {
+      if (m.isFavorite) continue;
+      final cats = m.category.split(',').map((e) => e.trim()).toList();
+      String displayCat = 'General';
+      if (cats.isNotEmpty && cats.first.isNotEmpty) {
+        final dept = MedicalDepartments.getById(cats.first);
+        displayCat = dept != null ? dept.nameEn : cats.first;
+      }
+      groups.putIfAbsent(displayCat, () => []).add(m);
+    }
+    return groups;
   }
 
   Future<void> _toggleFavorite(Macro macro) async {
@@ -114,650 +166,605 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
     await _loadMacros();
   }
 
+  // ── categories available in sidebar ───────────────────────────────────
+  List<String> get _departmentCategories {
+    // Get unique categories present in the filtered macros
+    final cats = <String>{};
+    for (final m in _allMacros) {
+      for (final c in m.category.split(',').map((e) => e.trim())) {
+        if (c.isNotEmpty && c != 'General' && c != 'General Practice') cats.add(c);
+      }
+    }
+    final result = cats.toList()..sort();
+    return result;
+  }
+
+  // ── Add / Edit dialog ─────────────────────────────────────────────────
   Future<void> _addOrEditMacro({Macro? macro}) async {
-    final triggerController = TextEditingController(text: macro?.trigger ?? "");
-    final contentController = TextEditingController(text: macro?.content ?? "");
-    final aiInstructionController = TextEditingController(text: macro?.aiInstruction ?? "");
-    bool isAiMacro = macro?.isAiMacro ?? false;
+    final triggerCtrl      = TextEditingController(text: macro?.trigger ?? '');
+    final contentCtrl      = TextEditingController(text: macro?.content ?? '');
+    final aiInstrCtrl      = TextEditingController(text: macro?.aiInstruction ?? '');
+    bool isAiMacro         = macro?.isAiMacro ?? false;
     String selectedCategory = macro?.category ?? 'General';
+
+    // Build items from MedicalDepartments
+    final deptItems = MedicalDepartments.all.map((d) =>
+      DropdownMenuItem(value: d.nameEn, child: Row(
+        children: [
+          Icon(d.icon, size: 16, color: d.color),
+          const SizedBox(width: 8),
+          Text(d.nameEn, style: const TextStyle(color: Colors.white, fontSize: 13)),
+        ],
+      ))
+    ).toList()
+    ..insert(0, const DropdownMenuItem(
+      value: 'General',
+      child: Row(children: [
+        Icon(Icons.folder_outlined, size: 16, color: _kBlue),
+        SizedBox(width: 8),
+        Text('General', style: TextStyle(color: Colors.white, fontSize: 13)),
+      ]),
+    ));
 
     await showDialog(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.5), // Semi-transparent dark overlay
-      builder: (context) {
+      barrierColor: Colors.black.withValues(alpha: 0.6),
+      builder: (ctx) {
         bool isSaving = false;
         return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-            backgroundColor: const Color(0xFF1E293B), // Slate 800 - darker, more visible
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-            title: Text(
-              macro == null ? "➕ New Macro" : "✏️ Edit Macro", 
-              style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)
-            ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: triggerController,
-                    style: const TextStyle(
-                      color: Colors.black87,
-                      fontSize: 14,
+          builder: (ctx, setDlg) => AlertDialog(
+            backgroundColor: const Color(0xFF1E293B),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(children: [
+              const Icon(Icons.bolt, color: _kBlue, size: 22),
+              const SizedBox(width: 8),
+              Text(macro == null ? 'New Macro' : 'Edit Macro',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17)),
+            ]),
+            content: SizedBox(
+              width: 500,
+              child: SingleChildScrollView(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  // Trigger + Category row
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Expanded(child: _dlgField(
+                      controller: triggerCtrl,
+                      label: 'Trigger Name',
+                      hint: 'e.g., ⚡ SOAP',
+                      icon: Icons.bolt,
+                    )),
+                    const SizedBox(width: 12),
+                    Expanded(child: DropdownButtonFormField<String>(
+                      initialValue: selectedCategory,
+                      dropdownColor: const Color(0xFF1E293B),
+                      isExpanded: true,
+                      decoration: _dlgDecoration(label: 'Category', icon: Icons.category_outlined),
+                      items: deptItems,
+                      onChanged: (v) => setDlg(() => selectedCategory = v!),
+                    )),
+                  ]),
+                  const SizedBox(height: 16),
+
+                  // Content / Prompt
+                  _dlgField(controller: contentCtrl, label: 'Content / Prompt', hint: 'FORMAT AS: ...', maxLines: 7),
+                  const SizedBox(height: 12),
+
+                  // AI Toggle
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.04),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                     ),
-                    cursorColor: Colors.amber,
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: Colors.white,
-                      labelText: "Trigger Phrase (e.g. 'Normal Cardio')",
-                      labelStyle: TextStyle(color: Colors.grey[600]),
-                      enabledBorder: OutlineInputBorder(
-                        borderSide: const BorderSide(color: Colors.grey),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderSide: const BorderSide(color: Colors.amber, width: 2),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 15),
-                  
-                  // Category Dropdown
-                  DropdownButtonFormField<String>(
-                    value: selectedCategory,
-                    dropdownColor: const Color(0xFF1E293B),
-                    style: const TextStyle(
-                      color: Colors.black87,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    selectedItemBuilder: (BuildContext context) {
-                      return const [
-                        Text('🗂️ General', style: TextStyle(color: Colors.black87, fontSize: 14)),
-                        Text('❤️ Cardiology', style: TextStyle(color: Colors.black87, fontSize: 14)),
-                        Text('🫁 Pulmonology', style: TextStyle(color: Colors.black87, fontSize: 14)),
-                        Text('👶 Pediatrics', style: TextStyle(color: Colors.black87, fontSize: 14)),
-                        Text('💊 Prescriptions', style: TextStyle(color: Colors.black87, fontSize: 14)),
-                        Text('🧠 Neurology', style: TextStyle(color: Colors.black87, fontSize: 14)),
-                        Text('🍽️ Gastroenterology', style: TextStyle(color: Colors.black87, fontSize: 14)),
-                      ];
-                    },
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: Colors.white,
-                      labelText: "Category",
-                      labelStyle: TextStyle(color: Colors.grey[600]),
-                      prefixIcon: const Icon(Icons.category, color: Colors.blue),
-                      enabledBorder: OutlineInputBorder(
-                        borderSide: const BorderSide(color: Colors.grey),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderSide: const BorderSide(color: Colors.blue, width: 2),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'General', child: Text('🗂️ General', style: TextStyle(color: Colors.white))),
-                      DropdownMenuItem(value: 'Cardiology', child: Text('❤️ Cardiology', style: TextStyle(color: Colors.white))),
-                      DropdownMenuItem(value: 'Pulmonology', child: Text('🫁 Pulmonology', style: TextStyle(color: Colors.white))),
-                      DropdownMenuItem(value: 'Pediatrics', child: Text('👶 Pediatrics', style: TextStyle(color: Colors.white))),
-                      DropdownMenuItem(value: 'Prescriptions', child: Text('💊 Prescriptions', style: TextStyle(color: Colors.white))),
-                      DropdownMenuItem(value: 'Neurology', child: Text('🧠 Neurology', style: TextStyle(color: Colors.white))),
-                      DropdownMenuItem(value: 'Gastroenterology', child: Text('🍽️ Gastroenterology', style: TextStyle(color: Colors.white))),
-                    ],
-                    onChanged: (value) {
-                      setState(() => selectedCategory = value!);
-                    },
-                  ),
-                  const SizedBox(height: 15),
-                  
-                  TextField(
-                    controller: contentController,
-                    style: const TextStyle(
-                      color: Colors.black87,
-                      fontSize: 14,
-                    ),
-                    cursorColor: Colors.amber,
-                    maxLines: 5,
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: Colors.white,
-                      labelText: "Content to Insert",
-                      labelStyle: TextStyle(color: Colors.grey[600]),
-                      enabledBorder: OutlineInputBorder(
-                        borderSide: const BorderSide(color: Colors.grey),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderSide: const BorderSide(color: Colors.amber, width: 2),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
+                    child: SwitchListTile(
+                      title: const Text('AI Smart Macro', style: TextStyle(color: Colors.white, fontSize: 13)),
+                      subtitle: const Text('Use Gemini to fill this template',
+                          style: TextStyle(color: Colors.white38, fontSize: 11)),
+                      value: isAiMacro,
+                      activeThumbColor: _kBlue,
+                      onChanged: (v) => setDlg(() => isAiMacro = v),
                     ),
                   ),
-                  const SizedBox(height: 15),
-                  
-                  // AI Macro Switch
-                  SwitchListTile(
-                    title: const Text("AI Smart Macro", style: TextStyle(color: Colors.white)),
-                    subtitle: const Text("Use Gemini to fill this template intelligently", style: TextStyle(color: Colors.white54, fontSize: 11)),
-                    value: isAiMacro,
-                    activeColor: Colors.purpleAccent,
-                    onChanged: (val) {
-                      setState(() => isAiMacro = val);
-                    },
-                  ),
-                  
+
                   if (isAiMacro) ...[
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: aiInstructionController,
-                      style: const TextStyle(
-                        color: Colors.black87,
-                        fontSize: 14,
-                      ),
-                      cursorColor: Colors.purpleAccent,
+                    const SizedBox(height: 12),
+                    _dlgField(
+                      controller: aiInstrCtrl,
+                      label: 'AI Instruction (Optional)',
+                      hint: 'e.g., Keep medical terms, be concise',
+                      icon: Icons.psychology_outlined,
                       maxLines: 2,
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: Colors.white,
-                        labelText: "AI Instruction (Optional)",
-                        hintText: "e.g. Summarize symptoms and keep medical terms",
-                        hintStyle: TextStyle(color: Colors.grey[600]),
-                        labelStyle: const TextStyle(color: Colors.purpleAccent),
-                        enabledBorder: OutlineInputBorder(
-                          borderSide: const BorderSide(color: Colors.purpleAccent),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderSide: const BorderSide(color: Colors.purpleAccent, width: 2),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        prefixIcon: const Icon(Icons.psychology, color: Colors.purpleAccent),
-                      ),
                     ),
                   ],
+
                   if (isSaving) ...[
-                    const SizedBox(height: 20),
-                    const Text(
-                      "Saving macro...",
-                      style: TextStyle(color: Colors.amber, fontSize: 12),
-                    ),
+                    const SizedBox(height: 16),
+                    const LinearProgressIndicator(color: _kBlue),
                   ],
-                ],
+                ]),
               ),
             ),
             actions: [
               TextButton(
-                onPressed: isSaving ? null : () => Navigator.pop(context),
-                child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+                onPressed: isSaving ? null : () => Navigator.pop(ctx),
+                child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
               ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.amber,
-                  foregroundColor: Colors.black,
-                ),
+              FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: _kBlue, foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
                 onPressed: isSaving ? null : () async {
-                  if (triggerController.text.isNotEmpty && contentController.text.isNotEmpty) {
-                    setState(() => isSaving = true);
-                    try {
-                      await Future.any([
-                        (macro == null) 
-                            ? _macroService.addMacro(
-                                triggerController.text, 
-                                contentController.text,
-                                isAiMacro: isAiMacro,
-                                aiInstruction: aiInstructionController.text,
-                                category: selectedCategory,
-                              )
-                            : _macroService.updateMacro(
-                                macro.id, 
-                                triggerController.text, 
-                                contentController.text,
-                                isAiMacro: isAiMacro,
-                                aiInstruction: aiInstructionController.text,
-                                category: selectedCategory,
-                              ),
-                        Future.delayed(const Duration(seconds: 5)).then((_) => throw TimeoutException("Database operation timed out")),
-                      ]);
-
-                      if (mounted) Navigator.pop(context);
-                      await _loadMacros();
-                    } catch (e) {
-                      print("MacroDialog: Error saving macro: $e");
-                      setState(() => isSaving = false);
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
-                        );
-                      }
-                    }
-                  } else {
+                  if (triggerCtrl.text.isEmpty || contentCtrl.text.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Please fill all fields"), backgroundColor: Colors.orange),
-                    );
+                      const SnackBar(content: Text('Please fill Trigger and Content'), backgroundColor: Colors.orange));
+                    return;
+                  }
+                  setDlg(() => isSaving = true);
+                  try {
+                    await Future.any([
+                      macro == null
+                        ? _macroService.addMacro(triggerCtrl.text, contentCtrl.text,
+                            isAiMacro: isAiMacro, aiInstruction: aiInstrCtrl.text, category: selectedCategory)
+                        : _macroService.updateMacro(macro.id, triggerCtrl.text, contentCtrl.text,
+                            isAiMacro: isAiMacro, aiInstruction: aiInstrCtrl.text, category: selectedCategory),
+                      Future.delayed(const Duration(seconds: 8))
+                          .then((_) => throw TimeoutException('Timeout')),
+                    ]);
+                    if (mounted) Navigator.pop(ctx);
+                    await _loadMacros();
+                  } catch (e) {
+                    setDlg(() => isSaving = false);
+                    debugPrint('MacroDialog save error: $e');
                   }
                 },
                 child: isSaving
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                  : const Text("Save"),
+                    ? const SizedBox(width: 18, height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text('Save'),
               ),
             ],
-          );
-        }
-      );
-    },
-  );
+          ),
+        );
+      },
+    );
   }
 
-  List<Macro> get _filteredMacros {
-    if (_searchQuery.isEmpty) return _macros;
-    
-    return _macros.where((macro) {
-      return macro.trigger.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-             macro.content.toLowerCase().contains(_searchQuery.toLowerCase());
-    }).toList();
+  // ── dialog helpers ────────────────────────────────────────────────────
+  InputDecoration _dlgDecoration({required String label, IconData? icon}) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: const TextStyle(color: Colors.white54, fontSize: 12),
+      prefixIcon: icon != null ? Icon(icon, color: _kBlue, size: 18) : null,
+      filled: true,
+      fillColor: Colors.white.withValues(alpha: 0.06),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.12))),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.12))),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: _kBlue, width: 1.5)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    );
   }
 
+  Widget _dlgField({
+    required TextEditingController controller,
+    required String label,
+    String? hint,
+    IconData? icon,
+    int maxLines = 1,
+  }) {
+    return TextField(
+      controller: controller,
+      maxLines: maxLines,
+      style: const TextStyle(color: Colors.white, fontSize: 13),
+      cursorColor: _kBlue,
+      decoration: _dlgDecoration(label: label, icon: icon).copyWith(hintText: hint,
+          hintStyle: const TextStyle(color: Colors.white24, fontSize: 12)),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // BUILD
+  // ══════════════════════════════════════════════════════════════════════
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<AppTheme>(
       valueListenable: ThemeService(),
-      builder: (context, currentTheme, child) {
-        final theme = Theme.of(context);
-        final colorScheme = theme.colorScheme;
-
+      builder: (context, currentTheme, _) {
         return Center(
           child: GestureDetector(
-            onPanStart: (details) => windowManager.startDragging(),
+            onPanStart: (_) => windowManager.startDragging(),
             child: Material(
-            color: Colors.transparent,
-            child: Container(
-              width: 900,
-              height: 650,
-              decoration: BoxDecoration(
-                color: currentTheme.backgroundColor,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: currentTheme.dividerColor, width: 1),
-                boxShadow: currentTheme.shadows,
-              ),
-              child: Column(
-                children: [
-                  // Header
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: currentTheme.backgroundColor,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(16),
-                    topRight: Radius.circular(16),
-                  ),
-                  border: Border(
-                    bottom: BorderSide(color: colorScheme.surface),
-                  ),
+              color: Colors.transparent,
+              child: Container(
+                width: 900,
+                height: 650,
+                decoration: BoxDecoration(
+                  color: currentTheme.backgroundColor,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: currentTheme.dividerColor),
+                  boxShadow: currentTheme.shadows,
                 ),
-                child: Row(
-                  children: [
-                    Icon(Icons.flash_on, color: colorScheme.primary, size: 24),
-                    const SizedBox(width: 12),
-                    // Title column takes remaining space
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Macro Manager',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              color: colorScheme.onSurface,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 18,
-                            ),
-                          ),
-                          Text(
-                            'Manage your templates',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: Colors.grey[400],
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Action buttons
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.add, size: 18),
-                      label: const Text('New Macro'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: colorScheme.secondary, // Emerald Green
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      onPressed: () => _addOrEditMacro(),
-                    ),
-                    const SizedBox(width: 10),
-                    const UserProfileHeader(),
-                    const SizedBox(width: 10),
-                    IconButton(
-                      icon: Icon(Icons.settings_outlined, color: Colors.grey[400]),
-                      onPressed: () async {
-                        await showDialog(
-                          context: context,
-                          builder: (context) => const MacroSettingsDialog(),
-                        );
-                      },
-                      tooltip: 'Settings',
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.close, color: Colors.grey[400]),
-                      onPressed: () => Navigator.of(context).pop(),
-                      tooltip: 'Close',
-                    ),
-                  ],
-                ),
+                child: Column(children: [
+                  _buildHeader(context, currentTheme),
+                  Expanded(child: Row(children: [
+                    _buildSidebar(currentTheme),
+                    Expanded(child: _buildMainPanel(currentTheme)),
+                  ])),
+                ]),
               ),
-              
-              // Two-Pane Layout
-              Expanded(
-                child: Row(
-                  children: [
-                    // Left Sidebar - Categories
-                    _buildCategoriesSidebar(currentTheme),
-                    
-                    // Right Panel - Macros
-                    Expanded(child: _buildMacrosPanel(currentTheme)),
-                  ],
-                ),
-              ),
-            ],
+            ),
           ),
-          ),
-        ),
-      ),
+        );
+      },
     );
-  },
-);
   }
 
-  Widget _buildCategoriesSidebar(AppTheme theme) {
+  // ── Header ────────────────────────────────────────────────────────────
+  Widget _buildHeader(BuildContext context, AppTheme theme) {
     return Container(
-      width: 240,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
-        color: theme.micIdleBackground.withOpacity(0.5), // Sidebar background matches idle mic bg
-        border: Border(
-          right: BorderSide(color: theme.dividerColor),
-        ),
+        color: theme.backgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        border: Border(bottom: BorderSide(color: theme.dividerColor)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      child: Row(children: [
+        const Icon(Icons.bolt, color: _kBlue, size: 22),
+        const SizedBox(width: 10),
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Macro Manager',
+              style: TextStyle(color: theme.iconColor, fontWeight: FontWeight.w700, fontSize: 17)),
+          Text('Manage your templates',
+              style: TextStyle(color: theme.iconColor.withValues(alpha: 0.45), fontSize: 11)),
+        ]),
+        const Spacer(),
+        // + New Macro
+        FilledButton.icon(
+          icon: const Icon(Icons.add, size: 16),
+          label: const Text('New Macro', style: TextStyle(fontSize: 13)),
+          style: FilledButton.styleFrom(backgroundColor: _kBlue, foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+          onPressed: () => _addOrEditMacro(),
+        ),
+        const SizedBox(width: 10),
+        const UserProfileHeader(),
+        const SizedBox(width: 6),
+        IconButton(
+          icon: Icon(Icons.settings_outlined, color: theme.iconColor.withValues(alpha: 0.5), size: 20),
+          onPressed: () => showDialog(context: context, builder: (_) => const MacroSettingsDialog()),
+          tooltip: 'Settings',
+        ),
+        IconButton(
+          icon: Icon(Icons.close, color: theme.iconColor.withValues(alpha: 0.5), size: 20),
+          onPressed: () => Navigator.of(context).pop(),
+          tooltip: 'Close',
+        ),
+      ]),
+    );
+  }
+
+  // ── Sidebar ───────────────────────────────────────────────────────────
+  Widget _buildSidebar(AppTheme theme) {
+    final deptId = _userDeptId;
+    final userDept = deptId != null ? MedicalDepartments.getById(deptId) : null;
+
+    return Container(
+      width: 220,
+      decoration: BoxDecoration(
+        color: theme.micIdleBackground.withValues(alpha: 0.5),
+        border: Border(right: BorderSide(color: theme.dividerColor)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // Header
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 18, 16, 10),
+          child: Row(children: [
+            Icon(Icons.folder_outlined, color: theme.iconColor.withValues(alpha: 0.6), size: 16),
+            const SizedBox(width: 8),
+            Text('Categories', style: TextStyle(color: theme.iconColor,
+                fontWeight: FontWeight.w600, fontSize: 13)),
+          ]),
+        ),
+
+        Expanded(child: ListView(padding: const EdgeInsets.symmetric(horizontal: 10), children: [
+          // Smart categories
+          _sidebarItem('⭐', 'Favorites',  Icons.star_outline,  theme),
+          _sidebarItem('📚', 'All Macros', Icons.layers_outlined, theme),
+          _sidebarItem('📈', 'Most Used',  Icons.trending_up,    theme),
+
+          // My Department shortcut
+          if (userDept != null) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Divider(color: theme.dividerColor, height: 1),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 4),
+              child: Text('MY DEPARTMENT', style: TextStyle(
+                  color: theme.iconColor.withValues(alpha: 0.4), fontSize: 10, letterSpacing: 1.0)),
+            ),
+            _sidebarDeptItem(userDept, theme),
+          ],
+
+          // All department categories found in macros
           Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              children: [
-                Icon(Icons.folder_outlined, color: theme.iconColor.withOpacity(0.7), size: 18),
-                const SizedBox(width: 8),
-                Text(
-                  'Categories',
-                  style: TextStyle(
-                    color: theme.iconColor,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Divider(color: theme.dividerColor, height: 1),
           ),
-          
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              children: [
-                _buildCategoryItem('⭐', 'Favorites', Colors.amber, theme),
-                _buildCategoryItem('📚', 'All Macros', Colors.blue, theme),
-                _buildCategoryItem('📈', 'Most Used', Colors.green, theme),
-                
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Divider(color: theme.dividerColor),
-                ),
-                
-                _buildCategoryItem('🗂️', 'General', Colors.grey, theme),
-                _buildCategoryItem('❤️', 'Cardiology', Colors.red, theme),
-                _buildCategoryItem('🫁', 'Pulmonology', Colors.cyan, theme),
-                _buildCategoryItem('👶', 'Pediatrics', Colors.pink, theme),
-                _buildCategoryItem('💊', 'Prescriptions', Colors.orange, theme),
-                _buildCategoryItem('🧠', 'Neurology', Colors.purple, theme),
-                _buildCategoryItem('🍽️', 'Gastroenterology', Colors.brown, theme),
-              ],
-            ),
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 4),
+            child: Text('ALL CATEGORIES', style: TextStyle(
+                color: theme.iconColor.withValues(alpha: 0.4), fontSize: 10, letterSpacing: 1.0)),
           ),
-        ],
-      ),
+          _sidebarItem('🗂️', 'General', Icons.folder_outlined, theme),
+          ..._departmentCategories.map((cat) {
+            final dept = MedicalDepartments.all
+                .where((d) => d.nameEn == cat)
+                .firstOrNull;
+            if (dept != null) return _sidebarDeptItem(dept, theme);
+            return _sidebarItem('📄', cat, Icons.folder_outlined, theme);
+          }),
+        ])),
+      ]),
     );
   }
 
-  Widget _buildCategoryItem(String emoji, String name, Color color, AppTheme theme) {
+  Widget _sidebarItem(String emoji, String name, IconData icon, AppTheme theme) {
     final isSelected = _selectedCategory == name;
-    
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          setState(() {
-            _selectedCategory = name;
-            _searchQuery = "";
-            _searchController.clear();
-          });
-          _loadMacros();
-        },
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 4),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: isSelected ? Colors.amber.withOpacity(0.1) : Colors.transparent, // Amber selection
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            children: [
-              Text(emoji, style: const TextStyle(fontSize: 16)),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  name,
-                  style: TextStyle(
-                    color: isSelected ? Colors.amber : theme.iconColor.withOpacity(0.7),
-                    fontSize: 13,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                  ),
-                ),
-              ),
-              if (isSelected)
-                const Icon(Icons.check, size: 14, color: Colors.amber),
-            ],
-          ),
+    return InkWell(
+      onTap: () {
+        setState(() { _selectedCategory = name; _searchQuery = ''; _searchController.clear(); });
+        _loadMacros();
+      },
+      borderRadius: BorderRadius.circular(8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        margin: const EdgeInsets.only(bottom: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? _kBlue.withValues(alpha: 0.12) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
         ),
+        child: Row(children: [
+          Text(emoji, style: const TextStyle(fontSize: 15)),
+          const SizedBox(width: 8),
+          Expanded(child: Text(name, style: TextStyle(
+            color: isSelected ? _kBlue : theme.iconColor.withValues(alpha: 0.7),
+            fontSize: 13, fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+          ))),
+          if (isSelected) const Icon(Icons.check, size: 13, color: _kBlue),
+        ]),
       ),
     );
   }
 
-  Widget _buildMacrosPanel(AppTheme theme) {
+  Widget _sidebarDeptItem(MedicalDepartment dept, AppTheme theme) {
+    final isSelected = _selectedCategory == dept.nameEn;
+    return InkWell(
+      onTap: () {
+        setState(() { _selectedCategory = dept.nameEn; _searchQuery = ''; _searchController.clear(); });
+        _loadMacros();
+      },
+      borderRadius: BorderRadius.circular(8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        margin: const EdgeInsets.only(bottom: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? _kBlue.withValues(alpha: 0.12) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(children: [
+          Icon(dept.icon, size: 15, color: isSelected ? _kBlue : dept.color.withValues(alpha: 0.8)),
+          const SizedBox(width: 8),
+          Expanded(child: Text(dept.nameEn, overflow: TextOverflow.ellipsis, style: TextStyle(
+            color: isSelected ? _kBlue : theme.iconColor.withValues(alpha: 0.7),
+            fontSize: 13, fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+          ))),
+          if (isSelected) const Icon(Icons.check, size: 13, color: _kBlue),
+        ]),
+      ),
+    );
+  }
+
+  // ── Main Panel ────────────────────────────────────────────────────────
+  Widget _buildMainPanel(AppTheme theme) {
     return Container(
       color: theme.backgroundColor,
-      child: Column(
-        children: [
-          // Search Bar
+      child: Column(children: [
+        // Search bar
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
+          child: TextField(
+            controller: _searchController,
+            style: TextStyle(color: theme.iconColor, fontSize: 14),
+            decoration: InputDecoration(
+              hintText: 'Search macros...',
+              hintStyle: TextStyle(color: theme.iconColor.withValues(alpha: 0.4)),
+              prefixIcon: Icon(Icons.search, color: theme.iconColor.withValues(alpha: 0.4), size: 20),
+              suffixIcon: _searchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: Icon(Icons.clear, color: theme.iconColor.withValues(alpha: 0.4), size: 18),
+                      onPressed: () { _searchController.clear(); setState(() => _searchQuery = ''); })
+                  : null,
+              filled: true,
+              fillColor: theme.micIdleBackground,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: _kBlue, width: 1.5)),
+              contentPadding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+            onChanged: (v) => setState(() => _searchQuery = v),
+          ),
+        ),
+
+        // List
+        Expanded(child: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: _kBlue))
+          : _filteredMacros.isEmpty
+              ? _emptyState(theme)
+              : _buildGroupedList(theme)),
+      ]),
+    );
+  }
+
+  Widget _emptyState(AppTheme theme) {
+    return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+      Icon(Icons.search_off, color: theme.iconColor.withValues(alpha: 0.15), size: 56),
+      const SizedBox(height: 12),
+      Text('No macros found', style: TextStyle(color: theme.iconColor.withValues(alpha: 0.4), fontSize: 14)),
+    ]));
+  }
+
+  // ── Grouped list — mirrors MacroManagerScreen ─────────────────────────
+  Widget _buildGroupedList(AppTheme theme) {
+    final groups = _grouped;
+    final sortedKeys = groups.keys.toList()..sort((a, b) {
+      if (a == 'Favorites') return -1;
+      if (b == 'Favorites') return 1;
+      return a.compareTo(b);
+    });
+
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      itemCount: sortedKeys.length,
+      itemBuilder: (_, i) {
+        final cat = sortedKeys[i];
+        final macros = groups[cat]!;
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Section header — identical to MacroManagerScreen
           Padding(
-            padding: const EdgeInsets.all(20),
-            child: TextField(
-              controller: _searchController,
-              style: TextStyle(color: theme.iconColor),
-              decoration: InputDecoration(
-                hintText: 'Search macros...',
-                hintStyle: TextStyle(color: theme.iconColor.withOpacity(0.5)),
-                prefixIcon: Icon(Icons.search, color: theme.iconColor.withOpacity(0.5)),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: Icon(Icons.clear, color: Colors.grey[500]),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() => _searchQuery = "");
-                        },
-                      )
-                    : null,
-                filled: true,
-                fillColor: theme.micIdleBackground,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 14),
-              ),
-              onChanged: (value) {
-                setState(() => _searchQuery = value);
+            padding: const EdgeInsets.fromLTRB(0, 16, 0, 8),
+            child: Row(children: [
+              Icon(cat == 'Favorites' ? Icons.star : Icons.folder_open,
+                  size: 14, color: _kBlue),
+              const SizedBox(width: 6),
+              Text(cat.toUpperCase(), style: const TextStyle(
+                  color: _kBlue, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.0)),
+              const SizedBox(width: 8),
+              Expanded(child: Divider(color: theme.dividerColor, height: 1)),
+            ]),
+          ),
+          ...macros.map((m) => _buildMacroCard(m, theme)),
+        ]);
+      },
+    );
+  }
+
+  // ── Macro card ────────────────────────────────────────────────────────
+  Widget _buildMacroCard(Macro macro, AppTheme theme) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: theme.micIdleBackground,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.6)),
+      ),
+      child: Row(children: [
+        // Favorite button
+        Tooltip(
+          message: macro.isFavorite ? 'Unfavorite' : 'Favorite',
+          child: IconButton(
+            icon: Icon(macro.isFavorite ? Icons.star : Icons.star_border,
+                color: macro.isFavorite ? _kBlue : theme.iconColor.withValues(alpha: 0.35),
+                size: 20),
+            onPressed: () => _toggleFavorite(macro),
+          ),
+        ),
+
+        // Macro info
+        Expanded(child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(macro.trigger,
+                style: TextStyle(color: theme.iconColor, fontSize: 14, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 3),
+            Text(macro.content,
+                maxLines: 2, overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: theme.iconColor.withValues(alpha: 0.5), fontSize: 12, height: 1.4)),
+            const SizedBox(height: 6),
+            // Category badge — blue styled
+            _categoryBadge(macro.category),
+          ]),
+        )),
+
+        // Actions
+        Row(children: [
+          // Copy & Inject
+          Tooltip(message: 'Use & Inject',
+            child: IconButton(
+              icon: Icon(Icons.copy_outlined, color: theme.iconColor.withValues(alpha: 0.45), size: 18),
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: macro.content));
+                final keyboard = KeyboardService();
+                await keyboard.pasteText(macro.content);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Copied & Injected ✓'), backgroundColor: _kBlue,
+                        duration: Duration(seconds: 2)));
+                }
               },
             ),
           ),
-          
-          // Macro List
-          Expanded(
-            child: _isLoading
-                ? const Center(
-                    child: CircularProgressIndicator(color: Colors.amber),
-                  )
-                : _filteredMacros.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.search_off, color: theme.iconColor.withOpacity(0.2), size: 60),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No macros found',
-                              style: TextStyle(color: Colors.grey[500], fontSize: 14),
-                            ),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                        itemCount: _filteredMacros.length,
-                        itemBuilder: (context, index) {
-                          final macro = _filteredMacros[index];
-                          return _buildMacroCard(macro, theme);
-                        },
-                      ),
+          // Edit
+          Tooltip(message: 'Edit',
+            child: IconButton(
+              icon: Icon(Icons.edit_outlined, color: theme.iconColor.withValues(alpha: 0.45), size: 18),
+              onPressed: () => _addOrEditMacro(macro: macro),
+            ),
           ),
-        ],
-      ),
+          // Delete
+          Tooltip(message: 'Delete',
+            child: IconButton(
+              icon: Icon(Icons.delete_outline, color: Colors.red.withValues(alpha: 0.6), size: 18),
+              onPressed: () async {
+                final ok = await _confirmDelete(macro.trigger);
+                if (ok) { await _macroService.deleteMacro(macro.id); await _loadMacros(); }
+              },
+            ),
+          ),
+          const SizedBox(width: 4),
+        ]),
+      ]),
     );
   }
 
-  Widget _buildMacroCard(Macro macro, AppTheme theme) {
+  Widget _categoryBadge(String category) {
+    final cats = category.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    final first = cats.isNotEmpty ? cats.first : 'General';
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: theme.micIdleBackground, // Card background
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.transparent, // Clean look
-        ),
+        color: _kBlue.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _kBlue.withValues(alpha: 0.25)),
       ),
-      child: Row(
-        children: [
-          // Favorite Button
-          IconButton(
-            icon: Icon(
-              macro.isFavorite ? Icons.star : Icons.star_border,
-              color: macro.isFavorite ? Colors.amber : theme.iconColor.withOpacity(0.6),
-            ),
-            onPressed: () => _toggleFavorite(macro),
-            tooltip: macro.isFavorite ? 'Unfavorite' : 'Favorite',
-          ),
-          
-          // Macro Info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  macro.trigger,
-                  style: TextStyle(
-                    color: theme.iconColor,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  macro.content.length > 100 ? macro.content.substring(0, 100) + '...' : macro.content,
-                  style: TextStyle(color: theme.iconColor.withOpacity(0.5), fontSize: 13),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    macro.category,
-                    style: const TextStyle(
-                      color: Colors.amber,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          
-          // Actions
-          Row(
-            children: [
-              // Copy Button
-              IconButton(
-                icon: Icon(Icons.copy_outlined, color: Colors.grey[500], size: 20),
-                onPressed: () async {
-                  await Clipboard.setData(ClipboardData(text: macro.content));
-                  // Ensure screen stays open (do not hide/pop)
-                  final keyboard = KeyboardService();
-                  await keyboard.pasteText(macro.content);
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Copied & Injected!"), backgroundColor: Colors.green),
-                    );
-                  }
-                },
-                tooltip: 'Use',
-              ),
-              
-              // Edit Button
-              IconButton(
-                icon: Icon(Icons.edit_outlined, color: Colors.grey[500], size: 20),
-                onPressed: () => _addOrEditMacro(macro: macro),
-                tooltip: 'Edit',
-              ),
-              
-              // Delete Button
-              IconButton(
-                icon: Icon(Icons.delete_outline, color: Colors.red[300], size: 20),
-                onPressed: () async {
-                  await _macroService.deleteMacro(macro.id);
-                  await _loadMacros();
-                },
-                tooltip: 'Delete',
-              ),
-            ],
+      child: Text(first, style: const TextStyle(color: _kBlue, fontSize: 10, fontWeight: FontWeight.w600)),
+    );
+  }
+
+  Future<bool> _confirmDelete(String triggerName) async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text('Delete Macro?', style: TextStyle(color: Colors.white)),
+        content: Text("Are you sure you want to delete '$triggerName'?",
+            style: const TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel', style: TextStyle(color: Colors.white54))),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
           ),
         ],
       ),
-    );
+    ) ?? false;
   }
 }

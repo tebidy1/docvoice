@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../mobile_app/core/theme.dart';
 import '../../mobile_app/models/note_model.dart';
 import '../../mobile_app/services/inbox_service.dart';
 import '../../mobile_app/services/macro_service.dart';
@@ -107,7 +106,7 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
             children: [
               Text("Inbox", style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold)),
               IconButton(
-                icon: const Icon(Icons.inventory_2_outlined, color: Colors.white70),
+                icon: Icon(Icons.inventory_2_outlined, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
                 tooltip: 'View Archive',
                 onPressed: _openArchive,
               )
@@ -129,7 +128,7 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
                 final notes = snapshot.data ?? [];
                 
                 if (notes.isEmpty) {
-                   return Center(child: Text("All caught up! 🎉", style: GoogleFonts.inter(color: Colors.white30)));
+                   return Center(child: Text("All caught up! 🎉", style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3))));
                 }
 
                 return AnimatedList(
@@ -152,12 +151,12 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
                           padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
                           child: Text(
                             DateHelper.formatGroupingDate(notes[index].createdAt).toUpperCase(),
-                            style: const TextStyle(
-                              color: AppTheme.accent, 
-                              fontWeight: FontWeight.bold, 
-                              fontSize: 12,
-                              letterSpacing: 1.2
-                            ),
+                            style: TextStyle(
+                               color: Theme.of(context).colorScheme.primary, 
+                               fontWeight: FontWeight.bold, 
+                               fontSize: 12,
+                               letterSpacing: 1.2
+                             ),
                           ),
                         )
                       : const SizedBox.shrink();
@@ -209,7 +208,7 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
 
     switch (note.status) {
       case NoteStatus.ready:
-        statusColor = AppTheme.success;
+        statusColor = Colors.green;
         statusIcon = Icons.check_circle;
         break;
       case NoteStatus.copied:
@@ -219,14 +218,13 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
       case NoteStatus.processed:
       case NoteStatus.draft:
       default:
-        statusColor = isDraft ? Colors.orange : AppTheme.draft;
+        statusColor = Theme.of(context).colorScheme.primary;
         statusIcon = Icons.edit_note;
         break;
     }
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      color: AppTheme.surface,
       elevation: isDraft ? 2 : 4, 
       shadowColor: Colors.black45,
       clipBehavior: Clip.antiAlias,
@@ -267,7 +265,7 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
                               noteNumber > 0 ? 'NO-$noteNumber' : 'Draft Note',
                               style: TextStyle(
                                 fontWeight: isDraft ? FontWeight.w500 : FontWeight.w600, 
-                                color: isDraft ? Colors.white54 : Colors.white, 
+                                color: isDraft ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.54) : Theme.of(context).colorScheme.onSurface, 
                                 fontSize: 16,
                                 fontStyle: isDraft ? FontStyle.italic : FontStyle.normal,
                               ),
@@ -276,7 +274,7 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
                           if (index != null) 
                             IconButton(
                               icon: Icon(Icons.subdirectory_arrow_left, 
-                                color: isDraft ? Colors.white30 : Colors.white70, 
+                                color: isDraft ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3) : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7), 
                                 size: 20),
                               tooltip: isDraft ? 'Select a template first' : 'Copy & Inject',
                               onPressed: isDraft ? null : () => _copyAndMarkCopied(note),
@@ -287,7 +285,7 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
                       Text(
                         note.formattedText.isNotEmpty ? note.formattedText : note.content,
                         maxLines: 2, overflow: TextOverflow.ellipsis, 
-                        style: TextStyle(color: isDraft ? Colors.white54 : Colors.white70, height: 1.4),
+                        style: TextStyle(color: isDraft ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.54) : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7), height: 1.4),
                       ),
                       const SizedBox(height: 12),
                       Row(

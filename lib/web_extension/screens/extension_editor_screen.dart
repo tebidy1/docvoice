@@ -1,8 +1,6 @@
 // ignore_for_file: deprecated_member_use
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import '../../mobile_app/core/theme.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
@@ -23,6 +21,8 @@ import '../services/extension_injection_service.dart';
 import '../../features/multimodal_ai/multimodal_ai_service.dart';
 import '../../features/multimodal_ai/ai_studio_multimodal_service.dart';
 import '../../core/ai/ai_prompt_constants.dart';
+import '../../core/medical_departments.dart';
+import '../../services/department_service.dart';
 
 class ExtensionEditorScreen extends StatefulWidget {
   final NoteModel draftNote;
@@ -133,10 +133,29 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
     super.dispose();
   }
 
+  List<String> _getCategories(MacroModel m) {
+    if (m.category.isEmpty) return [];
+    return m.category.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+  }
+
   Future<void> _loadMacros() async {
     // Reuse Mobile Macro Service
     // It returns List<MacroModel>
-    final macros = await _macroService.getMacros();
+    final allMacros = await _macroService.getMacros();
+    
+    final prefs = await SharedPreferences.getInstance();
+    final deptId = DepartmentService().value ?? prefs.getString('specialty');
+    final deptNameEn = deptId != null ? MedicalDepartments.getById(deptId)?.nameEn : 'General Practice';
+    
+    final macros = allMacros.where((m) {
+      final cats = _getCategories(m);
+      if (cats.isEmpty) return true; // uncategorized are general?
+      if (cats.contains('General') || cats.contains('General Practice')) return true;
+      if (deptId != null && cats.contains(deptId)) return true;
+      if (deptNameEn != null && cats.contains(deptNameEn)) return true; // legacy support
+      return false;
+    }).toList();
+
     // Sort: Favorites first
     macros.sort((a, b) {
        if (a.isFavorite && !b.isFavorite) return -1;
@@ -310,7 +329,8 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      final specialty = prefs.getString('specialty') ?? 'General Practice';
+      // Get real specialty from DepartmentService via AIProcessingService
+      final specialty = await AIProcessingService.getEffectiveSpecialty();
       final globalPrompt = prefs.getString('global_ai_prompt') ?? AIPromptConstants.globalMasterPrompt;
 
       // Detect MIME type from blob (webm is the default for Chrome recording)
@@ -490,7 +510,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF121212), // Dark gray background
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Stack(
           children: [
@@ -507,7 +527,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                           Row(
                             children: [
                                  IconButton(
-                                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                                    icon: Icon(Icons.arrow_back, color: Theme.of(context).colorScheme.onSurface),
                                     onPressed: () {
                                       if (Navigator.canPop(context)) {
                                         Navigator.pop(context);
@@ -520,7 +540,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                                     constraints: const BoxConstraints(),
                                 ),
                                 const SizedBox(width: 8),
-                                Text(widget.noteNumber > 0 ? "NO-${widget.noteNumber}" : "Draft Note", style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+                                Text(widget.noteNumber > 0 ? "NO-${widget.noteNumber}" : "Draft Note", style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 16, fontWeight: FontWeight.w600)),
                                 const SizedBox(width: 8),
                                 _buildStatusBadge(),
                                 const Spacer(),
@@ -531,7 +551,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                                         Clipboard.setData(ClipboardData(text: _rawText));
                                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Copied raw text"), duration: Duration(seconds: 1)));
                                     },
-                                    child: const Text("Use Raw Text", style: TextStyle(fontSize: 12, color: AppTheme.accent, fontWeight: FontWeight.w500)),
+                                    child: Text("Use Raw Text", style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w500)),
                                   ),
                             ],
                           ),
@@ -578,8 +598,8 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
         onPressed: _smartCopyAndInject,
         icon: const Icon(Icons.input),
         label: const Text("SMART COPY / INJECT"),
-        backgroundColor: AppTheme.accent,
-        foregroundColor: Colors.white,
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Theme.of(context).colorScheme.onPrimary,
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
@@ -589,7 +609,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
        // Check if "Ready"
        bool isReady = _finalNoteController.text.isNotEmpty;
        String text = isReady ? "READY" : "DRAFT";
-       Color color = isReady ? AppTheme.success : Colors.orange;
+       Color color = isReady ? Colors.green : Colors.orange;
 
        return Container(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -605,9 +625,9 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
   Widget _buildOriginalNoteCard() {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF1C1C1C),
+        color: Theme.of(context).cardTheme.color ?? Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF2A2A2A)),
+        border: Border.all(color: Theme.of(context).dividerColor),
       ),
       padding: const EdgeInsets.all(16),
       child: InkWell(
@@ -619,14 +639,14 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                _rawText.isEmpty ? "No source text available." : _rawText,
                maxLines: _isRawTextExpanded ? null : 2, // Changed to 2 lines
                overflow: _isRawTextExpanded ? null : TextOverflow.ellipsis,
-               style: const TextStyle(fontSize: 14, color: Colors.white70, height: 1.5),
+               style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7), height: 1.5),
              ),
              if (_rawText.isNotEmpty) ...[
                  const SizedBox(height: 4), // Reduced spacing
                  Row(
                    mainAxisAlignment: MainAxisAlignment.center,
                    children: [
-                     Icon(_isRawTextExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 16, color: Colors.white38),
+                      Icon(_isRawTextExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 16, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38)),
                    ],
                  )
              ]
@@ -638,7 +658,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
 
   Widget _buildTemplateSelectorCard() {
     // In One-Shot mode the header shows an amber bolt indicator
-    final headerColor = _isOneShotMode ? Colors.amber : AppTheme.accent;
+    final headerColor = _isOneShotMode ? Colors.amber : Theme.of(context).colorScheme.primary;
     final headerIcon = _isOneShotMode ? Icons.bolt : Icons.extension;
     final headerTitle = _isOneShotMode ? '⚡ Choose Template (One-Shot)' : 'Choose Template';
 
@@ -646,12 +666,12 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
       duration: const Duration(milliseconds: 350),
       curve: Curves.easeInOutCubic,
       decoration: BoxDecoration(
-        color: const Color(0xFF1C1C1C),
+        color: Theme.of(context).cardTheme.color ?? Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: _isTemplateCardExpanded
               ? headerColor.withValues(alpha: 0.5)
-              : const Color(0xFF2A2A2A),
+              : Theme.of(context).dividerColor,
           width: _isTemplateCardExpanded ? 1.5 : 1.0,
         ),
         boxShadow: _isTemplateCardExpanded ? [
@@ -678,14 +698,14 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                     child: Icon(
                       _isTemplateCardExpanded ? headerIcon : Icons.extension_outlined,
                       key: ValueKey(_isTemplateCardExpanded),
-                      color: _isTemplateCardExpanded ? headerColor : Colors.white54,
+                      color: _isTemplateCardExpanded ? headerColor : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.54),
                       size: 18,
                     ),
                   ),
                   const SizedBox(width: 8),
                   Text(
                     headerTitle,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface),
                   ),
                   if (!_isTemplateCardExpanded && _selectedMacro != null) ...[
                     const SizedBox(width: 8),
@@ -706,7 +726,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                         ? Icons.keyboard_arrow_up
                         : Icons.keyboard_arrow_down,
                     size: 18,
-                    color: Colors.white38,
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38),
                   ),
                 ],
               ),
@@ -740,12 +760,12 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                           }
                         }
                       },
-                      backgroundColor: const Color(0xFF2A2A2A),
+                      backgroundColor: Theme.of(context).dividerColor,
                       selectedColor: headerColor.withValues(alpha: 0.2),
                       checkmarkColor: headerColor,
                       labelStyle: TextStyle(
                         fontSize: 13,
-                        color: isSelected ? headerColor : Colors.white70,
+                        color: isSelected ? headerColor : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
                         fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                         fontFamily: 'Inter',
                       ),
@@ -775,17 +795,17 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
       curve: Curves.easeInOutCubic,
       width: double.infinity,
       decoration: BoxDecoration(
-        color: const Color(0xFF1C1C1C),
+        color: Theme.of(context).cardTheme.color ?? Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: _isGeneratedCardExpanded
-              ? AppTheme.accent.withValues(alpha: 0.5)
-              : const Color(0xFF2A2A2A),
+              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.5)
+              : Theme.of(context).dividerColor,
           width: _isGeneratedCardExpanded ? 1.5 : 1.0,
         ),
         boxShadow: _isGeneratedCardExpanded ? [
           BoxShadow(
-            color: AppTheme.accent.withValues(alpha: 0.08),
+            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
             blurRadius: 12,
             spreadRadius: 0,
           )
@@ -810,14 +830,14 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                     child: Icon(
                       _isGeneratedCardExpanded ? Icons.auto_awesome : Icons.auto_awesome_outlined,
                       key: ValueKey(_isGeneratedCardExpanded),
-                      color: _isGeneratedCardExpanded ? AppTheme.accent : Colors.white38,
+                      color: _isGeneratedCardExpanded ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38),
                       size: 18,
                     ),
                   ),
                   const SizedBox(width: 8),
-                  const Text(
+                  Text(
                     "Generated Note",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface),
                   ),
                   const Spacer(),
                   if (hasContent)
@@ -826,14 +846,14 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                           ? Icons.keyboard_arrow_up
                           : Icons.keyboard_arrow_down,
                       size: 18,
-                      color: Colors.white38,
+                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38),
                     )
                   else
-                    const Text(
+                    Text(
                       "Select a template above",
                       style: TextStyle(
                         fontSize: 11,
-                        color: Colors.white24,
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.24),
                         fontStyle: FontStyle.italic,
                       ),
                     ),
@@ -855,17 +875,17 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                   : TextField(
                       controller: _finalNoteController,
                       maxLines: null,
-                      style: const TextStyle(fontSize: 14, color: Colors.white, height: 1.6),
-                      decoration: const InputDecoration(
+                      style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurface, height: 1.6),
+                      decoration: InputDecoration(
                         border: InputBorder.none,
                         focusedBorder: InputBorder.none,
                         enabledBorder: InputBorder.none,
                         errorBorder: InputBorder.none,
                         disabledBorder: InputBorder.none,
                         isDense: true,
-                        contentPadding: EdgeInsets.only(bottom: 16),
+                        contentPadding: const EdgeInsets.only(bottom: 16),
                         hintText: "AI generated note will appear here...",
-                        hintStyle: TextStyle(color: Colors.white24),
+                        hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.24)),
                         fillColor: Colors.transparent,
                         filled: true,
                       ),

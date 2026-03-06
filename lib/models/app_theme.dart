@@ -52,26 +52,26 @@ class AppTheme {
     id: 'light_native',
     name: 'Native Light',
     isDark: false,
-    backgroundColor: const Color(0xFFF3F3F3), // --window-bg
-    borderColor: const Color(0xFF8E9093), // --window-border
+    backgroundColor: const Color(0xFFFFFFFF), // White background
+    borderColor: const Color(0xFFE2E8F0), // Light grey border
     shadows: [
       BoxShadow(
-        color: const Color.fromRGBO(0, 0, 0, 0.15), // --shadow-elevation
+        color: const Color.fromRGBO(0, 0, 0, 0.05), // Soft shadow for depth
         blurRadius: 12,
         offset: const Offset(0, 4),
       ),
     ],
-    borderRadius: 8.0, // --window-radius
-    iconColor: const Color(0xFF444746), // --icon-color
-    hoverColor: const Color(0xFFE0E0E0), // --btn-hover
-    dividerColor: const Color(0xFFC0C0C0), // --divider-color
-    micIdleBackground: const Color(0xFFFFFFFF), // --primary-bg-idle
-    micIdleIcon: const Color(0xFF4A90E2), // --primary-color (Medical Blue)
-    micIdleBorder: const Color(0xFFD1D1D1), // --primary-border
-    micRecordingBackground: const Color(0xFFFF5252), // --danger-color
+    borderRadius: 8.0,
+    iconColor: const Color(0xFF0A1C40), // Dark navy for text and icons
+    hoverColor: const Color(0xFFF4F6F9), // Light grayish-blue for hover
+    dividerColor: const Color(0xFFE2E8F0),
+    micIdleBackground: const Color(0xFFFFFFFF),
+    micIdleIcon: const Color(0xFF00A5FE), // Bright primary blue (Login Button Color)
+    micIdleBorder: const Color(0xFFE2E8F0),
+    micRecordingBackground: const Color(0xFFFF453A),
     micRecordingIcon: Colors.white,
-    micRecordingBorder: const Color(0xFFFF5252),
-    dragHandleColor: const Color(0xFF444746), // Matching icon color
+    micRecordingBorder: const Color(0xFFFF453A),
+    dragHandleColor: const Color(0xFF8A94A6), // Muted grey for subtle icons/handles
   );
 
   static final AppTheme slateDark = AppTheme(

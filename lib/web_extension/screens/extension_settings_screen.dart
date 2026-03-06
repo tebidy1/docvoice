@@ -5,7 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 // Screens
 import '../../screens/admin_dashboard_screen.dart';
 import '../../screens/secure_pairing_screen.dart';
-import '../../mobile_app/features/auth/qr_scanner_screen.dart';
 import '../../mobile_app/features/settings/company_settings_screen.dart';
 import '../../mobile_app/features/settings/macro_manager_screen.dart';
 
@@ -14,6 +13,8 @@ import '../../services/auth_service.dart';
 import '../../mobile_app/core/theme.dart';
 import '../../mobile_app/services/macro_service.dart';
 import '../../mobile_app/services/websocket_service.dart';
+import '../../core/medical_departments.dart';
+import '../../services/department_service.dart';
 import '../../models/app_theme.dart' as global_theme;
 import '../../services/theme_service.dart';
 
@@ -42,6 +43,18 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
     super.initState();
     _loadSettings();
     _loadUserProfile();
+    DepartmentService().addListener(_onDepartmentChanged);
+  }
+
+  @override
+  void dispose() {
+    _ipController.dispose();
+    DepartmentService().removeListener(_onDepartmentChanged);
+    super.dispose();
+  }
+
+  void _onDepartmentChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadUserProfile() async {
@@ -59,7 +72,7 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
+        backgroundColor: Theme.of(context).cardTheme.color ?? const Color(0xFF1E1E1E),
         title: const Text("Log Out?", style: TextStyle(color: Colors.white)),
         content: const Text(
           "Are you sure you want to log out of the extension?",
@@ -140,7 +153,7 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
+        backgroundColor: Theme.of(ctx).cardTheme.color ?? const Color(0xFF1E1E1E),
         title: const Text("Reset Macros?", style: TextStyle(color: Colors.white)),
         content: const Text("This will restore default templates.",
             style: TextStyle(color: Colors.white70)),
@@ -167,7 +180,7 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text("Settings"),
         backgroundColor: Colors.transparent,
@@ -183,7 +196,7 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
             _buildSectionHeader(context, "Account"),
             Card(
               clipBehavior: Clip.antiAlias,
-              color: AppTheme.surface,
+              color: Theme.of(context).cardTheme.color,
               child: _isFetchingProfile
                   ? const Padding(
                       padding: EdgeInsets.all(20),
@@ -192,34 +205,62 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                       children: [
                         ListTile(
                           leading: CircleAvatar(
-                            backgroundColor: AppTheme.primary.withOpacity(0.2),
+                            backgroundColor: AppTheme.primary.withValues(alpha: 0.2),
                             child: Text(
                                 _currentUser?['name'] != null
                                     ? (_currentUser!['name'] as String)[0].toUpperCase()
                                     : "?",
-                                style: const TextStyle(
-                                    color: AppTheme.primary,
+                                style: TextStyle(
+                                    color: Theme.of(context).colorScheme.primary,
                                     fontWeight: FontWeight.bold)),
                           ),
                           title: Text(
                               _currentUser?['name'] ?? "Guest User",
-                              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                              style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).textTheme.bodyLarge?.color)),
                           subtitle: Text(
                               _currentUser?['email'] ?? "Not logged in",
-                              style: const TextStyle(fontSize: 12, color: Colors.white70)),
+                              style: TextStyle(fontSize: 12, color: Theme.of(context).textTheme.bodyMedium?.color?.withValues(alpha: 0.7))),
                         ),
-                        const Divider(height: 1, color: Colors.white12),
+                        Divider(height: 1, color: Theme.of(context).dividerColor.withValues(alpha: 0.12)),
+                        // Department Selection
+                        ListTile(
+                          leading: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: (MedicalDepartments.getById(DepartmentService().value)?.color ?? Colors.grey).withValues(alpha: 0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              MedicalDepartments.getById(DepartmentService().value)?.icon ?? Icons.local_hospital,
+                              color: MedicalDepartments.getById(DepartmentService().value)?.color ?? Colors.grey,
+                              size: 20,
+                            ),
+                          ),
+                          title: Text("Medical Department", 
+                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Theme.of(context).textTheme.bodyLarge?.color)),
+                          subtitle: Text(
+                            MedicalDepartments.getById(DepartmentService().value)?.nameEn ?? "Tap to select specialty",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: DepartmentService().value == null ? Colors.redAccent : Colors.white54,
+                            ),
+                          ),
+                          trailing: Icon(Icons.arrow_drop_down, color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.54)),
+                          onTap: _showDepartmentPicker,
+                          dense: true,
+                        ),
+                        Divider(height: 1, color: Theme.of(context).dividerColor.withValues(alpha: 0.12)),
                         ListTile(
                           leading: const Icon(Icons.logout, color: Colors.redAccent, size: 20),
                           title: const Text("Log Out", style: TextStyle(color: Colors.redAccent, fontSize: 14)),
                           onTap: _handleLogout,
                           dense: true,
                         ),
-                        const Divider(height: 1, color: Colors.white12),
+                        Divider(height: 1, color: Theme.of(context).dividerColor.withValues(alpha: 0.12)),
                         ListTile(
                           leading: const Icon(Icons.devices, color: Colors.blueAccent, size: 20),
                           title: const Text("Link New Device", style: TextStyle(color: Colors.blueAccent, fontSize: 14)),
-                          subtitle: const Text("Generate QR for mobile to scan", style: TextStyle(fontSize: 11, color: Colors.white54)),
+                          subtitle: Text("Generate QR for mobile to scan", style: TextStyle(fontSize: 11, color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.54))),
                           onTap: () {
                             Navigator.push(
                               context,
@@ -228,29 +269,16 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                           },
                           dense: true,
                         ),
-                        // Only show Scan QR if user really wants to scan FROM laptop (e.g. authorize desktop login?)
-                        const Divider(height: 1, color: Colors.white12),
-                        ListTile(
-                          leading: const Icon(Icons.qr_code_scanner, color: Colors.greenAccent, size: 20),
-                          title: const Text("Scan QR to Authorize", style: TextStyle(color: Colors.greenAccent, fontSize: 14)),
-                          subtitle: const Text("Authorize Desktop login", style: TextStyle(fontSize: 11, color: Colors.white54)),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const QrScannerScreen()),
-                            );
-                          },
-                          dense: true,
-                        ),
+
 
                         // Admin / Company
                         if (_currentUser?['role']?.toString().toLowerCase() == 'admin' ||
                             _currentUser?['role']?.toString().toLowerCase() == 'company_manager') ...[
-                          const Divider(height: 1, color: Colors.white12),
+                          Divider(height: 1, color: Theme.of(context).dividerColor.withValues(alpha: 0.12)),
                           ListTile(
                             leading: const Icon(Icons.business, color: Colors.amberAccent, size: 20),
                             title: const Text("Company Settings", style: TextStyle(color: Colors.amberAccent, fontSize: 14)),
-                            subtitle: const Text("Manage per-company AI settings", style: TextStyle(fontSize: 11, color: Colors.white54)),
+                            subtitle: Text("Manage per-company AI settings", style: TextStyle(fontSize: 11, color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.54))),
                             onTap: () {
                                 Navigator.push(
                                   context,
@@ -260,11 +288,11 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                             dense: true,
                           ),
                           if (_currentUser?['role']?.toString().toLowerCase() == 'admin') ...[
-                            const Divider(height: 1, color: Colors.white12),
+                            Divider(height: 1, color: Theme.of(context).dividerColor.withValues(alpha: 0.12)),
                             ListTile(
                               leading: const Icon(Icons.admin_panel_settings, color: Colors.purpleAccent, size: 20),
                               title: const Text("Admin Dashboard", style: TextStyle(color: Colors.purpleAccent, fontSize: 14)),
-                              subtitle: const Text("Access advanced controls", style: TextStyle(fontSize: 11, color: Colors.white54)),
+                              subtitle: Text("Access advanced controls", style: TextStyle(fontSize: 11, color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.54))),
                               onTap: () {
                                 Navigator.push(
                                   context,
@@ -284,7 +312,7 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
             // --- Appearance ---
             _buildSectionHeader(context, "Appearance"),
             Card(
-              color: AppTheme.surface,
+              color: Theme.of(context).cardTheme.color,
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8.0),
                 child: ValueListenableBuilder<global_theme.AppTheme>(
@@ -293,7 +321,7 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                     return Column(
                       children: [
                         RadioListTile<String>(
-                          title: const Text("Native Light", style: TextStyle(color: Colors.white)),
+                          title: Text("Native Light", style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
                           value: global_theme.AppTheme.lightNative.id,
                           groupValue: currentTheme.id,
                           activeColor: AppTheme.accent,
@@ -302,7 +330,7 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                           },
                         ),
                         RadioListTile<String>(
-                          title: const Text("Slate Dark", style: TextStyle(color: Colors.white)),
+                          title: Text("Slate Dark", style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
                           value: global_theme.AppTheme.slateDark.id,
                           groupValue: currentTheme.id,
                           activeColor: AppTheme.accent,
@@ -311,7 +339,7 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                           },
                         ),
                         RadioListTile<String>(
-                          title: const Text("Dark Onyx", style: TextStyle(color: Colors.white)),
+                          title: Text("Dark Onyx", style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
                           value: global_theme.AppTheme.darkOnyx.id,
                           groupValue: currentTheme.id,
                           activeColor: AppTheme.accent,
@@ -331,22 +359,22 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
             // --- Server Configuration ---
             _buildSectionHeader(context, "Server Configuration"),
             Card(
-              color: AppTheme.surface,
+              color: Theme.of(context).cardTheme.color,
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   children: [
                     TextField(
                       controller: _ipController,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: const InputDecoration(
+                      style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color),
+                      decoration: InputDecoration(
                         labelText: "Desktop IP Address",
                         hintText: "e.g. 192.168.1.105",
-                        prefixIcon: Icon(Icons.computer, color: Colors.white70),
-                        labelStyle: TextStyle(color: Colors.white70),
-                        hintStyle: TextStyle(color: Colors.white30),
-                        enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-                        focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: AppTheme.primary)),
+                        prefixIcon: Icon(Icons.computer, color: Theme.of(context).textTheme.bodyMedium?.color?.withValues(alpha: 0.7)),
+                        labelStyle: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color?.withValues(alpha: 0.7)),
+                        hintStyle: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.3)),
+                        enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.24))),
+                        focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Theme.of(context).colorScheme.primary)),
                       ),
                       keyboardType: TextInputType.number,
                     ),
@@ -391,14 +419,14 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
             // --- Speech-to-Text Engine ---
             _buildSectionHeader(context, "Speech-to-Text Engine"),
             Card(
-              color: AppTheme.surface,
+              color: Theme.of(context).cardTheme.color,
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8.0),
                 child: Column(
                   children: [
                     RadioListTile<String>(
-                      title: const Text("Groq (Cloud - High Accuracy)", style: TextStyle(color: Colors.white)),
-                      subtitle: const Text("Requires internet. Best for complex medical terms.", style: TextStyle(color: Colors.white54)),
+                      title: Text("Groq (Cloud - High Accuracy)", style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
+                      subtitle: Text("Requires internet. Best for complex medical terms.", style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.54))),
                       value: 'groq',
                       groupValue: _sttEnginePref,
                       activeColor: AppTheme.accent,
@@ -411,8 +439,8 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                       },
                     ),
                     RadioListTile<String>(
-                      title: const Text("System Native (Built-in)", style: TextStyle(color: Colors.white)),
-                      subtitle: const Text("Uses Apple/Google built-in speech engine.", style: TextStyle(color: Colors.white54)),
+                      title: Text("System Native (Built-in)", style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
+                      subtitle: Text("Uses Apple/Google built-in speech engine.", style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.54))),
                       value: 'native',
                       groupValue: _sttEnginePref,
                       activeColor: AppTheme.accent,
@@ -425,8 +453,8 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                       },
                     ),
                     RadioListTile<String>(
-                      title: const Text("Oracle OCI Live Speech (Cloud)", style: TextStyle(color: Colors.white)),
-                      subtitle: const Text("Real-time streaming via Oracle AI. Recommended.", style: TextStyle(color: Colors.white54)),
+                      title: Text("Oracle OCI Live Speech (Cloud)", style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
+                      subtitle: Text("Real-time streaming via Oracle AI. Recommended.", style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.54))),
                       value: 'oracle_live',
                       groupValue: _sttEnginePref,
                       activeColor: Colors.orange,
@@ -439,8 +467,8 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                       },
                     ),
                     RadioListTile<String>(
-                      title: const Text("⚡ Gemini One-Shot AI", style: TextStyle(color: Colors.white)),
-                      subtitle: const Text("Audio + Template → Note in one step. No transcription.", style: TextStyle(color: Colors.white54)),
+                      title: Text("⚡ Gemini One-Shot AI", style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
+                      subtitle: Text("Audio + Template → Note in one step. No transcription.", style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.54))),
                       value: 'gemini_oneshot',
                       groupValue: _sttEnginePref,
                       activeColor: Colors.amber,
@@ -455,7 +483,7 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                     // A/B Testing Toggle — only visible when Oracle is selected
                     if (_sttEnginePref == 'oracle_live') ...
                       [
-                        const Divider(height: 1, color: Colors.white12),
+                        Divider(height: 1, color: Theme.of(context).dividerColor.withValues(alpha: 0.12)),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                           child: Row(
@@ -470,7 +498,7 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                                       _useOracleWhisperModel
                                           ? 'Model: Whisper Generic'
                                           : 'Model: Oracle Medical',
-                                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white),
+                                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Theme.of(context).textTheme.bodyLarge?.color),
                                     ),
                                     Text(
                                       _useOracleWhisperModel
@@ -496,7 +524,7 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                       ],
                     // Info note for One-Shot mode
                     if (_sttEnginePref == 'gemini_oneshot') ...[
-                      const Divider(height: 1, color: Colors.white12),
+                      Divider(height: 1, color: Theme.of(context).dividerColor.withValues(alpha: 0.12)),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         child: Row(
@@ -504,10 +532,10 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                           children: [
                             const Icon(Icons.info_outline, size: 16, color: Colors.amber),
                             const SizedBox(width: 8),
-                            const Expanded(
+                            Expanded(
                               child: Text(
                                 'Records audio, then sends audio + template directly to Gemini 2.5 Flash — no intermediate transcription step. Ideal for fast, high-quality notes.',
-                                style: TextStyle(fontSize: 12, color: Colors.white54, height: 1.4),
+                                style: TextStyle(fontSize: 12, color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.54), height: 1.4),
                               ),
                             ),
                           ],
@@ -523,18 +551,18 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
             // --- AI Brain & Macros ---
             _buildSectionHeader(context, "AI Brain & Macros"),
              Card(
-              color: AppTheme.surface,
+              color: Theme.of(context).cardTheme.color,
               child: ListTile(
                 leading: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                      color: AppTheme.accent.withOpacity(0.2),
+                      color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.2),
                       shape: BoxShape.circle),
-                  child: const Icon(Icons.psychology, color: AppTheme.accent),
+                  child: Icon(Icons.psychology, color: Theme.of(context).colorScheme.secondary),
                 ),
-                title: const Text("Macro Manager", style: TextStyle(color: Colors.white)),
-                subtitle: const Text("Manage custom templates", style: TextStyle(color: Colors.white54)),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.white30),
+                title: Text("Macro Manager", style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
+                subtitle: Text("Manage custom templates", style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.54))),
+                trailing: Icon(Icons.arrow_forward_ios, size: 16, color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.3)),
                 onTap: () {
                   Navigator.push(
                       context,
@@ -544,17 +572,17 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
               ),
             ),
             Card(
-              color: AppTheme.surface,
+              color: Theme.of(context).cardTheme.color,
               child: ListTile(
                 leading: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                      color: Colors.orange.withOpacity(0.2),
+                      color: Colors.orange.withValues(alpha: 0.2),
                       shape: BoxShape.circle),
                   child: const Icon(Icons.restore, color: Colors.orange),
                 ),
-                title: const Text("Reset to Default Macros", style: TextStyle(color: Colors.white)),
-                subtitle: const Text("Replace all with 8 medical templates", style: TextStyle(color: Colors.white54)),
+                title: Text("Reset to Default Macros", style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
+                subtitle: Text("Replace all with 8 medical templates", style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.54))),
                 trailing: const Icon(Icons.warning, size: 16, color: Colors.orange),
                 onTap: _resetMacrosToDefaults,
               ),
@@ -563,12 +591,12 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
             const SizedBox(height: 24),
             _buildSectionHeader(context, "About"),
              Card(
-                color: AppTheme.surface,
+                color: Theme.of(context).cardTheme.color,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: const ListTile(
-                  leading: Icon(Icons.info_outline, color: Colors.blueGrey),
-                  title: Text("ScribeFlow Extension", style: TextStyle(color: Colors.white)),
-                  subtitle: Text("Version 1.0.0", style: TextStyle(color: Colors.white54)),
+                child: ListTile(
+                  leading: const Icon(Icons.info_outline, color: Colors.blueGrey),
+                  title: Text("ScribeFlow Extension", style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
+                  subtitle: Text("Version 1.0.0", style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.54))),
                 ),
               ),
           ],
@@ -582,13 +610,139 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
       padding: const EdgeInsets.only(bottom: 8.0, left: 4),
       child: Text(
         title.toUpperCase(),
-        style: const TextStyle(
-          color: Colors.grey,
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1.2,
-        ),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppTheme.primary, letterSpacing: 1.2),
       ),
+    );
+  }
+
+  void _showDepartmentPicker() {
+    String searchQuery = '';
+    
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppTheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final filteredDepts = MedicalDepartments.all.where((dept) {
+              final q = searchQuery.toLowerCase();
+              return dept.nameEn.toLowerCase().contains(q) || 
+                     dept.nameAr.contains(q);
+            }).toList();
+
+            return DraggableScrollableSheet(
+              initialChildSize: 0.8,
+              minChildSize: 0.5,
+              maxChildSize: 0.95,
+              expand: false,
+              builder: (context, scrollController) {
+                return Column(
+                  children: [
+                    // Handle bar
+                    Container(
+                      margin: const EdgeInsets.symmetric(vertical: 12),
+                      width: 40,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).dividerColor.withValues(alpha: 0.24),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    
+                    // Title
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.local_hospital, color: AppTheme.accent),
+                          const SizedBox(width: 12),
+                          Text("Select Department", 
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: Colors.white)
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // Search bar
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: TextField(
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          hintText: "Search specialties...",
+                          hintStyle: const TextStyle(color: Colors.white54),
+                          prefixIcon: const Icon(Icons.search, color: Colors.white54),
+                          filled: true,
+                          fillColor: AppTheme.background,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                        ),
+                        onChanged: (val) {
+                          setSheetState(() {
+                            searchQuery = val;
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    
+                    // List
+                    Expanded(
+                      child: ListView.builder(
+                        controller: scrollController,
+                        itemCount: filteredDepts.length,
+                        itemBuilder: (context, index) {
+                          final dept = filteredDepts[index];
+                          final isSelected = DepartmentService().value == dept.id;
+                          
+                          return ListTile(
+                            leading: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: dept.color.withValues(alpha: 0.15),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(dept.icon, color: dept.color, size: 24),
+                            ),
+                            title: Text(dept.nameEn, 
+                              style: TextStyle(
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                color: isSelected ? AppTheme.accent : Colors.white,
+                              )
+                            ),
+                            subtitle: Text(dept.nameAr, 
+                              style: const TextStyle(
+                                fontSize: 13, 
+                                color: Colors.white54,
+                                fontFamily: 'Cairo', // Assuming an Arabic font is available
+                              )
+                            ),
+                            trailing: isSelected 
+                                ? const Icon(Icons.check_circle, color: AppTheme.accent)
+                                : null,
+                            onTap: () {
+                              DepartmentService().setDepartment(dept.id);
+                              Navigator.pop(context);
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
     );
   }
 }

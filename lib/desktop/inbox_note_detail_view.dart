@@ -25,6 +25,8 @@ import '../features/multimodal_ai/multimodal_ai_service.dart';
 import '../features/multimodal_ai/ai_studio_multimodal_service.dart';
 import '../core/ai/ai_prompt_constants.dart';
 import 'dart:io' show File;
+import '../core/medical_departments.dart';
+import '../services/department_service.dart';
 
 class InboxNoteDetailView extends StatefulWidget {
   final NoteModel note;
@@ -230,13 +232,21 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   Future<void> _loadQuickMacros() async {
     await _macroService.init();
 
+    final prefs = await SharedPreferences.getInstance();
+    final deptId = DepartmentService().value ?? prefs.getString('specialty');
+    final allowedCategories = deptId != null 
+        ? MedicalDepartments.getRelevantCategories(deptId)
+        : ['General'];
+
+    bool isAllowed(Macro m) => allowedCategories.contains(m.category) || allowedCategories.contains('General');
+
     // Strategy: Favorites FIRST, then Most Used
-    final favorites = await _macroService.getFavorites();
-    var mostUsed = await _macroService.getMostUsed(limit: 30);
+    final favorites = (await _macroService.getFavorites()).where(isAllowed).toList();
+    var mostUsed = (await _macroService.getMostUsed(limit: 30)).where(isAllowed).toList();
 
     // Fallback if most used is empty (e.g. fresh install)
     if (mostUsed.isEmpty && favorites.isEmpty) {
-      final allMacros = await _macroService.getAllMacros();
+      final allMacros = (await _macroService.getAllMacros()).where(isAllowed).toList();
       mostUsed = allMacros.take(30).toList();
     }
 
@@ -426,10 +436,9 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     });
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final specialty  = prefs.getString('specialty') ?? 'General Practice';
-      final globalPrmt = prefs.getString('global_ai_prompt')
-          ?? AIPromptConstants.globalMasterPrompt;
+      // Fetch settings using the unified AIProcessingService methods
+      final globalPrmt = await AIProcessingService.getEffectivePrompt();
+      final specialty = await AIProcessingService.getEffectiveSpecialty();
 
       // Single multimodal call — transcription + formatting in one pass
       final result = await _multimodalService.processAudioNote(

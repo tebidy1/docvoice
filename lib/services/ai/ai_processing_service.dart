@@ -23,6 +23,10 @@
 
 import '../../services/api_service.dart';
 import '../../core/ai/ai_prompt_constants.dart';
+import '../macro_service_api.dart';
+import 'package:http/http.dart' as http;
+import '../../core/medical_departments.dart';
+import '../../services/department_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Defines the processing mode for the AI engine.
@@ -123,8 +127,11 @@ class AIProcessingService {
     try {
       // Load settings if not provided by caller
       final prefs = await SharedPreferences.getInstance();
-      final resolvedSpecialty =
-          specialty ?? prefs.getString('specialty') ?? 'General Practice';
+      
+      // Get specialty from our new DepartmentService mapping
+      final deptId = DepartmentService().value ?? prefs.getString('specialty');
+      final resolvedSpecialty = specialty ?? MedicalDepartments.getById(deptId)?.nameEn ?? 'General Practice';
+      
       final resolvedPrompt = globalPromptOverride ??
           prefs.getString('global_ai_prompt') ??
           AIPromptConstants.globalMasterPrompt; // ← Uses centralized constant
@@ -214,7 +221,8 @@ class AIProcessingService {
   /// Loads the effective specialty setting.
   static Future<String> getEffectiveSpecialty() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('specialty') ?? 'General Practice';
+    final deptId = DepartmentService().value ?? prefs.getString('specialty');
+    return MedicalDepartments.getById(deptId)?.nameEn ?? 'General Practice';
   }
 
   /// Loads the effective Smart Suggestions preference.

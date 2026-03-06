@@ -272,6 +272,9 @@ class InboxScreenState extends State<InboxScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     final bool isDraft = note.formattedText.isEmpty;
 
+    // Primary blue — consistent with login screen and Windows app
+    const Color primaryBlue = Color(0xFF00A5FE);
+
     // Find applied template name
     String? templateName = note.summary;
     if ((templateName == null || templateName.isEmpty) && _allMacros.isNotEmpty) {
@@ -282,7 +285,7 @@ class InboxScreenState extends State<InboxScreen> {
       }
     }
 
-    // Badge label: template name if processed, else "Draft"
+    // Badge label
     final String badgeLabel;
     if (note.status == NoteStatus.ready) {
       badgeLabel = 'Ready';
@@ -303,113 +306,185 @@ class InboxScreenState extends State<InboxScreen> {
         statusIcon = Icons.check_circle;
         break;
       case NoteStatus.copied:
-        statusColor = Colors.blue;
+        statusColor = primaryBlue;
         statusIcon = Icons.copy_all;
         break;
       case NoteStatus.processed:
       case NoteStatus.draft:
       default:
-        statusColor = isDraft ? Colors.orange : AppTheme.draft;
+        statusColor = primaryBlue;
         statusIcon = Icons.edit_note;
         break;
     }
 
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      color: colorScheme.surface,
-      elevation: isDraft ? 2 : 4,
-      shadowColor: Colors.black45,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => EditorScreen(draftNote: note, noteNumber: noteNumber)),
-          );
-        },
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Left accent bar
-              Container(
-                width: 4,
-                color: statusColor,
-              ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                           CircleAvatar(
-                            radius: 16,
-                            backgroundColor: statusColor.withOpacity(0.2),
-                            child: Icon(statusIcon, color: statusColor, size: 18),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              noteNumber > 0 ? 'NO-$noteNumber' : 'Draft Note',
-                              style: TextStyle(
-                                fontWeight: isDraft ? FontWeight.w500 : FontWeight.w600,
-                                color: isDraft
-                                    ? colorScheme.onSurface.withOpacity(0.5)
-                                    : colorScheme.onSurface,
-                                fontSize: 16,
-                                fontStyle: isDraft ? FontStyle.italic : FontStyle.normal,
-                              ),
-                            ),
-                          ),
-                          if (index != null)
-                            IconButton(
-                              icon: Icon(Icons.subdirectory_arrow_left, 
-                                color: isDraft 
-                                  ? colorScheme.onSurface.withOpacity(0.2)
-                                  : colorScheme.onSurface.withOpacity(0.6), 
-                                size: 20),
-                              tooltip: isDraft ? 'Select a template first' : 'Copy & Inject',
-                              onPressed: isDraft ? null : () => _copyAndMarkCopied(note),
-                            )
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        note.formattedText.isNotEmpty ? note.formattedText : note.content,
-                        maxLines: 2, overflow: TextOverflow.ellipsis, 
-                        style: TextStyle(color: isDraft ? colorScheme.onSurface.withOpacity(0.4) : colorScheme.onSurface.withOpacity(0.7), height: 1.4),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Icon(Icons.access_time, size: 12, color: colorScheme.onSurface.withOpacity(0.4)),
-                          const SizedBox(width: 4),
-                          Text(
-                            "${note.createdAt.hour}:${note.createdAt.minute.toString().padLeft(2, '0')}",
-                            style: TextStyle(color: colorScheme.onSurface.withOpacity(0.4), fontSize: 12),
-                          ),
-                          const Spacer(),
-                          // Status badge pill
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: statusColor.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Text(
-                              badgeLabel,
-                              style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: colorScheme.outline.withValues(alpha: 0.35),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDraft ? 0.04 : 0.08),
+            blurRadius: isDraft ? 6 : 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => EditorScreen(draftNote: note, noteNumber: noteNumber)),
+            );
+          },
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Left accent bar — blue stripe like Windows card
+                Container(
+                  width: 4,
+                  decoration: BoxDecoration(
+                    color: statusColor,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(14),
+                      bottomLeft: Radius.circular(14),
+                    ),
                   ),
                 ),
-              ),
-            ],
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            // Circular avatar with blue icon
+                            Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                color: statusColor.withValues(alpha: 0.12),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: statusColor.withValues(alpha: 0.25),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Icon(statusIcon, color: statusColor, size: 18),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                noteNumber > 0 ? 'NO-$noteNumber' : 'Draft Note',
+                                style: TextStyle(
+                                  fontWeight: isDraft ? FontWeight.w500 : FontWeight.w700,
+                                  color: isDraft
+                                      ? colorScheme.onSurface.withValues(alpha: 0.45)
+                                      : colorScheme.onSurface,
+                                  fontSize: 15,
+                                  fontStyle: isDraft ? FontStyle.italic : FontStyle.normal,
+                                ),
+                              ),
+                            ),
+                            if (index != null)
+                              SizedBox(
+                                width: 36,
+                                height: 36,
+                                child: IconButton(
+                                  padding: EdgeInsets.zero,
+                                  icon: Icon(
+                                    Icons.subdirectory_arrow_left,
+                                    color: isDraft
+                                        ? colorScheme.onSurface.withValues(alpha: 0.2)
+                                        : colorScheme.onSurface.withValues(alpha: 0.55),
+                                    size: 19,
+                                  ),
+                                  tooltip: isDraft ? 'Select a template first' : 'Copy & Inject',
+                                  onPressed: isDraft ? null : () => _copyAndMarkCopied(note),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 9),
+                        Text(
+                          note.formattedText.isNotEmpty ? note.formattedText : note.content,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: isDraft
+                                ? colorScheme.onSurface.withValues(alpha: 0.38)
+                                : colorScheme.onSurface.withValues(alpha: 0.68),
+                            height: 1.45,
+                            fontSize: 13.5,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Icon(Icons.access_time_rounded, size: 12,
+                                color: colorScheme.onSurface.withValues(alpha: 0.38)),
+                            const SizedBox(width: 4),
+                            Text(
+                              "${note.createdAt.hour}:${note.createdAt.minute.toString().padLeft(2, '0')}",
+                              style: TextStyle(
+                                color: colorScheme.onSurface.withValues(alpha: 0.38),
+                                fontSize: 11.5,
+                              ),
+                            ),
+                            const Spacer(),
+                            // Badge pill — Windows-style with star icon
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: statusColor.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: statusColor.withValues(alpha: 0.25),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    note.status == NoteStatus.ready
+                                        ? Icons.check_circle_outline
+                                        : note.status == NoteStatus.copied
+                                            ? Icons.copy_outlined
+                                            : Icons.auto_awesome,
+                                    size: 11,
+                                    color: statusColor,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    badgeLabel,
+                                    style: TextStyle(
+                                      color: statusColor,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

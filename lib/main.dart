@@ -56,7 +56,7 @@ void main() async {
       final bool isAuth = await authService.isAuthenticated();
 
       final Size initialSize =
-          isAuth ? const Size(280, 56) : const Size(400, 720);
+          isAuth ? const Size(300, 56) : const Size(400, 720);
 
       WindowOptions windowOptions = WindowOptions(
         size: initialSize,
@@ -171,14 +171,17 @@ class _ScribeFlowAppState extends State<ScribeFlowApp> {
               filled: true,
               fillColor: currentTheme.isDark
                   ? currentTheme.micIdleBackground
-                  : Colors.white,
+                  : const Color(0xFFF4F6F9), // Light grey input fields
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
               ),
               contentPadding: const EdgeInsets.all(16),
-              hintStyle:
-                  TextStyle(color: currentTheme.iconColor.withValues(alpha: 0.5)),
+              hintStyle: TextStyle(
+                color: currentTheme.isDark
+                    ? currentTheme.iconColor.withValues(alpha: 0.5)
+                    : const Color(0xFF8A94A6), // Muted text for hints
+              ),
             ),
             useMaterial3: true,
           ),

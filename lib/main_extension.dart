@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 
-import 'mobile_app/features/auth/login_screen.dart' as unified_login;
+import 'web_extension/screens/extension_login_screen.dart';
+
 import 'web_extension/screens/extension_home_screen.dart'; // New Entry Point
 import 'mobile_app/services/websocket_service.dart' as unified_ws;
 import 'models/app_theme.dart';
@@ -261,9 +262,10 @@ class _ScribeFlowExtensionAppState extends State<ScribeFlowExtensionApp> {
                   if (isAuth) {
                     return const AuthGuard(child: ExtensionHomeScreen());
                   } else {
-                    return const unified_login.LoginScreen();
+                    return const ExtensionLoginScreen();
                   }
                 },
+
               ),
             );
           },

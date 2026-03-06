@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:screen_retriever/screen_retriever.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../desktop/qr_pairing_dialog.dart';
-import '../mobile_app/features/auth/qr_scanner_screen.dart';
+
 import '../models/app_theme.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
@@ -12,6 +13,8 @@ import '../services/theme_service.dart';
 import '../utils/window_manager_helper.dart';
 import 'admin_dashboard_screen.dart';
 import 'company_settings_dialog.dart';
+import '../core/medical_departments.dart';
+import '../services/department_service.dart';
 
 class SettingsDialog extends StatefulWidget {
   const SettingsDialog({super.key});
@@ -36,6 +39,20 @@ class _SettingsDialogState extends State<SettingsDialog> {
       if (mounted) setState(() {});
     });
     _resizeWindow(true);
+    
+    DepartmentService().addListener(_onDepartmentChanged);
+  }
+
+  @override
+  void dispose() {
+    WindowManagerHelper.setTransparencyLocked(false);
+    _resizeWindow(false);
+    DepartmentService().removeListener(_onDepartmentChanged);
+    super.dispose();
+  }
+
+  void _onDepartmentChanged() {
+    if (mounted) setState(() {});
   }
 
   final ApiService _apiService = ApiService();
@@ -79,24 +96,38 @@ class _SettingsDialogState extends State<SettingsDialog> {
     if (mounted) setState(() => _localIp = ip);
   }
 
-  @override
-  void dispose() {
-    WindowManagerHelper.setTransparencyLocked(false);
-    _resizeWindow(false);
-    super.dispose();
-  }
-
   Future<void> _resizeWindow(bool expanded) async {
-    // Enable resizing temporarily to animate/change size
     await windowManager.setResizable(true);
     if (expanded) {
-      await WindowManagerHelper.expandToCustomSizeBottomRight(500, 600); // Comfortable Settings Size
+      await WindowManagerHelper.expandToCustomSizeBottomRight(500, 600);
     } else {
-      await windowManager
-          .setSize(const Size(350, 56)); // Restore to Native Utility Toolbar
-      await windowManager.setResizable(false); // Lock it back
+      // Defer collapse AFTER the widget is fully removed from the tree
+      // to avoid layout overflow while the dialog is still rendering.
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        // Do NOT collapse if a logout is in progress — the login screen
+        // will be shown at full size and we must not shrink behind it.
+        if (WindowManagerHelper.isLoggingOut) return;
+
+        try {
+          await windowManager.setSize(const Size(350, 56));
+          await windowManager.setAlwaysOnTop(true);
+          await windowManager.setResizable(false);
+
+          // Re-position to right-center after collapsing
+          final display = await screenRetriever.getPrimaryDisplay();
+          final screenSize = display.size;
+          const w = 350.0;
+          const h = 56.0;
+          final x = screenSize.width - w - 20;
+          final y = screenSize.height - h - 80;
+          await windowManager.setPosition(Offset(x, y));
+        } catch (e) {
+          print('Error collapsing settings window: $e');
+        }
+      });
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -179,6 +210,14 @@ class _SettingsDialogState extends State<SettingsDialog> {
                               },
                               theme: currentTheme,
                             ),
+                            
+                            _buildMenuItem(
+                              icon: MedicalDepartments.getById(DepartmentService().value)?.icon ?? Icons.local_hospital,
+                              label: "Medical Department",
+                              subtitle: MedicalDepartments.getById(DepartmentService().value)?.nameEn ?? "Tap to select specialty",
+                              onTap: () => _showDepartmentPicker(currentTheme),
+                              theme: currentTheme,
+                            ),
 
                             const SizedBox(height: 16),
 
@@ -200,20 +239,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                               },
                               theme: currentTheme,
                             ),
-                            _buildMenuItem(
-                              icon: Icons.qr_code_scanner,
-                              label: "Scan QR to Authorize",
-                              subtitle: "Authorize another device's login",
-                              onTap: () async {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (context) =>
-                                          const QrScannerScreen()),
-                                );
-                              },
-                              theme: currentTheme,
-                            ),
+
 
                             const SizedBox(height: 16),
                             _buildSectionHeader("Speech-to-Text Engine", currentTheme),
@@ -570,6 +596,137 @@ class _SettingsDialogState extends State<SettingsDialog> {
           }
         },
       ),
+    );
+  }
+
+  void _showDepartmentPicker(AppTheme theme) {
+    String searchQuery = '';
+    
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final filteredDepts = MedicalDepartments.all.where((dept) {
+              final q = searchQuery.toLowerCase();
+              return dept.nameEn.toLowerCase().contains(q) || 
+                     dept.nameAr.contains(q);
+            }).toList();
+
+            return Dialog(
+              backgroundColor: theme.backgroundColor,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Container(
+                width: 400,
+                height: 500,
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.local_hospital, color: theme.iconColor),
+                        const SizedBox(width: 12),
+                        Text("Select Department", 
+                          style: TextStyle(
+                            fontSize: 18, 
+                            fontWeight: FontWeight.bold,
+                            color: theme.iconColor,
+                          )
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          color: theme.iconColor.withOpacity(0.5),
+                          onPressed: () => Navigator.pop(context),
+                        )
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      style: TextStyle(color: theme.iconColor),
+                      decoration: InputDecoration(
+                        hintText: "Search specialties...",
+                        hintStyle: TextStyle(color: theme.iconColor.withOpacity(0.5)),
+                        prefixIcon: Icon(Icons.search, color: theme.iconColor.withOpacity(0.5)),
+                        filled: true,
+                        fillColor: theme.micIdleBackground,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                      onChanged: (val) {
+                        setDialogState(() {
+                          searchQuery = val;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: filteredDepts.length,
+                        itemBuilder: (context, index) {
+                          final dept = filteredDepts[index];
+                          final isSelected = DepartmentService().value == dept.id;
+                          
+                          return Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () {
+                                DepartmentService().setDepartment(dept.id);
+                                Navigator.pop(context);
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              hoverColor: theme.hoverColor,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: dept.color.withOpacity(0.2),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(dept.icon, color: dept.color, size: 20),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(dept.nameEn, 
+                                            style: TextStyle(
+                                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                              color: isSelected ? Colors.blue : theme.iconColor,
+                                            )
+                                          ),
+                                          Text(dept.nameAr, 
+                                            style: TextStyle(
+                                              fontSize: 13, 
+                                              color: theme.iconColor.withOpacity(0.6),
+                                            )
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (isSelected) 
+                                      const Icon(Icons.check_circle, color: Colors.blue)
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

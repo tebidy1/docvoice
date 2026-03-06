@@ -6,6 +6,7 @@ import '../services/auth_service.dart';
 import '../widgets/window_title_bar.dart';
 import 'companies_list_screen.dart';
 import 'users_list_screen.dart';
+import 'admin_templates_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -136,6 +137,30 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                   },
                                 ),
                               ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          // Extra Admin Actions
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _StatCard(
+                                  title: 'Templates',
+                                  value: 'Manage',
+                                  icon: Icons.article,
+                                  color: Colors.orange,
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => const AdminTemplatesScreen(),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(child: Container()), // Spacer for symmetry
                             ],
                           ),
                           const SizedBox(height: 16),

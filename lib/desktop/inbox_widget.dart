@@ -59,7 +59,7 @@ class _InboxWidgetState extends State<InboxWidget> {
                   borderRadius: BorderRadius.circular(25),
                   border: Border.all(
                       color: count > 0
-                          ? Colors.orange.withOpacity(0.6)
+                          ? const Color(0xFF00A5FE).withOpacity(0.6)
                           : Colors.white10),
                   boxShadow: [
                     BoxShadow(
@@ -77,7 +77,7 @@ class _InboxWidgetState extends State<InboxWidget> {
                         width: 8,
                         height: 8,
                         decoration: const BoxDecoration(
-                          color: Colors.orange,
+                          color: Color(0xFF00A5FE),
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -118,7 +118,7 @@ class _InboxWidgetState extends State<InboxWidget> {
                 ),
                 border: Border(
                   left: BorderSide(
-                      color: Colors.amber.withOpacity(0.3), width: 2),
+                      color: const Color(0xFF00A5FE).withOpacity(0.3), width: 2),
                 ),
               ),
               child: Column(
@@ -131,18 +131,18 @@ class _InboxWidgetState extends State<InboxWidget> {
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: [
-                          Colors.amber.withOpacity(0.15),
-                          Colors.amber.withOpacity(0.05),
+                          const Color(0xFF00A5FE).withOpacity(0.15),
+                          const Color(0xFF00A5FE).withOpacity(0.05),
                         ],
                       ),
                       border: Border(
                         bottom:
-                            BorderSide(color: Colors.amber.withOpacity(0.3)),
+                            BorderSide(color: const Color(0xFF00A5FE).withOpacity(0.3)),
                       ),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.inbox, color: Colors.amber, size: 24),
+                        const Icon(Icons.inbox, color: Color(0xFF00A5FE), size: 24),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Container(
@@ -231,7 +231,7 @@ class _InboxWidgetState extends State<InboxWidget> {
         child: Container(
           decoration: BoxDecoration(
             color:
-                isSelected ? Colors.amber.withOpacity(0.2) : Colors.transparent,
+                isSelected ? const Color(0xFF00A5FE).withOpacity(0.2) : Colors.transparent,
             borderRadius: BorderRadius.circular(18),
           ),
           alignment: Alignment.center,
@@ -241,7 +241,7 @@ class _InboxWidgetState extends State<InboxWidget> {
               Text(
                 label,
                 style: TextStyle(
-                  color: isSelected ? Colors.amber : Colors.white60,
+                  color: isSelected ? const Color(0xFF00A5FE) : Colors.white60,
                   fontSize: 13,
                   fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                 ),
@@ -252,13 +252,13 @@ class _InboxWidgetState extends State<InboxWidget> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: Colors.amber,
+                    color: const Color(0xFF00A5FE),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
                     '$count',
                     style: const TextStyle(
-                      color: Colors.black,
+                      color: Colors.white,
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
                     ),

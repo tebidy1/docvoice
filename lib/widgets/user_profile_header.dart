@@ -1,5 +1,10 @@
+import 'package:flutter/foundation.dart';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:window_manager/window_manager.dart';
 import '../services/auth_service.dart';
+import '../utils/window_manager_helper.dart';
+
 
 class UserProfileHeader extends StatefulWidget {
   const UserProfileHeader({super.key});
@@ -90,12 +95,28 @@ class _UserProfileHeaderState extends State<UserProfileHeader> {
       } catch (e) {
         print('Logout error: $e');
       } finally {
+        // On desktop, resize window back to login screen size
+        if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+          try {
+            // Signal that no dialog dispose should collapse the window
+            WindowManagerHelper.isLoggingOut = true;
+            await windowManager.setAlwaysOnTop(false);
+            await windowManager.setResizable(true);
+            await windowManager.setSize(const Size(460, 760));
+            await windowManager.center();
+          } catch (e) {
+            print('Window resize error on logout: $e');
+          }
+        }
         if (mounted) {
-          // Navigate to login screen by removing all routes
           Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil(
             '/',
             (route) => false,
           );
+          // Reset after navigation is committed (next frame, all disposes done)
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            WindowManagerHelper.isLoggingOut = false;
+          });
         }
       }
     }

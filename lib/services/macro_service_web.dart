@@ -96,6 +96,9 @@ class MacroService {
     return List.from(_inMemoryMacros);
   }
 
+  /// Alias for getAllMacros() - used by cross-platform widgets
+  Future<List<Macro>> getMacros() => getAllMacros();
+
   Future<List<Macro>> getMacrosByCategory(String category) async {
     await init();
     return _inMemoryMacros.where((m) => m.category == category).toList()

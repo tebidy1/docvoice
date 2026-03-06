@@ -58,6 +58,9 @@ class InboxCard extends StatelessWidget {
       badgeLabel = 'Draft';
     }
     
+    // Primary Blue — matches login screen & light theme
+    const Color primaryBlue = Color(0xFF00A5FE);
+
     // Determine status icon/color
     Color statusColor;
     IconData statusIcon;
@@ -70,14 +73,14 @@ class InboxCard extends StatelessWidget {
         statusText = "Ready";
         break;
       case NoteStatus.copied:
-        statusColor = Colors.blue;
-        statusIcon = Icons.copy_all; 
+        statusColor = primaryBlue;
+        statusIcon = Icons.copy_all;
         statusText = "Copied";
         break;
       case NoteStatus.processed:
       case NoteStatus.draft:
       default:
-        statusColor = isDraft ? Colors.orange : AppTheme.draft;
+        statusColor = primaryBlue; // Blue instead of yellow/orange
         statusIcon = Icons.edit_note;
         statusText = "Draft";
         break;
