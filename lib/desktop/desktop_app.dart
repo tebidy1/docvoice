@@ -235,7 +235,8 @@ class _DesktopAppState extends State<DesktopApp> {
                 final text = await _oracleService!.stopSession();
                 if (text.isNotEmpty) {
                    instantTextController.add(text);
-                   await _inboxService.addNote(text, patientName: 'Untitled', summary: null);
+                   final savedNote = await _inboxService.addNote(text, patientName: 'Untitled', summary: null);
+                   tempNote.id = savedNote.id;
                 } else {
                    print("Warning: Oracle returned empty transcript");
                    instantTextController.addError(Exception("No speech detected."));
@@ -269,17 +270,14 @@ class _DesktopAppState extends State<DesktopApp> {
             }
             if (oneShotPath != null && mounted) {
               _geminiOneShotPath = oneShotPath;
-              // Save a lightweight draft note to inbox (no rawText yet — audioPath is what matters)
-              final savedNote = NoteModel()
-                ..id = 0
-                ..uuid = 'oneshot_${DateTime.now().millisecondsSinceEpoch}'
-                ..content = ''
-                ..rawText = ''
-                ..audioPath = oneShotPath
-                ..createdAt = DateTime.now()
-                ..updatedAt = DateTime.now()
-                ..status = NoteStatus.draft
-                ..patientName = 'Untitled';
+              // Save a lightweight draft note to inbox (needs some text to pass backend validation)
+              final savedNote = await _inboxService.addNote(
+                'لا يوجد نص اصلي عند اختيار هذا النموذج',
+                patientName: 'Untitled',
+                summary: null,
+                audioPath: oneShotPath,
+              );
+              
               // Open detail view in One-Shot mode — user picks a template to trigger Gemini
               await showDialog(
                 context: context,
@@ -356,12 +354,13 @@ class _DesktopAppState extends State<DesktopApp> {
               try {
                 // Determine Patient Name logic here if needed, or keep "Untitled"
                 // The Detail View handles the "final" version
-                await _inboxService.addNote(
+                final savedNote = await _inboxService.addNote(
                   text,
                   patientName: 'Untitled',
                   summary: null,
                   audioPath: path,
                 );
+                tempNote.id = savedNote.id;
                 print("✅ Persisted to Inbox with audio: $path");
               } catch (e) {
                 print("❌ Save failed: $e");

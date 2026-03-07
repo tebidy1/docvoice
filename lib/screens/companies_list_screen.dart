@@ -4,8 +4,10 @@ import '../models/company.dart';
 import '../services/admin_service.dart';
 import '../services/auth_service.dart';
 import '../widgets/create_company_dialog.dart';
+import '../widgets/create_company_dialog.dart';
 import '../widgets/window_title_bar.dart';
 import 'company_detail_screen.dart';
+import 'admin_company_settings_screen.dart';
 
 class CompaniesListScreen extends StatefulWidget {
   const CompaniesListScreen({super.key});
@@ -321,6 +323,18 @@ class _CompaniesListScreenState extends State<CompaniesListScreen> {
                                       onToggleStatus: () =>
                                           _toggleCompanyStatus(company),
                                       onDelete: () => _deleteCompany(company),
+                                      onSettings: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                AdminCompanySettingsScreen(
+                                              companyId: company.id,
+                                              companyName: company.name,
+                                            ),
+                                          ),
+                                        );
+                                      },
                                     );
                                   },
                                 ),
@@ -366,12 +380,14 @@ class _CompanyCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onToggleStatus;
   final VoidCallback onDelete;
+  final VoidCallback onSettings;
 
   const _CompanyCard({
     required this.company,
     required this.onTap,
     required this.onToggleStatus,
     required this.onDelete,
+    required this.onSettings,
   });
 
   @override
@@ -419,6 +435,11 @@ class _CompanyCard extends StatelessWidget {
               ),
               onPressed: onToggleStatus,
               tooltip: company.isActive ? 'Suspend' : 'Activate',
+            ),
+            IconButton(
+              icon: const Icon(Icons.settings, color: Colors.blueAccent),
+              onPressed: onSettings,
+              tooltip: 'Settings',
             ),
             IconButton(
               icon: const Icon(Icons.delete, color: Colors.red),

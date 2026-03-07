@@ -117,9 +117,24 @@ class AIStudioMultimodalService implements MultimodalAIService {
         providerName: _providerName,
       );
     } on GenerativeAIException catch (e) {
-      // API-level errors (quota exceeded, invalid key, model unavailable)
+      final message = e.message.toLowerCase();
+      String friendlyError = 'Gemini API Error: ${e.message}';
+
+      if (message.contains('429') || message.contains('quota')) {
+        friendlyError = '⚠️ نفاذ الرصيد المجاني (Quota Exceeded).\n'
+            'يرجى مراجعة حساب Google AI Studio أو ترقية خطة الدفع لزيادة عدد الطلبات المتاحة.';
+      } else if (message.contains('401') ||
+          message.contains('400') ||
+          message.contains('api key')) {
+        friendlyError = '❌ مفتاح API غير صالح (Invalid API Key).\n'
+            'يرجى التأكد من صحة المفتاح المُدخل في إعدادات الشركة.';
+      } else if (message.contains('billing')) {
+        friendlyError = '💳 خطأ في حساب الدفع (Billing Error).\n'
+            'يرجى تفعيل حساب الدفع في Google Cloud للاستمرار.';
+      }
+
       return MultimodalAIResult.error(
-        'Gemini API Error: ${e.message}',
+        friendlyError,
         provider: _providerName,
       );
     } catch (e) {
@@ -133,14 +148,19 @@ class AIStudioMultimodalService implements MultimodalAIService {
   // ── Private Helpers ───────────────────────────────────────────────────────
 
   /// Resolves the Gemini API key from the available sources.
-  /// Priority: SharedPreferences (user-entered) > .env (developer default).
   Future<String> _resolveApiKey() async {
+    // 1- نحاول إحضار المفتاح من إعدادات المستخدم إن وجد باستخدام شاشة الإعدادات
     final prefs = await SharedPreferences.getInstance();
     final fromPrefs = prefs.getString('gemini_api_key') ?? '';
     if (fromPrefs.isNotEmpty) return fromPrefs;
 
-    final fromEnv = dotenv.isInitialized ? dotenv.env['GEMINI_API_KEY'] ?? '' : '';
-    return fromEnv;
+    // 2- إذا لم يكن هناك مفتاح من المستخدم نحاول جلبه من ملف .env
+    final fromEnv =
+        dotenv.isInitialized ? dotenv.env['GEMINI_API_KEY'] ?? '' : '';
+    if (fromEnv.isNotEmpty) return fromEnv;
+
+    // 3- في حال لم يتم وضع مفتاح في الإعدادات، يتم استخدام هذا المفتاح الاحتياطي الافتراضي
+    return 'AIzaSyDW-iROws9ZD6jiZjdJ3GsfTQFcHVMhlJc';
   }
 
   /// Builds the text-part of the multimodal prompt.

@@ -167,7 +167,21 @@ class AIProcessingService {
         );
       }
     } catch (e) {
-      return AIProcessingResult.error(e.toString());
+      final errorStr = e.toString().toLowerCase();
+      String friendlyError = 'Unexpected error: $e';
+
+      if (errorStr.contains('429') || errorStr.contains('quota')) {
+        friendlyError = '⚠️ نفاذ الرصيد المجاني (Quota Exceeded).\n'
+            'يرجى مراجعة حساب Google AI Studio أو ترقية خطة الدفع لزيادة عدد الطلبات المتاحة.';
+      } else if (errorStr.contains('401') || errorStr.contains('400') || errorStr.contains('api key')) {
+        friendlyError = '❌ مفتاح API غير صالح (Invalid API Key).\n'
+            'يرجى التأكد من صحة المفتاح المُدخل في إعدادات الشركة.';
+      } else if (errorStr.contains('billing')) {
+        friendlyError = '💳 خطأ في حساب الدفع (Billing Error).\n'
+            'يرجى تفعيل حساب الدفع في Google Cloud للاستمرار.';
+      }
+
+      return AIProcessingResult.error(friendlyError);
     }
   }
 

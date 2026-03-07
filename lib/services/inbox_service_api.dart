@@ -93,8 +93,12 @@ class InboxService {
     int? suggestedMacroId,
     List<Map<String, dynamic>>? generatedOutputs,
   }) async {
+    print('🔄 [InboxService] updateNote called for ID: $noteId');
     final existing = await getNoteById(noteId);
-    if (existing == null) return null;
+    if (existing == null) {
+      print('❌ [InboxService] updateNote failed: existing note is null for ID $noteId');
+      return null;
+    }
 
     if (rawText != null) existing.originalText = rawText;
     if (formattedText != null) existing.formattedText = formattedText;

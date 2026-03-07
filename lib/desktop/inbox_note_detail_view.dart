@@ -98,7 +98,9 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
 
   // Dynamic Layout & Streaming
   bool _isLoadingText = false;
+  bool _isOneShotMode = false;
   StreamSubscription? _textStreamSubscription;
+  Timer? _debounceTimer;
 
   @override
   void initState() {
@@ -108,10 +110,24 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
 
     // ⚡ ONE-SHOT MODE: entered via gemini_oneshot STT engine
     if (widget.oneShotAudioPath != null) {
-      // Show template selector immediately — no rawText step
+      _isOneShotMode = true;
       _isTemplateCardExpanded = true;
-      return; // Skip all other init logic
+      return; 
     }
+
+    // Attempt to determine if we opened an existing note while in Gemini One-Shot mode
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+       if (widget.oneShotAudioPath == null && widget.note.audioPath != null && widget.note.audioPath!.isNotEmpty) {
+           final prefs = await SharedPreferences.getInstance();
+           final sttEngine = prefs.getString('stt_engine_desktop_pref') ?? 'oracle_live';
+           if (sttEngine == 'gemini_oneshot' && mounted) {
+              setState(() {
+                 _isOneShotMode = true;
+                 _isTemplateCardExpanded = true;
+              });
+           }
+       }
+    });
 
     // 1. Setup Stream (If Instant Open after Groq/Oracle recording)
     if (widget.pendingTextStream != null) {
@@ -199,7 +215,7 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
                  _activeTabIndex = _generatedOutputs.length;
                  _finalNoteController.text = _generatedOutputs.last.content ?? "";
                  _isTemplateCardExpanded = false;
-             } else if (_finalNoteController.text.isEmpty && freshNote.formattedText.isNotEmpty) {
+             } else if (_generatedOutputs.isEmpty && freshNote.formattedText.isNotEmpty) {
                  final legacyName = freshNote.summary ?? 'Legacy Note';
                  _generatedOutputs.add(GeneratedOutput(title: legacyName, content: freshNote.formattedText));
                  _activeTabIndex = 1;
@@ -289,6 +305,25 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   void dispose() {
     _generationTimer?.cancel();
     _textStreamSubscription?.cancel(); // Clean up stream
+    _debounceTimer?.cancel();
+    
+    // Sync current text field state before saving
+    if (_activeTabIndex == 0) {
+      widget.note.rawText = _finalNoteController.text;
+    } else if (_activeTabIndex > 0 && _activeTabIndex <= _generatedOutputs.length) {
+      _generatedOutputs[_activeTabIndex - 1].content = _finalNoteController.text;
+    }
+    
+    // Attempt one final sync fire-and-forget in case user typed quickly and closed
+    _inboxService.updateNote(
+      widget.note.id,
+      rawText: widget.note.rawText,
+      formattedText: _generatedOutputs.isNotEmpty ? _generatedOutputs.last.content : '',
+      generatedOutputs: _generatedOutputs.map((e) => e.toJson()).toList(),
+      summary: widget.note.summary,
+      suggestedMacroId: widget.note.suggestedMacroId,
+    );
+
     _finalNoteController.dispose();
     _restoreWindow();
     super.dispose();
@@ -491,11 +526,16 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
       try {
         await _inboxService.updateNote(
           widget.note.id,
+          rawText: widget.note.rawText.isNotEmpty ? widget.note.rawText : 'لا يوجد نص اصلي عند اختيار هذا النموذج',
           formattedText: _generatedOutputs.isNotEmpty ? _generatedOutputs.last.content : '',
           generatedOutputs: _generatedOutputs.map((e) => e.toJson()).toList(),
           summary: macro.trigger, // Store template name for badge display
           suggestedMacroId: macro.id, 
         );
+        
+        // Update local object so dispose/'Back' saves the correct summary too
+        widget.note.summary = macro.trigger;
+        widget.note.suggestedMacroId = macro.id;
         
         if (mounted) {
            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -516,7 +556,36 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
       _generatedOutputs[_activeTabIndex - 1].content = newText;
     }
     
-    // Auto-save logic can be added here if needed, similar to mobile
+    if (_debounceTimer?.isActive ?? false) _debounceTimer!.cancel();
+    
+    _debounceTimer = Timer(const Duration(seconds: 2), () {
+      _saveDraftUpdate();
+    });
+  }
+
+  Future<void> _saveDraftUpdate() async {
+    try {
+      if (!mounted) return;
+      
+      // Sync current text field state before saving
+      if (_activeTabIndex == 0) {
+        widget.note.rawText = _finalNoteController.text;
+      } else if (_activeTabIndex > 0 && _activeTabIndex <= _generatedOutputs.length) {
+        _generatedOutputs[_activeTabIndex - 1].content = _finalNoteController.text;
+      }
+      
+      await _inboxService.updateNote(
+        widget.note.id,
+        rawText: widget.note.rawText.isNotEmpty ? widget.note.rawText : 'لا يوجد نص اصلي عند اختيار هذا النموذج', // REQUIRED by backend to not lose transcript
+        formattedText: _generatedOutputs.isNotEmpty ? _generatedOutputs.last.content : '',
+        generatedOutputs: _generatedOutputs.map((e) => e.toJson()).toList(),
+        summary: widget.note.summary,
+        suggestedMacroId: widget.note.suggestedMacroId,
+      );
+      print("📝 Windows Auto-saved manual edits to cloud");
+    } catch (e) {
+      print("❌ Windows Auto-save failed: $e");
+    }
   }
 
   void _switchTab(int index) {
@@ -802,6 +871,7 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
             IconButton(
               icon: Icon(Icons.arrow_back, color: theme.colorScheme.onSurface),
               onPressed: () async {
+                 await _saveDraftUpdate();
                  await _restoreWindow();
                  if (mounted) Navigator.of(context).pop();
               },
@@ -850,6 +920,7 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
             IconButton(
               icon: Icon(Icons.close_fullscreen, color: Colors.grey[400], size: 20),
               onPressed: () async {
+                 await _saveDraftUpdate();
                  await _restoreWindow(); 
                  if (mounted) Navigator.of(context).pop();
               },
@@ -1169,7 +1240,7 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
                             if (selected) {
                               // In One-Shot mode: send audio+template to Gemini directly
                               // In classic mode: transcribe with backend STT first
-                              if (widget.oneShotAudioPath != null) {
+                              if (_isOneShotMode) {
                                 _applyOneShotAI(macro);
                               } else {
                                 _applyTemplate(macro);

@@ -79,6 +79,11 @@ class _EditorScreenState extends State<EditorScreen> {
       _isLoading = false;         // No transcription needed
       _isTemplateCardExpanded = true;  // Open template picker directly
 
+      if (widget.draftNote != null) {
+        _currentNoteId = (widget.draftNote!.id > 0) ? widget.draftNote!.id : int.tryParse(widget.draftNote!.uuid);
+        _generatedOutputs = List<GeneratedOutput>.from(widget.draftNote!.generatedOutputs);
+      }
+
       // Initialize controllers (required by build())
       _sourceController = TextEditingController(text: "");
       _finalController = PatternHighlightController(
@@ -200,7 +205,14 @@ class _EditorScreenState extends State<EditorScreen> {
 
   /// ⚡ Gemini One-Shot: read audio file bytes → processAudioNote → display result
   Future<void> _applyOneShotAI(MacroModel macro) async {
-    final audioPath = widget.oneShotAudioPath!;
+    final audioPath = widget.oneShotAudioPath ?? widget.draftNote?.audioPath;
+    if (audioPath == null || audioPath.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('⚡ No audio file available for One-Shot AI.'), backgroundColor: Colors.red));
+        setState(() => _isOneShotGenerating = false);
+      }
+      return;
+    }
     setState(() => _isOneShotGenerating = true);
 
     try {
@@ -248,7 +260,32 @@ class _EditorScreenState extends State<EditorScreen> {
             _isTemplateCardExpanded = false;
             _isOneShotGenerating = false;
           });
-          await _saveDraftUpdate();
+          
+          if (_currentNoteId == null) {
+            try {
+              final inboxService = InboxService();
+              final noteId = await inboxService.addNote(
+                'لا يوجد نص اصلي عند اختيار هذا النموذج',
+                patientName: macro.trigger,
+                audioPath: widget.oneShotAudioPath,
+              );
+              setState(() => _currentNoteId = noteId);
+              
+              await inboxService.updateNote(
+                noteId,
+                rawText: 'لا يوجد نص اصلي عند اختيار هذا النموذج',
+                formattedText: _generatedOutputs.isNotEmpty ? _generatedOutputs.last.content ?? '' : '',
+                generatedOutputs: _generatedOutputs.map((e) => e.toJson()).toList(),
+                suggestedMacroId: int.tryParse(macro.id.toString()) ?? 0,
+                summary: macro.trigger,
+                patientName: macro.trigger,
+              );
+            } catch (e) {
+              debugPrint('❌ Auto-save new note failed: $e');
+            }
+          } else {
+            await _saveDraftUpdate();
+          }
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Row(children: [
               const Icon(Icons.bolt, color: Colors.amber, size: 16),
@@ -306,7 +343,7 @@ class _EditorScreenState extends State<EditorScreen> {
       final inboxService = InboxService();
       await inboxService.updateNote(
         _currentNoteId!,
-        rawText: _sourceController.text, // REQUIRED by backend
+        rawText: _sourceController.text.isNotEmpty ? _sourceController.text : 'لا يوجد نص اصلي عند اختيار هذا النموذج', // REQUIRED by backend
         formattedText: _generatedOutputs.isNotEmpty ? _generatedOutputs.last.content : '', // Legacy fallback
         generatedOutputs: _generatedOutputs.map((e) => e.toJson()).toList(),
         // We persist the original transcript too if needed
@@ -479,6 +516,18 @@ class _EditorScreenState extends State<EditorScreen> {
               try {
                 final prefs = await SharedPreferences.getInstance();
                 final sttEngine = prefs.getString('stt_engine_pref') ?? 'oracle_live';
+                
+                // ⚡ Skip STT transcription entirely if in Gemini One-Shot mode
+                if (sttEngine == 'gemini_oneshot') {
+                  if (mounted) {
+                    setState(() {
+                       _isOneShotMode = true;
+                       _isLoading = false;
+                       _isTemplateCardExpanded = true;
+                    });
+                  }
+                  return;
+                }
                 
                 String transcript = "";
                 
