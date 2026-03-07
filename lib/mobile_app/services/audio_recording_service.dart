@@ -4,26 +4,31 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 import 'package:universal_io/io.dart';
+import 'audio_recording_helper_stub.dart'
+    if (dart.library.js_interop) 'audio_recording_helper_web.dart';
 
 class AudioRecordingService {
   AudioRecorder? _audioRecorder;
   String? _currentPath;
 
   Future<bool> hasPermission() async {
-    if (kIsWeb) return true; // Force prompt via start() on Web
+    if (kIsWeb) {
+       try {
+         final granted = await requestWebMicrophonePermission();
+         return granted;
+       } catch (e) {
+         debugPrint("Web microphone permission denied/error: $e");
+         return false;
+       }
+    }
 
     _audioRecorder ??= AudioRecorder();
     // Check permission using permission_handler for broader compatibility
-    if (!kIsWeb) {
-      var status = await Permission.microphone.status;
-      if (status.isDenied) {
-        status = await Permission.microphone.request();
-      }
-      return status.isGranted;
-    } else {
-      // On Web, use the recorder's built-in check which triggers the prompt
-      return await _audioRecorder!.hasPermission();
+    var status = await Permission.microphone.status;
+    if (status.isDenied) {
+      status = await Permission.microphone.request();
     }
+    return status.isGranted;
   }
 
   Future<void> startRecording() async {

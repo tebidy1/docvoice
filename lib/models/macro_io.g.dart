@@ -15,7 +15,7 @@ extension GetMacroCollection on Isar {
 
 const MacroSchema = CollectionSchema(
   name: r'Macro',
-  id: -2582945574721736876,
+  id: -25829455747217,
   properties: {
     r'aiInstruction': PropertySchema(
       id: 0,
@@ -70,7 +70,7 @@ const MacroSchema = CollectionSchema(
   idName: r'id',
   indexes: {
     r'trigger': IndexSchema(
-      id: -9206707463460544926,
+      id: -92067074634605,
       name: r'trigger',
       unique: false,
       replace: false,

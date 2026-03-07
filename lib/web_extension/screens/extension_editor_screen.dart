@@ -17,6 +17,7 @@ import '../../core/ai/ai_regex_patterns.dart';
 import '../../core/ai/text_processing_service.dart';
 import '../../services/ai/ai_processing_service.dart';
 import '../services/extension_injection_service.dart';
+import '../../mobile_app/models/generated_output.dart'; // import GeneratedOutput
 // ⚡ Gemini One-Shot AI
 import '../../features/multimodal_ai/multimodal_ai_service.dart';
 import '../../features/multimodal_ai/ai_studio_multimodal_service.dart';
@@ -40,10 +41,10 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
   final _macroService = MacroService();
 
   // Controllers
+  final _sourceController = TextEditingController();
   final _finalNoteController = PatternHighlightController(
       text: "",
       patternStyles: {
-        // ✅ Using centralized AIRegexPatterns (Phase 1 refactor)
         AIRegexPatterns.selectPlaceholderPattern:
             const TextStyle(
                 color: Colors.orange,
@@ -60,9 +61,9 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
         ),
       },
   );
-  // We need a separate controller/string for Source because Desktop uses widget.note.rawText
-  // but here we might update it dynamically from Audio.
-  String _rawText = ""; 
+  // Smart Tabs State
+  int _activeTabIndex = 0; // 0 = original, 1+ = generated outputs
+  List<GeneratedOutput> _generatedOutputs = [];
   
   // State
   List<MacroModel> _quickMacros = []; // Mobile service returns MacroModel
@@ -70,10 +71,8 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
   bool _isGenerating = false;
   bool _isOneShotGenerating = false; // ⚡ One-Shot AI state
   bool _isOneShotMode = false;       // ⚡ True when gemini_oneshot engine is selected
-  bool _isRawTextExpanded = false; // Collapsed by default
   bool _isLoading = true; // For audio processing
   bool _isTemplateCardExpanded = true;  // Template card: expanded by default
-  bool _isGeneratedCardExpanded = false; // Generated note card: collapsed by default
 
   // ⚡ One-Shot AI service (same as desktop)
   final MultimodalAIService _multimodalService = AIStudioMultimodalService();
@@ -93,15 +92,29 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
   @override
   void initState() {
     super.initState();
-    _rawText = widget.draftNote.originalText;
-    if (_rawText.isEmpty) _rawText = widget.draftNote.content;
-    if (widget.draftNote.formattedText.isNotEmpty) {
+    String initialRaw = widget.draftNote.originalText;
+    if (initialRaw.isEmpty) initialRaw = widget.draftNote.content;
+    _sourceController.text = initialRaw;
+    
+    // Load existing generated outputs
+    _generatedOutputs = widget.draftNote.generatedOutputs;
+    
+    if (_generatedOutputs.isNotEmpty) {
+      _activeTabIndex = _generatedOutputs.length; // Focus latest tab
+      _finalNoteController.text = _generatedOutputs.last.content ?? '';
+      _isTemplateCardExpanded = false;
+    } else if (widget.draftNote.formattedText.isNotEmpty) {
+      // Legacy migration
+      _generatedOutputs.add(
+        GeneratedOutput(
+            title: widget.draftNote.summary ?? 'AI Note',
+            content: widget.draftNote.formattedText)
+      );
+      _activeTabIndex = 1;
       _finalNoteController.text = widget.draftNote.formattedText;
       _isTemplateCardExpanded = false;
-      _isGeneratedCardExpanded = true;
     } else {
       _isTemplateCardExpanded = true;
-      _isGeneratedCardExpanded = false;
     }
 
     _loadMacros();
@@ -116,7 +129,6 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
           setState(() {
             _isOneShotMode = true;
             _isLoading = false;
-            _isRawTextExpanded = false;
             _isTemplateCardExpanded = true;
           });
         }
@@ -128,7 +140,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
 
   @override
   void dispose() {
-    // _generationTimer?.cancel(); // Removed
+    _sourceController.dispose();
     _finalNoteController.dispose();
     super.dispose();
   }
@@ -197,7 +209,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
 
   Future<void> _processAudioIfNeeded() async {
      final path = widget.draftNote.audioPath;
-     if (path != null && _rawText.isEmpty) { // Only process if we don't have text yet
+     if (path != null && _sourceController.text.isEmpty) { // Only process if we don't have text yet
          // ... Web Audio Fetching Logic from Mobile Editor ...
          if (kIsWeb) {
             try {
@@ -251,9 +263,8 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                // Success
                if (mounted) {
                    setState(() {
-                       _rawText = transcript.trim();
+                       _sourceController.text = transcript.trim();
                        _isLoading = false;
-                       _isRawTextExpanded = _finalNoteController.text.isEmpty; 
                    });
                    _saveDraft();
                }
@@ -277,9 +288,8 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                final transcript = result['payload']['text'] ?? "";
                if (mounted) {
                    setState(() {
-                       _rawText = transcript.trim();
+                       _sourceController.text = transcript.trim();
                        _isLoading = false;
-                       _isRawTextExpanded = _finalNoteController.text.isEmpty; 
                    });
                    _saveDraft();
                }
@@ -291,7 +301,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
           _showError("Transcription failed: $e");
           if (mounted) {
               setState(() {
-                  _rawText = "Transcription Failed";
+                  _sourceController.text = "Transcription Failed";
                   _isLoading = false;
               });
           }
@@ -324,7 +334,6 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
       _isOneShotGenerating = true;
       _selectedMacro = macro;
       _isTemplateCardExpanded = false;
-      _isGeneratedCardExpanded = true;
     });
 
     try {
@@ -347,6 +356,11 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
       if (result.success) {
         if (mounted) {
           setState(() {
+            _generatedOutputs.add(GeneratedOutput(
+               title: macro.trigger,
+               content: result.formattedNote,
+            ));
+            _activeTabIndex = _generatedOutputs.length;
             _finalNoteController.text = result.formattedNote;
           });
           _saveDraft();
@@ -375,8 +389,9 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
           if (widget.draftNote.id > 0) {
               await _inboxService.updateNote(
                   widget.draftNote.id,
-                  rawText: _rawText,
-                  formattedText: _finalNoteController.text,
+                  rawText: _sourceController.text,
+                  formattedText: _generatedOutputs.isNotEmpty ? _generatedOutputs.last.content ?? '' : '',
+                  generatedOutputs: _generatedOutputs.map((e) => e.toJson()).toList(),
                   summary: _selectedMacro?.trigger,
                   suggestedMacroId: _selectedMacro?.id is int ? _selectedMacro?.id as int : null,
               );
@@ -386,8 +401,9 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
               // We should probably rely on backend ID if possible.
               // For now, let's use addNote if we don't have a real ID.
               final newId = await _inboxService.addNote(
-                  _rawText,
-                  formattedText: _finalNoteController.text,
+                  _sourceController.text,
+                  formattedText: _generatedOutputs.isNotEmpty ? _generatedOutputs.last.content ?? '' : '',
+                  generatedOutputs: _generatedOutputs.map((e) => e.toJson()).toList(),
                   patientName: widget.draftNote.title,
                   summary: _selectedMacro?.trigger,
                   suggestedMacroId: _selectedMacro?.id is int ? _selectedMacro?.id as int : null,
@@ -404,10 +420,8 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
        setState(() {
           _isGenerating = true;
           _selectedMacro = macro;
-          _isRawTextExpanded = false;
           // Set state for AI loading and card expansion
           _isTemplateCardExpanded = false; // Collapse template
-          _isGeneratedCardExpanded = true; // Expand final note
        });
        
        
@@ -425,7 +439,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
            
            final aiService = AIProcessingService();
            final result = await aiService.processNote(
-               transcript: _rawText,
+               transcript: _sourceController.text,
                macroContent: macro.content,
                mode: enableSuggestions ? AIProcessingMode.smart : AIProcessingMode.fast,
                specialty: specialty,
@@ -438,7 +452,14 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                    _showError("AI returned empty result. Please check API Key or try again.");
                }
                if (mounted) {
-                   setState(() { _finalNoteController.text = finalText; });
+                   setState(() { 
+                       _generatedOutputs.add(GeneratedOutput(
+                          title: macro.trigger,
+                          content: finalText,
+                       ));
+                       _activeTabIndex = _generatedOutputs.length;
+                       _finalNoteController.text = finalText; 
+                   });
                    _saveDraft();
                }
            } else {
@@ -452,11 +473,62 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
         }
   }
 
+  void _onManualEdit(String newText) {
+    if (_activeTabIndex > 0 && _activeTabIndex <= _generatedOutputs.length) {
+      _generatedOutputs[_activeTabIndex - 1].content = newText;
+    }
+    // Auto-save disabled manually for manual edits here, saved via FAB usually
+  }
+
+  void _switchTab(int index) {
+    if (_activeTabIndex == index) return;
+
+    // Save current tab content
+    if (_activeTabIndex > 0 && _activeTabIndex <= _generatedOutputs.length) {
+      _generatedOutputs[_activeTabIndex - 1].content = _finalNoteController.text;
+    }
+
+    setState(() {
+      _activeTabIndex = index;
+      if (index == 0) {
+        _isTemplateCardExpanded = true;
+      } else {
+        _finalNoteController.text = _generatedOutputs[index - 1].content ?? '';
+        _isTemplateCardExpanded = false;
+      }
+    });
+  }
+
+  void _deleteTab(int index) {
+    if (index == 0) return; // Cannot delete raw transcript
+
+    setState(() {
+      _generatedOutputs.removeAt(index - 1);
+      
+      // Select the preceding tab
+      if (_activeTabIndex == index) {
+        _switchTab(index - 1);
+      } else if (_activeTabIndex > index) {
+        // Tab shifted left
+        _activeTabIndex--;
+      }
+    });
+    
+    _saveDraft();
+  }
+
 
   Future<void> _smartCopyAndInject() async {
-      final rawText = _finalNoteController.text;
+      String sourceText = '';
+      if (_activeTabIndex == 0) {
+          sourceText = _sourceController.text;
+      } else if (_activeTabIndex > 0 && _activeTabIndex <= _generatedOutputs.length) {
+          sourceText = _generatedOutputs[_activeTabIndex - 1].content ?? '';
+      }
       
-      final result = await ExtensionInjectionService.smartCopyAndInject(rawText);
+      // Removed placeholders formatting here, handled by ExtensionInjectionService internally
+      
+      final result = await ExtensionInjectionService.smartCopyAndInject(sourceText);
 
       if (result.status == InjectionStatus.failed) {
           _showError(result.message);
@@ -480,6 +552,8 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
   // Removed _copyCleanText as it is merged into _smartCopyAndInject
 
   void _handleEditorTap() {
+      if (_activeTabIndex == 0) return; // Don't highlight placeholders in raw text
+      
       Future.delayed(const Duration(milliseconds: 100), () {
           if (!mounted) return;
           final selection = _finalNoteController.selection;
@@ -548,7 +622,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                                 if (!_isOneShotMode)
                                   InkWell(
                                     onTap: () {
-                                        Clipboard.setData(ClipboardData(text: _rawText));
+                                        Clipboard.setData(ClipboardData(text: _sourceController.text));
                                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Copied raw text"), duration: Duration(seconds: 1)));
                                     },
                                     child: Text("Use Raw Text", style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w500)),
@@ -557,14 +631,14 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                           ),
                           const SizedBox(height: 16),
                           
-                          // Source Text - hidden in One-Shot mode
-                          if (!_isOneShotMode) ...[
-                            _buildOriginalNoteCard(),
-                            const SizedBox(height: 16),
-                          ],
-                          _buildTemplateSelectorCard(),
+                          // Smart Tabs logic instead of separate accordions
                           const SizedBox(height: 16),
-                          _buildGeneratedNoteCard(),
+                          if (_isOneShotMode)
+                             _buildTemplateSelectorCard()
+                          else
+                             _buildTemplateSelectorCard(),
+                          const SizedBox(height: 16),
+                          _buildSmartTabsEditorCard(),
                        ],
                      ),
                    ),
@@ -622,39 +696,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
       );
   }
 
-  Widget _buildOriginalNoteCard() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardTheme.color ?? Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Theme.of(context).dividerColor),
-      ),
-      padding: const EdgeInsets.all(16),
-      child: InkWell(
-        onTap: () => setState(() => _isRawTextExpanded = !_isRawTextExpanded),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-             Text(
-               _rawText.isEmpty ? "No source text available." : _rawText,
-               maxLines: _isRawTextExpanded ? null : 2, // Changed to 2 lines
-               overflow: _isRawTextExpanded ? null : TextOverflow.ellipsis,
-               style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7), height: 1.5),
-             ),
-             if (_rawText.isNotEmpty) ...[
-                 const SizedBox(height: 4), // Reduced spacing
-                 Row(
-                   mainAxisAlignment: MainAxisAlignment.center,
-                   children: [
-                      Icon(_isRawTextExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 16, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38)),
-                   ],
-                 )
-             ]
-          ],
-        ),
-      ),
-    );
-  }
+  // _buildOriginalNoteCard removed for Smart Tabs
 
   Widget _buildTemplateSelectorCard() {
     // In One-Shot mode the header shows an amber bolt indicator
@@ -788,113 +830,148 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
     );
   }
 
-  Widget _buildGeneratedNoteCard() {
-    final hasContent = _finalNoteController.text.isNotEmpty;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 350),
-      curve: Curves.easeInOutCubic,
-      width: double.infinity,
+  Widget _buildSmartTabsEditorCard() {
+    return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).cardTheme.color ?? Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: _isGeneratedCardExpanded
-              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.5)
-              : Theme.of(context).dividerColor,
-          width: _isGeneratedCardExpanded ? 1.5 : 1.0,
-        ),
-        boxShadow: _isGeneratedCardExpanded ? [
-          BoxShadow(
-            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
-            blurRadius: 12,
-            spreadRadius: 0,
-          )
-        ] : [],
+        border: Border.all(color: Theme.of(context).dividerColor),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Header — always visible, tappable to toggle ──
-          InkWell(
-            onTap: hasContent
-                ? () => setState(() => _isGeneratedCardExpanded = !_isGeneratedCardExpanded)
-                : null,
-            borderRadius: BorderRadius.circular(12),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
-              child: Row(
-                children: [
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 250),
-                    child: Icon(
-                      _isGeneratedCardExpanded ? Icons.auto_awesome : Icons.auto_awesome_outlined,
-                      key: ValueKey(_isGeneratedCardExpanded),
-                      color: _isGeneratedCardExpanded ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38),
-                      size: 18,
+         crossAxisAlignment: CrossAxisAlignment.stretch,
+         children: [
+             // --- TAB BAR UI ---
+             Container(
+               height: 40,
+               decoration: BoxDecoration(
+                 color: Theme.of(context).brightness == Brightness.dark ? Colors.black12 : Colors.grey[100],
+                 borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                 border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor)),
+               ),
+               child: ListView(
+                 scrollDirection: Axis.horizontal,
+                 children: [
+                    // Source Tab (Always present)
+                    _buildTab(
+                      index: 0,
+                      icon: Icons.mic_none,
+                      label: "Source",
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    "Generated Note",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface),
-                  ),
-                  const Spacer(),
-                  if (hasContent)
-                    Icon(
-                      _isGeneratedCardExpanded
-                          ? Icons.keyboard_arrow_up
-                          : Icons.keyboard_arrow_down,
-                      size: 18,
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38),
-                    )
-                  else
-                    Text(
-                      "Select a template above",
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.24),
-                        fontStyle: FontStyle.italic,
+                    
+                    // Generated Output Tabs
+                    for (int i = 0; i < _generatedOutputs.length; i++)
+                      _buildTab(
+                        index: i + 1,
+                        icon: Icons.auto_awesome,
+                        label: _generatedOutputs[i].title ?? 'AI Note',
+                        onDelete: () => _deleteTab(i + 1),
                       ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-          // ── Content — only visible when expanded ──
-          AnimatedCrossFade(
-            duration: const Duration(milliseconds: 300),
-            crossFadeState: _isGeneratedCardExpanded
-                ? CrossFadeState.showFirst
-                : CrossFadeState.showSecond,
-            firstChild: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: _isGenerating
-                  ? const SizedBox(height: 60)
-                  : TextField(
-                      controller: _finalNoteController,
-                      maxLines: null,
-                      style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurface, height: 1.6),
-                      decoration: InputDecoration(
-                        border: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        errorBorder: InputBorder.none,
-                        disabledBorder: InputBorder.none,
-                        isDense: true,
-                        contentPadding: const EdgeInsets.only(bottom: 16),
-                        hintText: "AI generated note will appear here...",
-                        hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.24)),
-                        fillColor: Colors.transparent,
-                        filled: true,
+                 ],
+               ),
+             ),
+             
+             // --- EDITOR AREA ---
+             Container(
+                 width: double.infinity,
+                 padding: const EdgeInsets.all(16),
+                 child: _isGenerating 
+                      ? const SizedBox(height: 60)
+                      : _activeTabIndex == 0 ? TextField(
+                          controller: _sourceController,
+                          maxLines: null,
+                          minLines: 15,
+                          style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurface, height: 1.6),
+                          decoration: InputDecoration(
+                             border: InputBorder.none,
+                             focusedBorder: InputBorder.none,
+                             enabledBorder: InputBorder.none,
+                             errorBorder: InputBorder.none,
+                             disabledBorder: InputBorder.none,
+                             isDense: true,
+                             contentPadding: const EdgeInsets.only(bottom: 16),
+                             hintText: "Original transcript will appear here...",
+                             hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.24)),
+                             fillColor: Colors.transparent,
+                             filled: true,
+                          ),
+                      ) : TextField(
+                          controller: _finalNoteController,
+                          maxLines: null,
+                          minLines: 15,
+                          onChanged: _onManualEdit,
+                          onTap: _handleEditorTap,
+                          style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurface, height: 1.6),
+                          decoration: InputDecoration(
+                             border: InputBorder.none,
+                             focusedBorder: InputBorder.none,
+                             enabledBorder: InputBorder.none,
+                             errorBorder: InputBorder.none,
+                             disabledBorder: InputBorder.none,
+                             isDense: true,
+                             contentPadding: const EdgeInsets.only(bottom: 16),
+                             hintText: "AI generated note will appear here...",
+                             hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.24)),
+                             fillColor: Colors.transparent,
+                             filled: true,
+                          ),
                       ),
-                      onTap: _handleEditorTap,
-                    ),
+             ),
+         ],
+      ),
+    );
+  }
+
+  Widget _buildTab({
+    required int index,
+    required IconData icon,
+    required String label,
+    VoidCallback? onDelete,
+  }) {
+    final bool isActive = _activeTabIndex == index;
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    return GestureDetector(
+      onTap: () => _switchTab(index),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: isActive ? colorScheme.surface : Colors.transparent,
+          border: Border(
+            bottom: BorderSide(
+              color: isActive ? colorScheme.primary : Colors.transparent,
+              width: 2,
             ),
-            secondChild: const SizedBox(width: double.infinity, height: 0),
+            right: BorderSide(color: Theme.of(context).dividerColor),
           ),
-        ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+             Icon(
+               icon,
+               size: 14,
+               color: isActive ? colorScheme.primary : colorScheme.onSurface.withValues(alpha: 0.5),
+             ),
+             const SizedBox(width: 8),
+             Text(
+               label,
+               style: TextStyle(
+                 fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                 color: isActive ? colorScheme.onSurface : colorScheme.onSurface.withValues(alpha: 0.5),
+                 fontSize: 12,
+               ),
+             ),
+             if (onDelete != null) ...[
+               const SizedBox(width: 8),
+               InkWell(
+                 onTap: onDelete,
+                 borderRadius: BorderRadius.circular(12),
+                 child: Icon(Icons.close, size: 14, color: colorScheme.onSurface.withValues(alpha: 0.4)),
+               )
+             ]
+          ],
+        ),
       ),
     );
   }

@@ -1,6 +1,7 @@
 import 'dart:async';
 import '../models/note_model.dart';
 import '../../services/api_service.dart';
+import '../models/generated_output.dart';
 
 // Unified InboxService for Mobile (API Based)
 class InboxService {
@@ -27,6 +28,7 @@ class InboxService {
     // Add formatted text support as Mobile processes it locally first
     String? formattedText, 
     String? audioPath,
+    List<Map<String, dynamic>>? generatedOutputs,
   }) async {
     try {
       await init();
@@ -39,6 +41,7 @@ class InboxService {
         if (formattedText != null) 'formatted_text': formattedText,
         if (formattedText != null) 'status': 'processed', // Auto-mark as processed if we send formatted text
         if (audioPath != null) 'audio_path': audioPath,
+        if (generatedOutputs != null) 'generated_outputs': generatedOutputs,
       };
 
       final response = await _apiService.post('/inbox-notes', body: body);
@@ -64,6 +67,7 @@ class InboxService {
     String? summary,
     int? suggestedMacroId,
     String? status, // Added status update support
+    List<Map<String, dynamic>>? generatedOutputs,
   }) async {
     try {
       await init();
@@ -90,6 +94,7 @@ class InboxService {
       if (summary != null) body['summary'] = summary;
       if (suggestedMacroId != null) body['suggested_macro_id'] = suggestedMacroId;
       if (status != null) body['status'] = status;
+      if (generatedOutputs != null) body['generated_outputs'] = generatedOutputs;
       
       // Update status to processed if formatted text is provided
       if (formattedText != null && formattedText.isNotEmpty && status == null) {
@@ -192,6 +197,13 @@ class InboxService {
     // Map summary (template name for badge display)
     if (json['summary'] != null) {
       note.summary = json['summary'];
+    }
+
+    // Map generated outputs
+    if (json['generated_outputs'] != null && json['generated_outputs'] is List) {
+      note.generatedOutputs = (json['generated_outputs'] as List)
+          .map((e) => GeneratedOutput.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
     }
     
     return note;

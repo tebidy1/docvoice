@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:isar/isar.dart';
 import 'note_model_base.dart';
+import 'generated_output.dart';
 
 export 'note_model_base.dart';
 
@@ -20,6 +22,15 @@ class NoteModel extends NoteModelBase {
   @Enumerated(EnumType.name)
   @override
   late NoteStatus status;
+
+  @ignore
+  @override
+  List<GeneratedOutput> generatedOutputs = [];
+
+  List<String> get generatedOutputsJson => generatedOutputs.map((e) => jsonEncode(e.toJson())).toList();
+  set generatedOutputsJson(List<String> jsons) {
+    generatedOutputs = jsons.map((e) => GeneratedOutput.fromJson(jsonDecode(e))).toList();
+  }
 }
 
 // Extension methods for JSON serialization
@@ -39,6 +50,7 @@ extension NoteModelJson on NoteModel {
     note.appliedMacroId = base.appliedMacroId;
     note.originalText = base.originalText;
     note.formattedText = base.formattedText;
+    note.generatedOutputs = base.generatedOutputs;
     return note;
   }
 }

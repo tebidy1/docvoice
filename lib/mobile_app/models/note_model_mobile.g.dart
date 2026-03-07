@@ -15,7 +15,7 @@ extension GetNoteModelCollection on Isar {
 
 const NoteModelSchema = CollectionSchema(
   name: r'NoteModel',
-  id: -5829966683692150002,
+  id: -58299666836921,
   properties: {
     r'appliedMacroId': PropertySchema(
       id: 0,
@@ -42,49 +42,54 @@ const NoteModelSchema = CollectionSchema(
       name: r'formattedText',
       type: IsarType.string,
     ),
-    r'originalText': PropertySchema(
+    r'generatedOutputsJson': PropertySchema(
       id: 5,
+      name: r'generatedOutputsJson',
+      type: IsarType.stringList,
+    ),
+    r'originalText': PropertySchema(
+      id: 6,
       name: r'originalText',
       type: IsarType.string,
     ),
     r'patientName': PropertySchema(
-      id: 6,
+      id: 7,
       name: r'patientName',
       type: IsarType.string,
     ),
     r'rawText': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'rawText',
       type: IsarType.string,
     ),
     r'status': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'status',
       type: IsarType.string,
       enumMap: _NoteModelstatusEnumValueMap,
     ),
     r'suggestedMacroId': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'suggestedMacroId',
       type: IsarType.long,
     ),
     r'summary': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'summary',
       type: IsarType.string,
     ),
     r'title': PropertySchema(
-      id: 11,
+      id: 12,
       name: r'title',
       type: IsarType.string,
     ),
     r'updatedAt': PropertySchema(
-      id: 12,
+      id: 13,
       name: r'updatedAt',
       type: IsarType.dateTime,
     ),
     r'uuid': PropertySchema(
-      id: 13,
+      id: 14,
       name: r'uuid',
       type: IsarType.string,
     )
@@ -96,7 +101,7 @@ const NoteModelSchema = CollectionSchema(
   idName: r'id',
   indexes: {
     r'uuid': IndexSchema(
-      id: 2134397340427724972,
+      id: 21343973404277,
       name: r'uuid',
       unique: false,
       replace: false,
@@ -131,6 +136,13 @@ int _noteModelEstimateSize(
   }
   bytesCount += 3 + object.content.length * 3;
   bytesCount += 3 + object.formattedText.length * 3;
+  bytesCount += 3 + object.generatedOutputsJson.length * 3;
+  {
+    for (var i = 0; i < object.generatedOutputsJson.length; i++) {
+      final value = object.generatedOutputsJson[i];
+      bytesCount += value.length * 3;
+    }
+  }
   bytesCount += 3 + object.originalText.length * 3;
   bytesCount += 3 + object.patientName.length * 3;
   bytesCount += 3 + object.rawText.length * 3;
@@ -157,15 +169,16 @@ void _noteModelSerialize(
   writer.writeString(offsets[2], object.content);
   writer.writeDateTime(offsets[3], object.createdAt);
   writer.writeString(offsets[4], object.formattedText);
-  writer.writeString(offsets[5], object.originalText);
-  writer.writeString(offsets[6], object.patientName);
-  writer.writeString(offsets[7], object.rawText);
-  writer.writeString(offsets[8], object.status.name);
-  writer.writeLong(offsets[9], object.suggestedMacroId);
-  writer.writeString(offsets[10], object.summary);
-  writer.writeString(offsets[11], object.title);
-  writer.writeDateTime(offsets[12], object.updatedAt);
-  writer.writeString(offsets[13], object.uuid);
+  writer.writeStringList(offsets[5], object.generatedOutputsJson);
+  writer.writeString(offsets[6], object.originalText);
+  writer.writeString(offsets[7], object.patientName);
+  writer.writeString(offsets[8], object.rawText);
+  writer.writeString(offsets[9], object.status.name);
+  writer.writeLong(offsets[10], object.suggestedMacroId);
+  writer.writeString(offsets[11], object.summary);
+  writer.writeString(offsets[12], object.title);
+  writer.writeDateTime(offsets[13], object.updatedAt);
+  writer.writeString(offsets[14], object.uuid);
 }
 
 NoteModel _noteModelDeserialize(
@@ -180,18 +193,19 @@ NoteModel _noteModelDeserialize(
   object.content = reader.readString(offsets[2]);
   object.createdAt = reader.readDateTime(offsets[3]);
   object.formattedText = reader.readString(offsets[4]);
+  object.generatedOutputsJson = reader.readStringList(offsets[5]) ?? [];
   object.id = id;
-  object.originalText = reader.readString(offsets[5]);
-  object.patientName = reader.readString(offsets[6]);
-  object.rawText = reader.readString(offsets[7]);
+  object.originalText = reader.readString(offsets[6]);
+  object.patientName = reader.readString(offsets[7]);
+  object.rawText = reader.readString(offsets[8]);
   object.status =
-      _NoteModelstatusValueEnumMap[reader.readStringOrNull(offsets[8])] ??
+      _NoteModelstatusValueEnumMap[reader.readStringOrNull(offsets[9])] ??
           NoteStatus.draft;
-  object.suggestedMacroId = reader.readLongOrNull(offsets[9]);
-  object.summary = reader.readStringOrNull(offsets[10]);
-  object.title = reader.readString(offsets[11]);
-  object.updatedAt = reader.readDateTime(offsets[12]);
-  object.uuid = reader.readString(offsets[13]);
+  object.suggestedMacroId = reader.readLongOrNull(offsets[10]);
+  object.summary = reader.readStringOrNull(offsets[11]);
+  object.title = reader.readString(offsets[12]);
+  object.updatedAt = reader.readDateTime(offsets[13]);
+  object.uuid = reader.readString(offsets[14]);
   return object;
 }
 
@@ -213,23 +227,25 @@ P _noteModelDeserializeProp<P>(
     case 4:
       return (reader.readString(offset)) as P;
     case 5:
-      return (reader.readString(offset)) as P;
+      return (reader.readStringList(offset) ?? []) as P;
     case 6:
       return (reader.readString(offset)) as P;
     case 7:
       return (reader.readString(offset)) as P;
     case 8:
+      return (reader.readString(offset)) as P;
+    case 9:
       return (_NoteModelstatusValueEnumMap[reader.readStringOrNull(offset)] ??
           NoteStatus.draft) as P;
-    case 9:
-      return (reader.readLongOrNull(offset)) as P;
     case 10:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readLongOrNull(offset)) as P;
     case 11:
-      return (reader.readString(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 12:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 13:
+      return (reader.readDateTime(offset)) as P;
+    case 14:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -928,6 +944,233 @@ extension NoteModelQueryFilter
         property: r'formattedText',
         value: '',
       ));
+    });
+  }
+
+  QueryBuilder<NoteModel, NoteModel, QAfterFilterCondition>
+      generatedOutputsJsonElementEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'generatedOutputsJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<NoteModel, NoteModel, QAfterFilterCondition>
+      generatedOutputsJsonElementGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'generatedOutputsJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<NoteModel, NoteModel, QAfterFilterCondition>
+      generatedOutputsJsonElementLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'generatedOutputsJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<NoteModel, NoteModel, QAfterFilterCondition>
+      generatedOutputsJsonElementBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'generatedOutputsJson',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<NoteModel, NoteModel, QAfterFilterCondition>
+      generatedOutputsJsonElementStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'generatedOutputsJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<NoteModel, NoteModel, QAfterFilterCondition>
+      generatedOutputsJsonElementEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'generatedOutputsJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<NoteModel, NoteModel, QAfterFilterCondition>
+      generatedOutputsJsonElementContains(String value,
+          {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'generatedOutputsJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<NoteModel, NoteModel, QAfterFilterCondition>
+      generatedOutputsJsonElementMatches(String pattern,
+          {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'generatedOutputsJson',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<NoteModel, NoteModel, QAfterFilterCondition>
+      generatedOutputsJsonElementIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'generatedOutputsJson',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<NoteModel, NoteModel, QAfterFilterCondition>
+      generatedOutputsJsonElementIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'generatedOutputsJson',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<NoteModel, NoteModel, QAfterFilterCondition>
+      generatedOutputsJsonLengthEqualTo(int length) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'generatedOutputsJson',
+        length,
+        true,
+        length,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<NoteModel, NoteModel, QAfterFilterCondition>
+      generatedOutputsJsonIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'generatedOutputsJson',
+        0,
+        true,
+        0,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<NoteModel, NoteModel, QAfterFilterCondition>
+      generatedOutputsJsonIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'generatedOutputsJson',
+        0,
+        false,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<NoteModel, NoteModel, QAfterFilterCondition>
+      generatedOutputsJsonLengthLessThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'generatedOutputsJson',
+        0,
+        true,
+        length,
+        include,
+      );
+    });
+  }
+
+  QueryBuilder<NoteModel, NoteModel, QAfterFilterCondition>
+      generatedOutputsJsonLengthGreaterThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'generatedOutputsJson',
+        length,
+        include,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<NoteModel, NoteModel, QAfterFilterCondition>
+      generatedOutputsJsonLengthBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'generatedOutputsJson',
+        lower,
+        includeLower,
+        upper,
+        includeUpper,
+      );
     });
   }
 
@@ -2447,6 +2690,13 @@ extension NoteModelQueryWhereDistinct
     });
   }
 
+  QueryBuilder<NoteModel, NoteModel, QDistinct>
+      distinctByGeneratedOutputsJson() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'generatedOutputsJson');
+    });
+  }
+
   QueryBuilder<NoteModel, NoteModel, QDistinct> distinctByOriginalText(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -2544,6 +2794,13 @@ extension NoteModelQueryProperty
   QueryBuilder<NoteModel, String, QQueryOperations> formattedTextProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'formattedText');
+    });
+  }
+
+  QueryBuilder<NoteModel, List<String>, QQueryOperations>
+      generatedOutputsJsonProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'generatedOutputsJson');
     });
   }
 

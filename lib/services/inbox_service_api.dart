@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../mobile_app/models/note_model.dart';
+import '../mobile_app/models/generated_output.dart';
 import 'inbox_note_api_service.dart';
 import 'sync_manager.dart';
 import 'cache_manager.dart';
@@ -35,6 +36,7 @@ class InboxService {
     int? suggestedMacroId,
     String? formattedText,
     String? audioPath,
+    List<Map<String, dynamic>>? generatedOutputs,
   }) async {
     final note = NoteModel();
     note.uuid = DateTime.now().millisecondsSinceEpoch.toString();
@@ -44,6 +46,9 @@ class InboxService {
     note.suggestedMacroId = suggestedMacroId;
     note.formattedText = formattedText ?? '';
     note.audioPath = audioPath; // Added audio path map
+    if (generatedOutputs != null) {
+      note.generatedOutputs = generatedOutputs.map((e) => GeneratedOutput.fromJson(e)).toList();
+    }
     note.content = note.formattedText.isNotEmpty ? note.formattedText : note.originalText; // Fix LateInitializationError
     note.status =
         note.formattedText.isNotEmpty ? NoteStatus.processed : NoteStatus.draft;
@@ -86,6 +91,7 @@ class InboxService {
     String? patientName,
     String? summary,
     int? suggestedMacroId,
+    List<Map<String, dynamic>>? generatedOutputs,
   }) async {
     final existing = await getNoteById(noteId);
     if (existing == null) return null;
@@ -95,6 +101,9 @@ class InboxService {
     if (patientName != null) existing.patientName = patientName;
     if (summary != null) existing.summary = summary;
     if (suggestedMacroId != null) existing.suggestedMacroId = suggestedMacroId;
+    if (generatedOutputs != null) {
+      existing.generatedOutputs = generatedOutputs.map((e) => GeneratedOutput.fromJson(e)).toList();
+    }
 
     if (formattedText != null && formattedText.isNotEmpty) {
       existing.status = NoteStatus.processed;

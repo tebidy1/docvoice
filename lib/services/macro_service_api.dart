@@ -104,7 +104,9 @@ class MacroService {
 
   Future<List<Macro>> getAllMacros() async {
     try {
+      print('🌐 MacroService(API): Fetching all macros from /macros...');
       final response = await _apiService.get('/macros');
+      print('🌐 MacroService(API): Response received: $response');
 
       if (response['status'] == true && response['payload'] != null) {
         final payload = response['payload'];
@@ -112,15 +114,21 @@ class MacroService {
             ? payload['data']
             : (payload is List ? payload : []);
 
-        return data.map((json) => _mapToMacro(json)).toList();
+        final result = data.map((json) => _mapToMacro(json)).toList();
+        print('🌐 MacroService(API): Successfully parsed ${result.length} macros.');
+        return result;
       }
 
+      print('🌐 MacroService(API): Response format issue, returning empty list. Payload: ${response['payload']}');
       return [];
     } catch (e) {
-      print('Error getting all macros: $e');
+      print('🌐 MacroService(API): Error getting all macros: $e');
       return [];
     }
   }
+
+  /// Alias for getAllMacros() - used by cross-platform widgets
+  Future<List<Macro>> getMacros() => getAllMacros();
 
   Future<List<Macro>> getMacrosByCategory(String category) async {
     await init();
