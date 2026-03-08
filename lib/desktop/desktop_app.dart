@@ -475,10 +475,11 @@ cQBOFhw1ZkYvxx4A6HSNxyae
                _openRecordingDialog();
              }
           } else if (sttEngine == 'gemini_oneshot') {
-             // --- GEMINI ONE-SHOT START: Record locally to WAV, no streaming ---
+             // --- GEMINI ONE-SHOT START: Record locally to M4A/FLAC, no streaming ---
              final dir = await getTemporaryDirectory();
-             final path = '${dir.path}/oneshot_${DateTime.now().millisecondsSinceEpoch}.wav';
-             await _recorder.startRecordingToFile(path);
+             final ext = Platform.isWindows ? 'flac' : 'm4a';
+             final path = '${dir.path}/oneshot_${DateTime.now().millisecondsSinceEpoch}.$ext';
+             await _recorder.startRecordingCompressed(path);
              _geminiOneShotPath = path;
              print("Gemini One-Shot recording started at: $path");
              if (mounted) {
@@ -526,6 +527,13 @@ cQBOFhw1ZkYvxx4A6HSNxyae
     if (_isRecordingDialogOpen) return;
     _isRecordingDialogOpen = true;
 
+    final prefs = await SharedPreferences.getInstance();
+    final sttEngine = prefs.getString('stt_engine_pref') ?? 'oracle_live';
+    String? compressionLabel;
+    if (sttEngine == 'gemini_oneshot') {
+      compressionLabel = Platform.isWindows ? 'FLAC / High Quality' : 'AAC / M4A';
+    }
+
     await WindowManagerHelper.expandToSidebar(context);
     if (!mounted) {
       _isRecordingDialogOpen = false;
@@ -540,6 +548,7 @@ cQBOFhw1ZkYvxx4A6HSNxyae
         isProcessing: _isProcessing,
         onRecordTap: _toggleRecording,
         recorderService: _recorder,
+        compressionLabel: compressionLabel,
       ),
     );
     _isRecordingDialogOpen = false;
@@ -688,8 +697,16 @@ cQBOFhw1ZkYvxx4A6HSNxyae
                                               setState(() =>
                                                   _lastViewedCount = count);
 
+                                              final prefs = await SharedPreferences.getInstance();
+                                              final sttEngine = prefs.getString('stt_engine_pref') ?? 'oracle_live';
+                                              String? compressionLabel;
+                                              if (sttEngine == 'gemini_oneshot') {
+                                                compressionLabel = Platform.isWindows ? 'FLAC / High Quality' : 'AAC / M4A';
+                                              }
+
                                               await WindowManagerHelper
                                                   .expandToSidebar(context);
+                                              if (!mounted) return;
                                               await showDialog(
                                                 context: context,
                                                 barrierDismissible: true,
@@ -704,6 +721,7 @@ cQBOFhw1ZkYvxx4A6HSNxyae
                                                           _toggleRecording,
                                                       recorderService:
                                                           _recorder,
+                                                      compressionLabel: compressionLabel,
                                                     ),
                                               );
                                               await WindowManagerHelper

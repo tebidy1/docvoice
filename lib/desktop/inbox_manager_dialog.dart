@@ -21,6 +21,7 @@ class InboxManagerDialog extends StatefulWidget {
   final bool isRecording;
   final bool isProcessing;
   final AudioRecorderService? recorderService;
+  final String? compressionLabel;
 
   const InboxManagerDialog({
     super.key,
@@ -28,6 +29,7 @@ class InboxManagerDialog extends StatefulWidget {
     this.isRecording = false,
     this.isProcessing = false,
     this.recorderService,
+    this.compressionLabel,
   });
 
   @override
@@ -247,17 +249,53 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
   // LISTENING VIEW — Animated waveform rings
   // ──────────────────────────────────────────────
   Widget _buildListeningView({Key? key}) {
-    return ListeningModeView(
+    return Stack(
       key: key,
-      getAmplitude: () async {
-        if (widget.recorderService != null) {
-          try {
-            final amp = await widget.recorderService!.getAmplitude();
-            return amp.current; // Returns -160.0 to 0.0
-          } catch (_) {}
-        }
-        return -160.0;
-      },
+      children: [
+        ListeningModeView(
+          getAmplitude: () async {
+            if (widget.recorderService != null) {
+              try {
+                final amp = await widget.recorderService!.getAmplitude();
+                return amp.current; // Returns -160.0 to 0.0
+              } catch (_) {}
+            }
+            return -160.0;
+          },
+        ),
+        if (widget.compressionLabel != null)
+          Positioned(
+            bottom: 20,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.bolt, color: Colors.amber, size: 14),
+                    const SizedBox(width: 4),
+                    Text(
+                      widget.compressionLabel!,
+                      style: GoogleFonts.plusJakartaSans(
+                        color: Colors.white.withValues(alpha: 0.9),
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 

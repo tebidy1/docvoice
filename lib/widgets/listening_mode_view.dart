@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class ListeningModeView extends StatefulWidget {
   final Future<double> Function() getAmplitude;
@@ -37,29 +38,32 @@ class _ListeningModeViewState extends State<ListeningModeView>
   // Peak amplitude for ring burst effect
   double _peakAmplitude = 0.0;
 
+  // Waveform history for the equalizer bars (FIFO buffer)
+  final List<double> _waveHistory = List.filled(9, 0.0);
+  
   @override
   void initState() {
     super.initState();
 
-    // Slow breathing for idle state
+    // Slightly faster breathing in idle
     _breathController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2000),
+      duration: const Duration(milliseconds: 1500),
     )..repeat(reverse: true);
 
-    // Core dot pulsation
+    // Core dot fast pulsation
     _coreGlowController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 600),
     )..repeat(reverse: true);
 
     // 4 expanding ring controllers with staggered start
     _ringControllers = List.generate(4, (index) {
       final controller = AnimationController(
         vsync: this,
-        duration: Duration(milliseconds: 1800 + index * 200),
+        duration: Duration(milliseconds: 1400 + index * 150),
       );
-      Future.delayed(Duration(milliseconds: index * 400), () {
+      Future.delayed(Duration(milliseconds: index * 300), () {
         if (mounted) controller.repeat();
       });
       return controller;
@@ -78,30 +82,50 @@ class _ListeningModeViewState extends State<ListeningModeView>
   }
 
   void _startAmplitudePolling() {
-    // Poll every 50ms for high sensitivity
+    int _debugCounter = 0;
+    // ⚡ Poll every 30ms for fast reaction time
     _amplitudePollTimer =
-        Timer.periodic(const Duration(milliseconds: 50), (_) async {
+        Timer.periodic(const Duration(milliseconds: 30), (_) async {
       if (!mounted) return;
 
       final amp = await widget.getAmplitude();
       if (!mounted) return;
 
-      // Normalize amplitude (-160 to 0 or -60 to 0) → 0.0 to 1.0
-      // Handle both ranges gracefully
-      double normalized;
-      if (amp < -100) {
-        // -160 to 0 range (native STT)
-        normalized = (amp.clamp(-160.0, 0.0) + 160) / 160;
-      } else {
-        // -60 to 0 range (record package)
-        normalized = (amp.clamp(-60.0, 0.0) + 60) / 60;
+      // Debug: log every ~30th sample (≈1 second) to see actual values
+      _debugCounter++;
+      if (_debugCounter % 33 == 0) {
+        debugPrint('🎤 Amplitude raw: $amp');
       }
 
-      // Aggressive exponential scaling for high sensitivity
-      normalized = pow(normalized, 1.2).toDouble();
+      // ── Normalize amplitude to 0.0–1.0 ──
+      // The `record` package on Android returns dBFS: typically -45 (silence) to 0 (max).
+      // Normal speech sits around -30 to -10 dBFS.
+      // Native STT ranges from -160 (silence) to 0 (max).
+      double normalized;
+      if (amp <= -100) {
+        // -160 to 0 range (native STT or no signal)
+        normalized = (amp.clamp(-160.0, 0.0) + 160) / 160;
+      } else if (kIsWeb) {
+        // Web browsers (via Web Audio API) typically report slightly lower dBFS than Android 
+        final webAmp = (amp.clamp(-50.0, -10.0) + 50.0) / 40.0; // 0.0 to 1.0
+        normalized = webAmp;
+      } else if (amp < 0) {
+        // Android/iOS record package: typically -45 to 0 dBFS
+        // Use a TIGHT range (-40 to -5) so normal speech (which is -30 to -10)
+        // maps to a wide output range instead of a tiny one
+        final tightAmp = (amp.clamp(-40.0, -5.0) + 40.0) / 35.0; // 0.0 to 1.0
+        normalized = tightAmp;
+      } else {
+        // Positive range (some Android devices)
+        normalized = (amp / 32768.0).clamp(0.0, 1.0);
+      }
 
-      // Boost low volumes to show even whispers
-      if (normalized > 0.02) {
+      // Apply a sqrt curve to boost low/medium amplitude dramatically 
+      // (sqrt is much more aggressive than pow(0.7))
+      normalized = sqrt(normalized);
+
+      // Ensure even quiet speech is visible
+      if (normalized > 0.01) {
         normalized = 0.15 + normalized * 0.85;
       }
 
@@ -111,16 +135,24 @@ class _ListeningModeViewState extends State<ListeningModeView>
       if (_targetAmplitude > _peakAmplitude) {
         _peakAmplitude = _targetAmplitude;
       } else {
-        _peakAmplitude *= 0.95; // Decay peak
+        _peakAmplitude *= 0.92;
       }
 
-      // Smooth interpolation toward target
+      // Update waveform history
+      _waveHistory.removeAt(0);
+      _waveHistory.add(_targetAmplitude);
+
       setState(() {
-        _currentAmplitude +=
-            (_targetAmplitude - _currentAmplitude) * 0.3;
+        // ⚡ ASYMMETRIC smoothing: rise FAST, fall slowly
+        if (_targetAmplitude > _currentAmplitude) {
+          _currentAmplitude += (_targetAmplitude - _currentAmplitude) * 0.7;
+        } else {
+          _currentAmplitude += (_targetAmplitude - _currentAmplitude) * 0.2;
+        }
       });
     });
   }
+
 
   @override
   void dispose() {
@@ -225,9 +257,9 @@ class _ListeningModeViewState extends State<ListeningModeView>
 
   Widget _buildEqualizerBars() {
     const barCount = 9;
-    const barWidth = 3.0;
+    const barWidth = 3.5;
     const barSpacing = 5.0;
-    const maxHeight = 32.0;
+    const maxHeight = 36.0;
     const minHeight = 4.0;
 
     return SizedBox(
@@ -239,25 +271,27 @@ class _ListeningModeViewState extends State<ListeningModeView>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: List.generate(barCount, (i) {
+              // ⚡ Each bar shows a slice of the waveform history
+              // Left = oldest, Right = newest — like a scrolling waveform
+              final historyValue = _waveHistory[i];
+              
+              // Add a sine-wave offset for natural-looking idle movement
               final phase = (i / barCount) * 2 * pi;
-              final wave =
-                  sin((_breathController.value * 2 * pi) + phase) * 0.5 + 0.5;
+              final idleWave = sin((_breathController.value * 2 * pi) + phase) * 0.5 + 0.5;
 
-              // Higher sensitivity: bars react strongly to amplitude
-              final amplitudeFactor = 0.15 + _currentAmplitude * 0.85;
-              final height =
-                  minHeight + (maxHeight - minHeight) * wave * amplitudeFactor;
+              // Mix between idle animation and real amplitude data
+              final mix = historyValue > 0.05 ? historyValue : idleWave * 0.25;
+              final height = minHeight + (maxHeight - minHeight) * mix;
 
               // Center bars are brightest
-              final distFromCenter =
-                  (i - barCount / 2).abs() / (barCount / 2);
-              final brightness = 1.0 - distFromCenter * 0.4;
+              final distFromCenter = (i - barCount / 2).abs() / (barCount / 2);
+              final brightness = 1.0 - distFromCenter * 0.3;
 
-              // Color shifts with amplitude
+              // Color shifts cyan→white as voice gets louder
               final barColor = Color.lerp(
                 const Color(0xFF0088CC),
                 const Color(0xFF00EEFF),
-                _currentAmplitude * brightness,
+                historyValue * brightness,
               )!;
 
               return Container(
@@ -266,14 +300,16 @@ class _ListeningModeViewState extends State<ListeningModeView>
                 height: height.clamp(minHeight, maxHeight),
                 decoration: BoxDecoration(
                   color: barColor,
-                  borderRadius: BorderRadius.circular(1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: barColor.withValues(alpha: 0.6 * _currentAmplitude),
-                      blurRadius: 4,
-                      spreadRadius: 0,
-                    ),
-                  ],
+                  borderRadius: BorderRadius.circular(2.0),
+                  boxShadow: historyValue > 0.2
+                      ? [
+                          BoxShadow(
+                            color: barColor.withValues(alpha: 0.7 * historyValue),
+                            blurRadius: 6,
+                            spreadRadius: 0,
+                          )
+                        ]
+                      : null,
                 ),
               );
             }),
@@ -283,6 +319,7 @@ class _ListeningModeViewState extends State<ListeningModeView>
     );
   }
 }
+
 
 // ═══════════════════════════════════════════════════════════════
 // Precision Rings Painter — thin, sharp, neon-glow rings

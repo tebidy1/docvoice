@@ -22,6 +22,20 @@ RAW TRANSCRIPT:
 """;
 
   // ==========================================
+  // 1.5 THE TRANSCRIPTION PROMPT (AUDIO TO TEXT)
+  // ==========================================
+  static const String goldenTranscriptionPrompt = """
+SYSTEM DIRECTIVE: You are an elite Medical Transcriptionist. Your ONLY task is to transcribe this audio verbatim (word-for-word) into text.
+STRICT RULES:
+1. VERBATIM ACCURACY: Write exactly what you hear. Do not add, summarize, or guess unsaid information. Do not correct spoken grammatical errors.
+2. ZERO HALLUCINATION: If a word is unintelligible, write [غير مسموع]. Never invent medications or diagnoses.
+3. MEDICAL CODE-SWITCHING: Arab doctors mix Arabic and English medical terms. Preserve this! Write the Arabic in Arabic, and keep English medical terms (e.g., MRI, Paracetamol) exactly as spoken in English. Do NOT translate them.
+4. NUMBERS/DOSES: Be extremely precise with vitals and doses. Write '500 mg', not 'خمسمائة مليغرام'.
+5. MULTIPLE SPEAKERS: If possible, indicate speaker changes.
+OUTPUT: Output the plain transcript text only. No introductions, no metadata, no markdown.
+""";
+
+  // ==========================================
   // 2. THE MEDICAL TEMPLATES (MACROS)
   // ==========================================
 

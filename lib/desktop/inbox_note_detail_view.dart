@@ -24,7 +24,7 @@ import '../features/multimodal_ai/ai_studio_multimodal_service.dart';
 import 'dart:io' show File;
 import '../core/medical_departments.dart';
 import '../services/department_service.dart';
-
+import '../core/ai/ai_prompt_constants.dart';
 class InboxNoteDetailView extends StatefulWidget {
   final NoteModel note;
   final Macro? autoStartMacro;
@@ -99,8 +99,10 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   // Dynamic Layout & Streaming
   bool _isLoadingText = false;
   bool _isOneShotMode = false;
+  bool _showCleanTemplatePicker = false; // ✨ For Optimistic Clean UI
   StreamSubscription? _textStreamSubscription;
   Timer? _debounceTimer;
+  Future<void>? _backgroundTranscriptionFuture;
 
   @override
   void initState() {
@@ -112,6 +114,16 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     if (widget.oneShotAudioPath != null) {
       _isOneShotMode = true;
       _isTemplateCardExpanded = true;
+      
+      // Proactive 2-Step Transcription: If this is a new recording (placeholder text), transcribe it immediately in the background.
+      if (widget.note.rawText.isEmpty || widget.note.rawText.contains('لا يوجد نص')) {
+        _showCleanTemplatePicker = true; // Shows the clean UI
+        _backgroundTranscriptionFuture = _proactiveTranscribe(widget.oneShotAudioPath!);
+      } else {
+        // If we already have text or it's an existing note opened in One-Shot mode, turn off One-Shot
+        // to force subsequent macro clicks to use the text-based generator.
+        _isOneShotMode = false;
+      }
       return; 
     }
 
@@ -364,6 +376,19 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
       }
     });
 
+    // Optimistic UI: If transcription is still running in background, wait for it!
+    if (_backgroundTranscriptionFuture != null) {
+      await _backgroundTranscriptionFuture;
+      _backgroundTranscriptionFuture = null;
+      if (!mounted) return;
+      if (widget.note.rawText.isEmpty) {
+        setState(() => _isGenerating = false);
+        _generationTimer?.cancel();
+        _showError("فشل في تحويل الصوت إلى نص. لا يمكن تطبيق القالب.");
+        return;
+      }
+    }
+
     try {
       // ✅ Use centralized AIProcessingService (Phase 1 refactor)
       final aiService = AIProcessingService();
@@ -384,6 +409,7 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
             _suggestions = result.missingSuggestions
                 .map((s) => SmartSuggestion.fromJson(s))
                 .toList();
+            _showCleanTemplatePicker = false; // Transition to normal editor
           });
           _autoSaveGeneratedContent(result.formattedNote, macro);
         } else {
@@ -392,6 +418,7 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
             _activeTabIndex = _generatedOutputs.length;
             _finalNoteController.text = result.formattedNote;
             _suggestions = [];
+            _showCleanTemplatePicker = false; // Transition to normal editor
           });
           _autoSaveGeneratedContent(result.formattedNote, macro);
         }
@@ -408,13 +435,65 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   }
   
   // ═══════════════════════════════════════════════════════════════════════
+  // 🎙 PROACTIVE TRANSCRIPTION (2-Step Architecture Step 1)
+  // ═══════════════════════════════════════════════════════════════════════
+  Future<void> _proactiveTranscribe(String audioPath) async {
+    // OPTIMISTIC UI: We intentionally DO NOT set _isLoadingText to true
+    // so the user can immediately select a template while this runs in the background.
+
+    try {
+      final file = File(audioPath);
+      if (!await file.exists()) throw Exception('Audio file not found.');
+      
+      final audioBytes = await file.readAsBytes();
+      final ext = audioPath.split('.').last.toLowerCase();
+      final mimeType = switch (ext) {
+        'm4a'  => 'audio/m4a',
+        'mp4'  => 'audio/mp4',
+        'webm' => 'audio/webm',
+        'ogg'  => 'audio/ogg',
+        _      => 'audio/wav',
+      };
+
+      final result = await _multimodalService.transcribeAudio(
+        audioBytes: audioBytes,
+        mimeType: mimeType,
+        globalPrompt: AIPromptConstants.goldenTranscriptionPrompt,
+      );
+
+      if (mounted) {
+        if (result.success) {
+          final transcript = result.formattedNote;
+          setState(() {
+             // Now that we have real text, disable One-Shot generating mode 
+             // so templates use the standard text-based generator.
+             _isOneShotMode = false;
+          });
+          
+          widget.note.rawText = transcript;
+          widget.note.originalText = transcript;
+          
+          await _inboxService.updateNote(
+            widget.note.id,
+            rawText: transcript,
+          );
+          
+          print("✅ Proactive background transcription complete and saved.");
+        } else {
+          _showError('Transcription failed: ${result.errorMessage}');
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+         _showError('Error processing audio: $e');
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
   // ⚡ ONE-SHOT AI: Audio + Template → Gemini 2.5 Flash (Multimodal)
   // ═══════════════════════════════════════════════════════════════════════
-  // Sends the saved audio file + the selected template directly to Gemini.
-  // No backend hop required — Browser/App → Google AI Studio directly.
-  //
-  // MIGRATION: To switch to Vertex AI, change _multimodalService assignment
-  // in the field declaration above. UI code here does NOT change.
+  // *DEPRECATED* but kept for fallback or specific manual triggers.
   // ═══════════════════════════════════════════════════════════════════════
   Future<void> _applyOneShotAI(Macro macro) async {
     // Primary: oneShotAudioPath (when launched from Gemini One-Shot engine)
@@ -798,6 +877,10 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    
+    if (_showCleanTemplatePicker) {
+      return _buildCleanTemplateScreen(theme);
+    }
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -1240,9 +1323,12 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
                             if (selected) {
                               // In One-Shot mode: send audio+template to Gemini directly
                               // In classic mode: transcribe with backend STT first
-                              if (_isOneShotMode) {
-                                _applyOneShotAI(macro);
+                              if (_isLoadingText) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('يرجى الانتظار حتى يكتمل التفريغ الصوتي')),
+                                );
                               } else {
+                                // 2-Step Process: Always apply the template to the text!
                                 _applyTemplate(macro);
                               }
                             }
@@ -1277,6 +1363,119 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
           ),
         ],
       ),
+    );
+  }
+
+  // ✨ NEW: Clean Template Selection UI
+  Widget _buildCleanTemplateScreen(ThemeData theme) {
+    final colorScheme = theme.colorScheme;
+
+    return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: Stack(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              border: Border(
+                left: BorderSide(color: colorScheme.surface, width: 1),
+              ),
+            ),
+            child: Column(
+              children: [
+                _buildSmartHeader(theme), // Includes back button
+                Expanded(
+                  child: Center(
+                    // Slide up & fade in animation
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 50.0, end: 0.0),
+                      duration: const Duration(milliseconds: 600),
+                      curve: Curves.easeOutQuart,
+                      builder: (context, value, child) {
+                        return Transform.translate(
+                          offset: Offset(0, value),
+                          child: Opacity(
+                            opacity: (1.0 - (value / 50.0)).clamp(0.0, 1.0),
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.auto_awesome, size: 48, color: colorScheme.primary.withOpacity(0.8)),
+                            const SizedBox(height: 16),
+                            Text(
+                              "How would you like to format this note?",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: colorScheme.onSurface,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              "Choose a template to get started.",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: colorScheme.onSurface.withOpacity(0.6),
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+                            _buildCleanTemplateChips(theme),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_isGenerating || _isLoadingText)
+            Positioned.fill(
+              child: ProcessingOverlay(
+                cyclingMessages: _statusMessages,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCleanTemplateChips(ThemeData theme) {
+    final colorScheme = theme.colorScheme;
+    return Wrap(
+      spacing: 12.0,
+      runSpacing: 12.0,
+      alignment: WrapAlignment.center,
+      children: _quickMacros.map((macro) {
+        return ActionChip(
+          label: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+            child: Text(macro.trigger),
+          ),
+          onPressed: () {
+             _applyTemplate(macro);
+          },
+          backgroundColor: colorScheme.surface,
+          labelStyle: TextStyle(
+            fontSize: 15,
+            color: colorScheme.onSurface,
+            fontWeight: FontWeight.w500,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(
+              color: colorScheme.outline.withOpacity(0.3),
+            ),
+          ),
+          elevation: 1,
+        );
+      }).toList(),
     );
   }
 

@@ -54,6 +54,14 @@ abstract class MultimodalAIService {
     required String specialty,
   });
 
+  /// Extracts verbatim text transcript from raw audio without formatting it into a template.
+  /// Used in the 2-step transcription architecture.
+  Future<MultimodalAIResult> transcribeAudio({
+    required Uint8List audioBytes,
+    required String mimeType,
+    required String globalPrompt,
+  });
+
   /// Human-friendly name of this provider, for logging and UI badges.
   /// Example: "Google AI Studio (gemini-2.5-flash)"
   String get providerDisplayName;

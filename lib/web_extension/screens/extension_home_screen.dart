@@ -10,6 +10,7 @@ import 'package:web/web.dart' as web;
 import 'dart:js_interop';
 import '../../../widgets/animated_record_button.dart';
 import '../../../widgets/listening_mode_view.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ExtensionHomeScreen extends StatefulWidget {
   const ExtensionHomeScreen({super.key});
@@ -24,7 +25,8 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
   final AudioRecordingService _audioService = AudioRecordingService();
   final GlobalKey<ExtensionInboxScreenState> _inboxKey = GlobalKey<ExtensionInboxScreenState>();
 
-  late final List<Widget> _screens;
+  late List<Widget> _screens;
+  String _currentSttEngine = 'oracle_live';
 
   @override
   void initState() {
@@ -33,6 +35,14 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
       ExtensionInboxScreen(key: _inboxKey), // Use Extension Version
       const ExtensionSettingsScreen(),
     ];
+    _loadPreferences();
+  }
+
+  Future<void> _loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _currentSttEngine = prefs.getString('stt_engine_pref') ?? 'oracle_live';
+    });
   }
 
   void _onItemTapped(int index) {
@@ -77,8 +87,13 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
          }
       }
       
-      // 2. Start Recording
-      await _audioService.startRecording();
+      // 2. Refresh preferences and Start Recording
+      await _loadPreferences();
+      if (_currentSttEngine == 'gemini_oneshot') {
+        await _audioService.startRecordingCompressed();
+      } else {
+        await _audioService.startRecording();
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -97,7 +112,7 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
         final draft = NoteModel()
           ..uuid = const Uuid().v4()
           ..title = "Extension Note"
-          ..content = "Processing..."
+          ..content = ""
           ..audioPath = path
           ..status = NoteStatus.draft
           ..createdAt = DateTime.now()
@@ -146,9 +161,45 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
               Positioned.fill(
                 child: ListeningModeView(
                   getAmplitude: () async {
+                    final prefs = await SharedPreferences.getInstance();
+                    // Web typically doesn't use the system_native STT.
                     final amp = await _audioService.getAmplitude();
                     return amp.current;
                   },
+                ),
+              ),
+
+            // AAC/M4A/WebM indicator — must be ABOVE ListeningModeView
+            if (_isRecording && _currentSttEngine == 'gemini_oneshot')
+              Positioned(
+                bottom: 120, // Slightly above the FAB in extension
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withOpacity(0.25),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.amber.withOpacity(0.6)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.bolt, color: Colors.amber, size: 18),
+                        const SizedBox(width: 6),
+                        Text(
+                          "WebM / Opus",
+                          style: TextStyle(
+                            color: Colors.amber.shade200,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
           ],

@@ -68,6 +68,8 @@ class _EditorScreenState extends State<EditorScreen> {
   // Auto-Save State
   int? _currentNoteId; // Track the cloud note ID for updates
   Timer? _debounceTimer; // For manual edit auto-save
+  Future<void>? _backgroundTranscriptionFuture; // Optimistic UI: track background STT
+  bool _showCleanTemplatePicker = false; // ✨ For Optimistic Clean UI
 
   @override
   void initState() {
@@ -78,6 +80,7 @@ class _EditorScreenState extends State<EditorScreen> {
       _isOneShotMode = true;
       _isLoading = false;         // No transcription needed
       _isTemplateCardExpanded = true;  // Open template picker directly
+      _showCleanTemplatePicker = true; // ✨ Shows the clean UI
 
       if (widget.draftNote != null) {
         _currentNoteId = (widget.draftNote!.id > 0) ? widget.draftNote!.id : int.tryParse(widget.draftNote!.uuid);
@@ -129,8 +132,8 @@ class _EditorScreenState extends State<EditorScreen> {
       return;
     }
 
-    final path = widget.draftNote?.audioPath;
-    _isLoading = widget.oracleTranscriptFuture != null || (path != null && path.isNotEmpty);
+    // Optimistic UI: never block visually, transcript happens in background
+    _isLoading = false; 
     
     // Initialize ID if opening existing draft
     if (widget.draftNote != null) {
@@ -189,8 +192,19 @@ class _EditorScreenState extends State<EditorScreen> {
     // Auto-save on manual edits
     _finalController.addListener(_onManualEdit);
     
+    // 🌐 PWA Fix: If we are on web and the text is the placeholder, clear it 
+    // so the clean template picker triggers correctly.
+    if (kIsWeb && _sourceController.text == "Transcribing...") {
+      _sourceController.text = "";
+    }
+
+    if ((widget.draftNote?.audioPath != null || widget.oneShotAudioPath != null) && 
+      _sourceController.text.trim().isEmpty) {
+      _showCleanTemplatePicker = true;
+    }
+    
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initStandalone();
+      _backgroundTranscriptionFuture = _initStandalone();
     });
   }
 
@@ -213,7 +227,11 @@ class _EditorScreenState extends State<EditorScreen> {
       }
       return;
     }
-    setState(() => _isOneShotGenerating = true);
+    setState(() {
+      _isOneShotGenerating = true;
+      // Immediately dismiss the clean template picker and show overlay
+      _showCleanTemplatePicker = false;
+    });
 
     try {
       // ── Load audio bytes: Web → fetch blob URL, Native → read local file ──
@@ -254,6 +272,8 @@ class _EditorScreenState extends State<EditorScreen> {
         if (result.success) {
           setState(() {
             _selectedMacro = macro;
+            // ✅ Populate the TRANSCRIPT tab with the generated text
+            _sourceController.text = result.formattedNote;
             _generatedOutputs.add(GeneratedOutput(title: macro.trigger, content: result.formattedNote));
             _activeTabIndex = _generatedOutputs.length;
             _finalController.text = result.formattedNote;
@@ -265,7 +285,7 @@ class _EditorScreenState extends State<EditorScreen> {
             try {
               final inboxService = InboxService();
               final noteId = await inboxService.addNote(
-                'لا يوجد نص اصلي عند اختيار هذا النموذج',
+                result.formattedNote,
                 patientName: macro.trigger,
                 audioPath: widget.oneShotAudioPath,
               );
@@ -273,7 +293,7 @@ class _EditorScreenState extends State<EditorScreen> {
               
               await inboxService.updateNote(
                 noteId,
-                rawText: 'لا يوجد نص اصلي عند اختيار هذا النموذج',
+                rawText: result.formattedNote,
                 formattedText: _generatedOutputs.isNotEmpty ? _generatedOutputs.last.content ?? '' : '',
                 generatedOutputs: _generatedOutputs.map((e) => e.toJson()).toList(),
                 suggestedMacroId: int.tryParse(macro.id.toString()) ?? 0,
@@ -660,6 +680,17 @@ class _EditorScreenState extends State<EditorScreen> {
       _isTemplateCardExpanded = false;   // Collapse template card
     });
 
+    // Optimistic UI: wait for background STT if not finished
+    if (_backgroundTranscriptionFuture != null) {
+      await _backgroundTranscriptionFuture;
+      _backgroundTranscriptionFuture = null;
+      if (!mounted) return;
+      if (_sourceController.text.isEmpty || _sourceController.text.startsWith('❌')) {
+        setState(() => _isProcessing = false);
+        return; // Transcription failed, UI already shows error
+      }
+    }
+
     final prefs = await SharedPreferences.getInstance();
     String? geminiKey = prefs.getString('gemini_api_key');
     
@@ -716,6 +747,7 @@ class _EditorScreenState extends State<EditorScreen> {
             _activeTabIndex = _generatedOutputs.length;
             _finalController.text = result.formattedNote;
             _suggestions = result.missingSuggestions;
+            _showCleanTemplatePicker = false; // ✨ Transition to normal editor
           });
 
           // 5. AUTO-SAVE: Update existing note or create new one
@@ -953,6 +985,10 @@ class _EditorScreenState extends State<EditorScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_showCleanTemplatePicker) {
+      return _buildCleanTemplateScreen(context);
+    }
+    
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
@@ -1374,6 +1410,153 @@ class _EditorScreenState extends State<EditorScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
         ),
+    );
+  }
+
+  // ✨ NEW: Clean Template Selection UI for Mobile
+  Widget _buildCleanTemplateScreen(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Scaffold(
+      // Ensure the background is solid (Theme's background color)
+      backgroundColor: theme.scaffoldBackgroundColor,
+      appBar: AppBar(
+        title: Text(
+          widget.noteNumber > 0 ? 'NO-${widget.noteNumber}' : 'Draft Note',
+          style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                Expanded(
+                  child: Center(
+                    // Slide up & fade in animation
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 300.0, end: 0.0),
+                      duration: const Duration(milliseconds: 800),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, value, child) {
+                        return Transform.translate(
+                          offset: Offset(0, value),
+                          child: Opacity(
+                            opacity: (1.0 - (value / 300.0)).clamp(0.0, 1.0),
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.auto_awesome, size: 48, color: colorScheme.primary.withValues(alpha: 0.8)),
+                            const SizedBox(height: 16),
+                            Text(
+                              "How would you like to format this note?",
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.inter(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: colorScheme.onSurface,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              "Choose a template to get started.",
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.inter(
+                                fontSize: 14,
+                                color: colorScheme.onSurface.withValues(alpha: 0.5),
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+                            // Wrapping the chips in a constrained box to make them look good on mobile
+                            _buildCleanTemplateChips(theme),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            
+            // Overlays
+            if (_isLoading)
+               const Positioned.fill(child: ProcessingOverlay()),
+
+            if (_isProcessing)
+               const Positioned.fill(
+                 child: ProcessingOverlay(
+                   cyclingMessages: [
+                      'Processing Medical Note...',
+                      'Consulting AI Model...',
+                      'Formatting and Structuring...',
+                   ],
+                 ),
+               ),
+
+            if (_isOneShotGenerating)
+               const Positioned.fill(
+                 child: ProcessingOverlay(
+                   cyclingMessages: [
+                      '⚡ Sending Audio to Gemini...',
+                      '⚡ Analyzing Audio & Template...',
+                      '⚡ Generating Medical Note...',
+                      '⚡ Formatting Final Result...',
+                   ],
+                 ),
+               ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCleanTemplateChips(ThemeData theme) {
+    final colorScheme = theme.colorScheme;
+    return SingleChildScrollView(
+      child: Wrap(
+        spacing: 12.0,
+        runSpacing: 12.0,
+        alignment: WrapAlignment.center,
+        children: _macros.map((macro) {
+          return ActionChip(
+            label: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+              child: Text(macro.trigger),
+            ),
+            onPressed: () {
+               // Immediately dismiss template picker before processing
+               setState(() => _showCleanTemplatePicker = false);
+               if (_isOneShotMode) {
+                 _applyOneShotAI(macro);
+               } else {
+                 _applyMacroWithAI(macro);
+               }
+            },
+            backgroundColor: colorScheme.surface,
+            labelStyle: GoogleFonts.inter(
+              fontSize: 15,
+              color: colorScheme.onSurface,
+              fontWeight: FontWeight.w500,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(
+                color: colorScheme.outline.withValues(alpha: 0.3),
+              ),
+            ),
+            elevation: 1,
+          );
+        }).toList(),
+      ),
     );
   }
 }

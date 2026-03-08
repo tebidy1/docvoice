@@ -71,8 +71,11 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
   bool _isGenerating = false;
   bool _isOneShotGenerating = false; // ⚡ One-Shot AI state
   bool _isOneShotMode = false;       // ⚡ True when gemini_oneshot engine is selected
-  bool _isLoading = true; // For audio processing
+  bool _isLoading = false; // Optimistic UI: For audio processing
   bool _isTemplateCardExpanded = true;  // Template card: expanded by default
+  Future<void>? _backgroundTranscriptionFuture; // Optimistic UI: track background STT
+  bool _showCleanTemplatePicker = false; // ✨ For Optimistic Clean UI
+
 
   // ⚡ One-Shot AI service (same as desktop)
   final MultimodalAIService _multimodalService = AIStudioMultimodalService();
@@ -123,6 +126,11 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final prefs = await SharedPreferences.getInstance();
       final sttEngine = prefs.getString('stt_engine_pref') ?? 'groq';
+      // ALSO set _showCleanTemplatePicker = true if we have empty text AND audio!
+      if (widget.draftNote.audioPath != null && widget.draftNote.audioPath!.isNotEmpty && _sourceController.text.trim().isEmpty) {
+          if (mounted) setState(() => _showCleanTemplatePicker = true);
+      }
+      
       if (sttEngine == 'gemini_oneshot') {
         // One-Shot mode: skip transcription, show template card directly
         if (mounted) {
@@ -133,7 +141,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
           });
         }
       } else {
-        _processAudioIfNeeded();
+        _backgroundTranscriptionFuture = _processAudioIfNeeded();
       }
     });
   }
@@ -334,6 +342,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
       _isOneShotGenerating = true;
       _selectedMacro = macro;
       _isTemplateCardExpanded = false;
+      _showCleanTemplatePicker = false; // ✨ Instant feedback
     });
 
     try {
@@ -356,12 +365,14 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
       if (result.success) {
         if (mounted) {
           setState(() {
+            _sourceController.text = result.formattedNote; // ✅ Populate TRANSCRIPT
             _generatedOutputs.add(GeneratedOutput(
                title: macro.trigger,
                content: result.formattedNote,
             ));
             _activeTabIndex = _generatedOutputs.length;
             _finalNoteController.text = result.formattedNote;
+            _showCleanTemplatePicker = false; // ✨ Transition to normal editor
           });
           _saveDraft();
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -424,6 +435,15 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
           _isTemplateCardExpanded = false; // Collapse template
        });
        
+       if (_backgroundTranscriptionFuture != null) {
+          await _backgroundTranscriptionFuture;
+          _backgroundTranscriptionFuture = null;
+          if (!mounted) return;
+          if (_sourceController.text.isEmpty || _sourceController.text.startsWith('Transcription Failed') || _sourceController.text.startsWith('Error')) {
+             setState(() => _isGenerating = false);
+             return;
+          }
+       }
        
        // Animation Timer - Removed, handled by ProcessingOverlay.dart
 
@@ -452,13 +472,14 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                    _showError("AI returned empty result. Please check API Key or try again.");
                }
                if (mounted) {
-                   setState(() { 
+                   setState(() {
                        _generatedOutputs.add(GeneratedOutput(
                           title: macro.trigger,
                           content: finalText,
                        ));
                        _activeTabIndex = _generatedOutputs.length;
-                       _finalNoteController.text = finalText; 
+                       _finalNoteController.text = finalText;
+                       _showCleanTemplatePicker = false; // ✨ Transition to normal editor
                    });
                    _saveDraft();
                }
@@ -504,7 +525,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
 
     setState(() {
       _generatedOutputs.removeAt(index - 1);
-      
+
       // Select the preceding tab
       if (_activeTabIndex == index) {
         _switchTab(index - 1);
@@ -513,7 +534,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
         _activeTabIndex--;
       }
     });
-    
+
     _saveDraft();
   }
 
@@ -525,9 +546,9 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
       } else if (_activeTabIndex > 0 && _activeTabIndex <= _generatedOutputs.length) {
           sourceText = _generatedOutputs[_activeTabIndex - 1].content ?? '';
       }
-      
+
       // Removed placeholders formatting here, handled by ExtensionInjectionService internally
-      
+
       final result = await ExtensionInjectionService.smartCopyAndInject(sourceText);
 
       if (result.status == InjectionStatus.failed) {
@@ -542,7 +563,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
               duration: const Duration(seconds: 2),
           ));
       }
-      
+
       // Update Status
       if (widget.draftNote.id > 0) {
           await _inboxService.updateStatus(widget.draftNote.id, NoteStatus.copied);
@@ -553,7 +574,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
 
   void _handleEditorTap() {
       if (_activeTabIndex == 0) return; // Don't highlight placeholders in raw text
-      
+
       Future.delayed(const Duration(milliseconds: 100), () {
           if (!mounted) return;
           final selection = _finalNoteController.selection;
@@ -583,6 +604,10 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_showCleanTemplatePicker) {
+      return _buildCleanTemplateScreen(context);
+    }
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
@@ -630,7 +655,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                             ],
                           ),
                           const SizedBox(height: 16),
-                          
+
                           // Smart Tabs logic instead of separate accordions
                           const SizedBox(height: 16),
                           if (_isOneShotMode)
@@ -645,7 +670,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                  ),
               ],
             ),
-            
+
             // Overlay for Initial Transcription
             if (_isLoading)
                const Positioned.fill(child: ProcessingOverlay()),
@@ -678,7 +703,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
-  
+
   Widget _buildStatusBadge() {
        // Check if "Ready"
        bool isReady = _finalNoteController.text.isNotEmpty;
@@ -688,9 +713,9 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
        return Container(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
           decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
+              color: color.withOpacity(0.1),
               borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: color.withValues(alpha: 0.3)),
+              border: Border.all(color: color.withOpacity(0.3)),
           ),
           child: Text(text, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
       );
@@ -712,13 +737,13 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: _isTemplateCardExpanded
-              ? headerColor.withValues(alpha: 0.5)
+              ? headerColor.withOpacity(0.5)
               : Theme.of(context).dividerColor,
           width: _isTemplateCardExpanded ? 1.5 : 1.0,
         ),
         boxShadow: _isTemplateCardExpanded ? [
           BoxShadow(
-            color: headerColor.withValues(alpha: 0.08),
+            color: headerColor.withOpacity(0.08),
             blurRadius: 12,
             spreadRadius: 0,
           )
@@ -740,7 +765,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                     child: Icon(
                       _isTemplateCardExpanded ? headerIcon : Icons.extension_outlined,
                       key: ValueKey(_isTemplateCardExpanded),
-                      color: _isTemplateCardExpanded ? headerColor : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.54),
+                      color: _isTemplateCardExpanded ? headerColor : Theme.of(context).colorScheme.onSurface.withOpacity(0.54),
                       size: 18,
                     ),
                   ),
@@ -768,7 +793,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                         ? Icons.keyboard_arrow_up
                         : Icons.keyboard_arrow_down,
                     size: 18,
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38),
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.38),
                   ),
                 ],
               ),
@@ -803,11 +828,11 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                         }
                       },
                       backgroundColor: Theme.of(context).dividerColor,
-                      selectedColor: headerColor.withValues(alpha: 0.2),
+                      selectedColor: headerColor.withOpacity(0.2),
                       checkmarkColor: headerColor,
                       labelStyle: TextStyle(
                         fontSize: 13,
-                        color: isSelected ? headerColor : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                        color: isSelected ? headerColor : Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                         fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                         fontFamily: 'Inter',
                       ),
@@ -858,7 +883,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                       icon: Icons.mic_none,
                       label: "Source",
                     ),
-                    
+
                     // Generated Output Tabs
                     for (int i = 0; i < _generatedOutputs.length; i++)
                       _buildTab(
@@ -870,12 +895,12 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                  ],
                ),
              ),
-             
+
              // --- EDITOR AREA ---
              Container(
                  width: double.infinity,
                  padding: const EdgeInsets.all(16),
-                 child: _isGenerating 
+                 child: _isGenerating
                       ? const SizedBox(height: 60)
                       : _activeTabIndex == 0 ? TextField(
                           controller: _sourceController,
@@ -891,7 +916,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                              isDense: true,
                              contentPadding: const EdgeInsets.only(bottom: 16),
                              hintText: "Original transcript will appear here...",
-                             hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.24)),
+                             hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.24)),
                              fillColor: Colors.transparent,
                              filled: true,
                           ),
@@ -911,7 +936,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                              isDense: true,
                              contentPadding: const EdgeInsets.only(bottom: 16),
                              hintText: "AI generated note will appear here...",
-                             hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.24)),
+                             hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.24)),
                              fillColor: Colors.transparent,
                              filled: true,
                           ),
@@ -930,7 +955,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
   }) {
     final bool isActive = _activeTabIndex == index;
     final colorScheme = Theme.of(context).colorScheme;
-    
+
     return GestureDetector(
       onTap: () => _switchTab(index),
       child: Container(
@@ -951,14 +976,14 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
              Icon(
                icon,
                size: 14,
-               color: isActive ? colorScheme.primary : colorScheme.onSurface.withValues(alpha: 0.5),
+               color: isActive ? colorScheme.primary : colorScheme.onSurface.withOpacity(0.5),
              ),
              const SizedBox(width: 8),
              Text(
                label,
                style: TextStyle(
                  fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                 color: isActive ? colorScheme.onSurface : colorScheme.onSurface.withValues(alpha: 0.5),
+                 color: isActive ? colorScheme.onSurface : colorScheme.onSurface.withOpacity(0.5),
                  fontSize: 12,
                ),
              ),
@@ -967,7 +992,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                InkWell(
                  onTap: onDelete,
                  borderRadius: BorderRadius.circular(12),
-                 child: Icon(Icons.close, size: 14, color: colorScheme.onSurface.withValues(alpha: 0.4)),
+                 child: Icon(Icons.close, size: 14, color: colorScheme.onSurface.withOpacity(0.4)),
                )
              ]
           ],
@@ -976,5 +1001,144 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
     );
   }
 
+  // ✨ NEW: Clean Template Selection UI for Extension
+  Widget _buildCleanTemplateScreen(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final headerColor = Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF4AC2E2)
+        : Theme.of(context).colorScheme.primary;
 
+    return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      appBar: AppBar(
+        title: const Text('New Note', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Inter')),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                Expanded(
+                  child: Center(
+                    // Slide up & fade in animation, updated for dramatic impact
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 300.0, end: 0.0),
+                      duration: const Duration(milliseconds: 800),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, value, child) {
+                        return Transform.translate(
+                          offset: Offset(0, value),
+                          child: Opacity(
+                            opacity: (1.0 - (value / 300.0)).clamp(0.0, 1.0),
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.auto_awesome, size: 48, color: headerColor.withOpacity(0.8)),
+                            const SizedBox(height: 16),
+                            Text(
+                              "How would you like to format this note?",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: colorScheme.onSurface,
+                                fontFamily: 'Inter'
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              "Choose a template to get started.",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: colorScheme.onSurface.withOpacity(0.6),
+                                fontFamily: 'Inter'
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+                            _buildCleanTemplateChips(theme, headerColor),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            // Overlays
+            if (_isGenerating || _isLoading)
+               Positioned.fill(
+                 child: ProcessingOverlay(
+                   cyclingMessages: _statusMessages,
+                 ),
+               ),
+
+            if (_isOneShotGenerating)
+               Positioned.fill(
+                 child: ProcessingOverlay(
+                   cyclingMessages: _oneShotMessages,
+                 ),
+               ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCleanTemplateChips(ThemeData theme, Color headerColor) {
+    final colorScheme = theme.colorScheme;
+    return SingleChildScrollView(
+      child: Wrap(
+        spacing: 12.0,
+        runSpacing: 12.0,
+        alignment: WrapAlignment.center,
+        children: _quickMacros.map((macro) {
+          return ActionChip(
+            label: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+              child: Text(macro.trigger),
+            ),
+            onPressed: () {
+               setState(() => _showCleanTemplatePicker = false); // ✨ Immediate dismiss
+               if (_isOneShotMode) {
+                 _applyOneShotAI(macro);
+               } else {
+                 _applyTemplate(macro);
+               }
+            },
+            backgroundColor: Theme.of(context).dividerColor.withOpacity(0.3),
+            labelStyle: TextStyle(
+              fontSize: 14,
+              color: colorScheme.onSurface,
+              fontWeight: FontWeight.w500,
+              fontFamily: 'Inter',
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(
+                color: Theme.of(context).dividerColor,
+              ),
+            ),
+            elevation: 1,
+          );
+        }).toList(),
+      ),
+    );
+  }
 }

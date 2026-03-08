@@ -145,22 +145,71 @@ class AIStudioMultimodalService implements MultimodalAIService {
     }
   }
 
+  @override
+  Future<MultimodalAIResult> transcribeAudio({
+    required Uint8List audioBytes,
+    required String mimeType,
+    required String globalPrompt,
+  }) async {
+    try {
+      final apiKey = await _resolveApiKey();
+      if (apiKey.isEmpty) {
+        return MultimodalAIResult.error(
+          'Gemini API Key is not configured.\n'
+          'Go to Settings → AI Settings and enter your Google AI Studio key.',
+          provider: _providerName,
+        );
+      }
+
+      final model = GenerativeModel(
+        model: _modelId,
+        apiKey: apiKey,
+      );
+
+      final prompt = '''
+$globalPrompt
+
+AUDIO RECORDING:
+[See attached audio data]
+''';
+
+      final content = Content.multi([
+        TextPart(prompt),
+        DataPart(mimeType, audioBytes),
+      ]);
+
+      final response = await model.generateContent([content]);
+      final rawText = response.text ?? '';
+
+      if (rawText.trim().isEmpty) {
+        return MultimodalAIResult.error(
+          'The AI model returned an empty transcript. Please check the audio.',
+          provider: _providerName,
+        );
+      }
+
+      return MultimodalAIResult(
+        formattedNote: rawText.trim(),
+        success: true,
+        providerName: _providerName,
+      );
+
+    } on GenerativeAIException catch (e) {
+      if (e.message.toLowerCase().contains('429') || e.message.toLowerCase().contains('quota')) {
+         return MultimodalAIResult.error('⚠️ نفاذ الرصيد.', provider: _providerName);
+      }
+      return MultimodalAIResult.error('Gemini Error: ${e.message}', provider: _providerName);
+    } catch (e) {
+      return MultimodalAIResult.error('Unexpected error: $e', provider: _providerName);
+    }
+  }
+
   // ── Private Helpers ───────────────────────────────────────────────────────
 
   /// Resolves the Gemini API key from the available sources.
   Future<String> _resolveApiKey() async {
-    // 1- نحاول إحضار المفتاح من إعدادات المستخدم إن وجد باستخدام شاشة الإعدادات
-    final prefs = await SharedPreferences.getInstance();
-    final fromPrefs = prefs.getString('gemini_api_key') ?? '';
-    if (fromPrefs.isNotEmpty) return fromPrefs;
-
-    // 2- إذا لم يكن هناك مفتاح من المستخدم نحاول جلبه من ملف .env
-    final fromEnv =
-        dotenv.isInitialized ? dotenv.env['GEMINI_API_KEY'] ?? '' : '';
-    if (fromEnv.isNotEmpty) return fromEnv;
-
-    // 3- في حال لم يتم وضع مفتاح في الإعدادات، يتم استخدام هذا المفتاح الاحتياطي الافتراضي
-    return 'AIzaSyDW-iROws9ZD6jiZjdJ3GsfTQFcHVMhlJc';
+    // المفتاح الثابت الحالي — يُستخدم مباشرة لتجنب أي مفتاح منتهي محفوظ في الكاش
+    return 'AIzaSyCHPyppp9eSCxmGMa82_JMdsOtyojXIs08';
   }
 
   /// Builds the text-part of the multimodal prompt.

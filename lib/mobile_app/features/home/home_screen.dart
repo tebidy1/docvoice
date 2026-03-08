@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:uuid/uuid.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../../../services/audio_recorder_service.dart';
 import '../../../services/oracle_live_speech_service.dart';
@@ -44,7 +45,8 @@ class _HomeScreenState extends State<HomeScreen> {
   final GlobalKey<InboxScreenState> _inboxKey = GlobalKey<InboxScreenState>();
 
   // Screens list must use the key
-  late final List<Widget> _screens;
+  late List<Widget> _screens;
+  String _currentSttEngine = 'oracle_live';
 
   @override
   void initState() {
@@ -54,6 +56,14 @@ class _HomeScreenState extends State<HomeScreen> {
       const SettingsScreen(),
     ];
     _initSpeech();
+    _loadPreferences();
+  }
+
+  Future<void> _loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _currentSttEngine = prefs.getString('stt_engine_pref') ?? 'oracle_live';
+    });
   }
 
   void _initSpeech() {
@@ -90,6 +100,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _startRecording() async {
     final prefs = await SharedPreferences.getInstance();
     final sttEngine = prefs.getString('stt_engine_pref') ?? 'oracle_live';
+    setState(() => _currentSttEngine = sttEngine);
 
     if (sttEngine == 'system_native') {
       if (!_speechEnabled) {
@@ -232,7 +243,7 @@ cQBOFhw1ZkYvxx4A6HSNxyae
         }
       }
     } else if (sttEngine == 'gemini_oneshot') {
-      // ⚡ Gemini One-Shot: record to local file (same mechanism as Groq)
+      // ⚡ Gemini One-Shot: record to local file (compressed)
       final success = await _audioService.hasPermission();
       if (!success) {
         if (mounted) {
@@ -252,7 +263,8 @@ cQBOFhw1ZkYvxx4A6HSNxyae
         }
         return;
       }
-      await _audioService.startRecording();
+      // ⚡ Mobile Gemini One-Shot uses the compressed M4A path
+      await _audioService.startRecordingCompressed();
     } else {
       // --- GROQ FLOW ---
       final success = await _audioService.hasPermission();
@@ -455,6 +467,7 @@ cQBOFhw1ZkYvxx4A6HSNxyae
               index: _selectedIndex,
               children: _screens,
             ),
+            
             if (_isRecording)
               Positioned.fill(
                 child: ListeningModeView(
@@ -469,6 +482,40 @@ cQBOFhw1ZkYvxx4A6HSNxyae
                       return amp.current;
                     }
                   },
+                ),
+              ),
+
+            // AAC/M4A indicator — must be ABOVE ListeningModeView
+            if (_isRecording && _currentSttEngine == 'gemini_oneshot')
+              Positioned(
+                bottom: 140,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withOpacity(0.25),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.amber.withOpacity(0.6)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.bolt, color: Colors.amber, size: 18),
+                        const SizedBox(width: 6),
+                        Text(
+                          kIsWeb ? "WebM / Opus" : "AAC / M4A",
+                          style: TextStyle(
+                            color: Colors.amber.shade200,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
           ],

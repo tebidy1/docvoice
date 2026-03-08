@@ -79,6 +79,44 @@ class AudioRecordingService {
     }
   }
 
+  Future<void> startRecordingCompressed() async {
+    _audioRecorder ??= AudioRecorder();
+    try {
+      if (await hasPermission()) {
+        String path = '';
+
+        if (!kIsWeb) {
+          final Directory appDocDir = await getApplicationDocumentsDirectory();
+          final String timestamp =
+              DateTime.now().millisecondsSinceEpoch.toString();
+          path = '${appDocDir.path}/recording_$timestamp.m4a';
+        } else {
+          path = '';
+        }
+        _currentPath = path;
+
+        RecordConfig config;
+        if (kIsWeb) {
+          config = const RecordConfig(encoder: AudioEncoder.opus);
+        } else {
+          config = const RecordConfig(
+            encoder: AudioEncoder.aacLc,
+            sampleRate: 16000,
+            numChannels: 1,
+          );
+        }
+
+        await _audioRecorder!.start(config, path: path);
+        debugPrint("Started compressed recording to: $path (isWeb: $kIsWeb)");
+      } else {
+        throw Exception("Microphone permission denied");
+      }
+    } catch (e) {
+      debugPrint("Error starting compressed recording: $e");
+      rethrow;
+    }
+  }
+
   Future<String?> stopRecording() async {
     try {
       if (_audioRecorder == null) {

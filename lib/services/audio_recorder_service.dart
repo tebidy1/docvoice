@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:record/record.dart';
 
 class AudioRecorderService {
@@ -86,6 +88,26 @@ class AudioRecorderService {
     await _audioRecorder.start(
       const RecordConfig(
         encoder: AudioEncoder.wav,
+        sampleRate: 16000,
+        numChannels: 1,
+      ),
+      path: path,
+    );
+  }
+
+  Future<void> startRecordingCompressed(String path) async {
+    if (!await hasPermission()) {
+      throw Exception("Microphone permission denied");
+    }
+
+    AudioEncoder encoder = AudioEncoder.aacLc;
+    if (!kIsWeb && Platform.isWindows) {
+      encoder = AudioEncoder.flac; // FLAC is the best compression we have on Windows
+    }
+
+    await _audioRecorder.start(
+      RecordConfig(
+        encoder: encoder,
         sampleRate: 16000,
         numChannels: 1,
       ),
