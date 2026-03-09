@@ -39,7 +39,7 @@ class _ListeningModeViewState extends State<ListeningModeView>
   double _peakAmplitude = 0.0;
 
   // Waveform history for the equalizer bars (FIFO buffer)
-  final List<double> _waveHistory = List.filled(9, 0.0);
+  final List<double> _waveHistory = List.filled(9, 0.0, growable: true);
   
   @override
   void initState() {

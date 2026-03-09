@@ -265,33 +265,14 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
         ),
         if (widget.compressionLabel != null)
           Positioned(
-            bottom: 20,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.4),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.bolt, color: Colors.amber, size: 14),
-                    const SizedBox(width: 4),
-                    Text(
-                      widget.compressionLabel!,
-                      style: GoogleFonts.plusJakartaSans(
-                        color: Colors.white.withValues(alpha: 0.9),
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ],
-                ),
+            bottom: 12,
+            left: 12,
+            child: Text(
+              widget.compressionLabel!,
+              style: GoogleFonts.plusJakartaSans(
+                color: Colors.blueGrey.withValues(alpha: 0.6),
+                fontSize: 9,
+                fontWeight: FontWeight.normal,
               ),
             ),
           ),

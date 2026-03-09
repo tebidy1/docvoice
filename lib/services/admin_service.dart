@@ -107,8 +107,18 @@ class AdminService {
     try {
       final response =
           await _apiService.get('/admin/companies/$companyId/settings');
-      if (response['success'] == true) {
-        return response['settings'];
+      
+      if (response['status'] == true || response['success'] == true) {
+        final payload = response['payload'];
+        if (payload != null && payload is Map<String, dynamic>) {
+          if (payload.containsKey('settings')) {
+            return payload['settings'] as Map<String, dynamic>;
+          }
+          return payload;
+        }
+        if (response.containsKey('settings')) {
+          return response['settings'] as Map<String, dynamic>;
+        }
       }
     } catch (e) {
       print('Get company settings admin error: $e');
@@ -120,8 +130,9 @@ class AdminService {
       int companyId, Map<String, dynamic> settings) async {
     try {
       final response = await _apiService
-          .put('/admin/companies/$companyId/settings', body: settings);
-      return response['success'] == true;
+          .patch('/admin/companies/$companyId/settings', body: settings);
+      
+      return response['status'] == true || response['success'] == true;
     } catch (e) {
       print('Update company settings admin error: $e');
       rethrow;

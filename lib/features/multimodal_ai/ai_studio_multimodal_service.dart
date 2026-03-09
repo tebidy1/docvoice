@@ -207,9 +207,21 @@ AUDIO RECORDING:
   // ── Private Helpers ───────────────────────────────────────────────────────
 
   /// Resolves the Gemini API key from the available sources.
+  /// Priority: SharedPreferences (company settings) → .env → empty
   Future<String> _resolveApiKey() async {
-    // المفتاح الثابت الحالي — يُستخدم مباشرة لتجنب أي مفتاح منتهي محفوظ في الكاش
-    return 'AIzaSyCHPyppp9eSCxmGMa82_JMdsOtyojXIs08';
+    final prefs = await SharedPreferences.getInstance();
+    final companyKey = prefs.getString('gemini_api_key');
+    if (companyKey != null && companyKey.isNotEmpty) {
+      return companyKey;
+    }
+    
+    // Fallback to .env
+    final envKey = dotenv.env['GEMINI_API_KEY'];
+    if (envKey != null && envKey.isNotEmpty) {
+      return envKey;
+    }
+    
+    return '';
   }
 
   /// Builds the text-part of the multimodal prompt.

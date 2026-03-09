@@ -85,7 +85,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
 
     if (mounted) {
       setState(() {
-        _sttEnginePref = prefs.getString('stt_engine_pref') ?? 'oracle_live';
+        _sttEnginePref = prefs.getString('stt_engine_pref') ?? 'gemini_oneshot';
         _useOracleWhisperModel = prefs.getBool('oracle_use_whisper_model') ?? true;
       });
     }
@@ -244,23 +244,23 @@ class _SettingsDialogState extends State<SettingsDialog> {
                             const SizedBox(height: 16),
                             _buildSectionHeader("Speech-to-Text Engine", currentTheme),
                             _buildSttItem(
-                              title: "Groq (Cloud - High Accuracy)",
+                              title: "High-Speed Dictation (Cloud)",
                               value: 'groq',
                               theme: currentTheme,
                             ),
                             _buildSttItem(
-                              title: "System Native (Built-in)",
+                              title: "Offline Draft Mode (Built-in)",
                               value: 'native',
                               theme: currentTheme,
                             ),
                             _buildSttItem(
-                              title: "Oracle OCI Live Speech (Cloud)",
+                              title: "Specialized Medical Dictation",
                               value: 'oracle_live',
                               theme: currentTheme,
                             ),
                             _buildSttItem(
-                              title: "⚡ Gemini One-Shot AI",
-                              subtitle: "Audio + Template → Note in one step",
+                              title: "✨ Smart Magic Flow (Recommended)",
+                              subtitle: "Skip transcription! Audio + Template → Final Note in 1 step.",
                               value: 'gemini_oneshot',
                               theme: currentTheme,
                             ),
@@ -276,7 +276,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            _useOracleWhisperModel ? 'Model: Whisper Generic' : 'Model: Oracle Medical',
+                                            _useOracleWhisperModel ? 'Engine: Ultra-Fast General' : 'Engine: Deep Medical Focus',
                                             style: TextStyle(
                                               fontSize: 14,
                                               color: currentTheme.iconColor,
@@ -284,7 +284,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                                             ),
                                           ),
                                           Text(
-                                            _useOracleWhisperModel ? 'modelType=WHISPER domain=GENERIC' : 'modelType=ORACLE domain=MEDICAL',
+                                            _useOracleWhisperModel ? 'Prioritizes speed and general vocabulary' : 'Prioritizes complex clinical terminology',
                                             style: TextStyle(
                                               fontSize: 12,
                                               color: currentTheme.iconColor.withOpacity(0.6),
@@ -315,7 +315,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: Text(
-                                        'Records audio locally, then sends audio + template to Gemini 2.5 Flash in one request. No intermediate transcription step.',
+                                        'Records audio and applies your template in a single, lightning-fast step for ultimate speed and accuracy. No intermediate typing required.',
                                         style: TextStyle(
                                           fontSize: 12,
                                           color: currentTheme.iconColor.withOpacity(0.65),

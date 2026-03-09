@@ -488,33 +488,13 @@ cQBOFhw1ZkYvxx4A6HSNxyae
             // AAC/M4A indicator — must be ABOVE ListeningModeView
             if (_isRecording && _currentSttEngine == 'gemini_oneshot')
               Positioned(
-                bottom: 140,
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.amber.withOpacity(0.25),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.amber.withOpacity(0.6)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.bolt, color: Colors.amber, size: 18),
-                        const SizedBox(width: 6),
-                        Text(
-                          kIsWeb ? "WebM / Opus" : "AAC / M4A",
-                          style: TextStyle(
-                            color: Colors.amber.shade200,
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ],
-                    ),
+                bottom: 80,
+                left: 12,
+                child: Text(
+                  kIsWeb ? "WebM / Opus" : "AAC / M4A",
+                  style: TextStyle(
+                    color: Colors.blueGrey.withOpacity(0.6),
+                    fontSize: 9,
                   ),
                 ),
               ),

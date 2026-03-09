@@ -28,7 +28,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isLoading = false;
   String _statusMessage = "Not Connected";
   Color _statusColor = Colors.grey;
-  String _sttEnginePref = 'groq';
+  String _sttEnginePref = 'gemini_oneshot';
 
   // A/B Testing: Oracle Medical (default) vs Whisper Generic
   bool _useOracleWhisperModel = false; // false = Oracle Medical, true = Whisper Generic
@@ -136,7 +136,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     setState(() {
       _ipController.text = prefs.getString('server_ip') ?? "192.168.1.100";
-      _sttEnginePref = prefs.getString('stt_engine_pref') ?? 'oracle_live';
+      _sttEnginePref = prefs.getString('stt_engine_pref') ?? 'gemini_oneshot';
       _useOracleWhisperModel = prefs.getBool('oracle_use_whisper_model') ?? true;
     });
   }
@@ -479,8 +479,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Column(
                   children: [
                     RadioListTile<String>(
-                      title: const Text("Groq (Cloud - High Accuracy)"),
-                      subtitle: const Text("Requires internet. Best for complex medical terms."),
+                      title: const Text("High-Speed Dictation (Cloud)"),
+                      subtitle: const Text("Lightning-fast processing via cloud servers."),
                       value: 'groq',
                       groupValue: _sttEnginePref,
                       activeColor: AppTheme.accent,
@@ -493,8 +493,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                     ),
                     RadioListTile<String>(
-                      title: const Text("System Native (Built-in)"),
-                      subtitle: const Text("Uses Apple/Google built-in speech engine."),
+                      title: const Text("Offline Draft Mode (Built-in)"),
+                      subtitle: const Text("Basic transcription using device's internal engine."),
                       value: 'native',
                       groupValue: _sttEnginePref,
                       activeColor: AppTheme.accent,
@@ -507,8 +507,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                     ),
                     RadioListTile<String>(
-                      title: const Text("Oracle OCI Live Speech (Cloud)"),
-                      subtitle: const Text("Real-time streaming via Oracle AI (me-riyadh-1). Recommended."),
+                      title: const Text("Specialized Medical Dictation"),
+                      subtitle: const Text("Cloud-based engine trained on complex medical terminology."),
                       value: 'oracle_live',
                       groupValue: _sttEnginePref,
                       activeColor: Colors.orange,
@@ -521,9 +521,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                     ),
                     RadioListTile<String>(
-                      title: const Text("⚡ Gemini One-Shot AI",
+                      title: const Text("✨ Smart Magic Flow (Recommended)",
                           style: TextStyle(color: Colors.amber)),
-                      subtitle: const Text("Audio + Template → Note in one step. No transcription."),
+                      subtitle: const Text("Max speed! Audio maps directly to final formatted note. No intermediate step."),
                       value: 'gemini_oneshot',
                       groupValue: _sttEnginePref,
                       activeColor: Colors.amber,
@@ -551,14 +551,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   children: [
                                     Text(
                                       _useOracleWhisperModel
-                                          ? 'Model: Whisper Generic'
-                                          : 'Model: Oracle Medical',
+                                          ? 'Engine: Ultra-Fast General'
+                                          : 'Engine: Deep Medical Focus',
                                       style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                                     ),
                                     Text(
                                       _useOracleWhisperModel
-                                          ? 'modelType=WHISPER domain=GENERIC'
-                                          : 'modelType=ORACLE domain=MEDICAL',
+                                          ? 'Prioritizes speed and general vocabulary'
+                                          : 'Prioritizes complex clinical terminology',
                                       style: const TextStyle(fontSize: 11, color: Colors.grey),
                                     ),
                                   ],
@@ -589,7 +589,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             const SizedBox(width: 8),
                             const Expanded(
                               child: Text(
-                                'Records audio, then sends it + template directly to Gemini — skips the transcription step entirely. Ideal for fast, high-quality clinical notes.',
+                                'Records audio and applies your template in a single, lightning-fast step for ultimate speed and accuracy. Ideal for fast, high-quality clinical notes.',
                                 style: TextStyle(fontSize: 12, color: Colors.grey, height: 1.4),
                               ),
                             ),

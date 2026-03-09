@@ -102,18 +102,36 @@ class AudioRecorderService {
 
     AudioEncoder encoder = AudioEncoder.aacLc;
     if (!kIsWeb && Platform.isWindows) {
-      encoder = AudioEncoder.flac; // FLAC is the best compression we have on Windows
+      encoder = AudioEncoder.flac; // FLAC is the best compression on Windows
     }
 
-    await _audioRecorder.start(
-      RecordConfig(
-        encoder: encoder,
-        sampleRate: 16000,
-        numChannels: 1,
-      ),
-      path: path,
-    );
+    try {
+      await _audioRecorder.start(
+        RecordConfig(
+          encoder: encoder,
+          sampleRate: 16000,
+          numChannels: 1,
+        ),
+        path: path,
+      );
+      print("✅ Compressed recording started: ${encoder.name} → $path");
+    } catch (e) {
+      // 🛡️ Robust Fallback: if compressed encoder fails, fall back to WAV silently
+      print("⚠️ Compressed encoder '${encoder.name}' failed: $e. Falling back to WAV.");
+      // Adjust path extension to .wav for fallback
+      final wavPath = path.replaceAll(RegExp(r'\.(flac|m4a|aac|opus)$'), '.wav');
+      await _audioRecorder.start(
+        const RecordConfig(
+          encoder: AudioEncoder.wav,
+          sampleRate: 16000,
+          numChannels: 1,
+        ),
+        path: wavPath,
+      );
+      print("✅ WAV fallback recording started → $wavPath");
+    }
   }
+
 
   Future<String?> stop() async {
     await _recordSubscription?.cancel();

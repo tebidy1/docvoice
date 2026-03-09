@@ -172,33 +172,13 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
             // AAC/M4A/WebM indicator — must be ABOVE ListeningModeView
             if (_isRecording && _currentSttEngine == 'gemini_oneshot')
               Positioned(
-                bottom: 120, // Slightly above the FAB in extension
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.amber.withOpacity(0.25),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.amber.withOpacity(0.6)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.bolt, color: Colors.amber, size: 18),
-                        const SizedBox(width: 6),
-                        Text(
-                          "WebM / Opus",
-                          style: TextStyle(
-                            color: Colors.amber.shade200,
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ],
-                    ),
+                bottom: 60,
+                left: 12,
+                child: Text(
+                  "WebM / Opus",
+                  style: TextStyle(
+                    color: Colors.blueGrey.withOpacity(0.6),
+                    fontSize: 9,
                   ),
                 ),
               ),

@@ -153,6 +153,18 @@ class MacroService {
              debugPrint("Failed to add Free Note to Cloud: $e");
            }
         }
+        
+        // Auto-add Classic SOAP to cloud if missing for existing users
+        if (!macros.any((m) => m.trigger == '📝 Classic SOAP')) {
+           debugPrint("MacroService: '📝 Classic SOAP' missing in Cloud. Auto-adding...");
+           try {
+             final classicSoap = _defaultMacros().firstWhere((m) => m.trigger == '📝 Classic SOAP');
+             await addMacro(classicSoap);
+             macros.add(classicSoap);
+           } catch (e) {
+             debugPrint("Failed to add Classic SOAP to Cloud: $e");
+           }
+        }
         // Cache for offline use
         await _cacheLocally(macros);
         await _updateLastSync();
@@ -342,12 +354,21 @@ class MacroService {
         return defaults;
       }
 
-      // Auto-upgrade: make sure the Free Note exists for users who already have the new defaults
+      // Auto-upgrade: make sure Free Note exists for users who already have the new defaults
       if (!macros.any((m) => m.trigger == '✨ Free Note')) {
         debugPrint("MacroService: '✨ Free Note' missing in cache. Auto-upgrading...");
         final defaults = _defaultMacros();
         final freeNoteMacro = defaults.firstWhere((m) => m.trigger == '✨ Free Note');
         macros.add(freeNoteMacro);
+        await _cacheLocally(macros);
+      }
+
+      // Auto-upgrade: make sure Classic SOAP exists
+      if (!macros.any((m) => m.trigger == '📝 Classic SOAP')) {
+        debugPrint("MacroService: '📝 Classic SOAP' missing in cache. Auto-upgrading...");
+        final defaults = _defaultMacros();
+        final classicSoapMacro = defaults.firstWhere((m) => m.trigger == '📝 Classic SOAP');
+        macros.add(classicSoapMacro);
         await _cacheLocally(macros);
       }
       

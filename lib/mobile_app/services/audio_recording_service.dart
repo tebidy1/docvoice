@@ -81,41 +81,58 @@ class AudioRecordingService {
 
   Future<void> startRecordingCompressed() async {
     _audioRecorder ??= AudioRecorder();
-    try {
-      if (await hasPermission()) {
-        String path = '';
+    if (!await hasPermission()) {
+      throw Exception("Microphone permission denied");
+    }
 
-        if (!kIsWeb) {
-          final Directory appDocDir = await getApplicationDocumentsDirectory();
-          final String timestamp =
-              DateTime.now().millisecondsSinceEpoch.toString();
-          path = '${appDocDir.path}/recording_$timestamp.m4a';
-        } else {
-          path = '';
-        }
-        _currentPath = path;
+    String path = '';
 
-        RecordConfig config;
-        if (kIsWeb) {
-          config = const RecordConfig(encoder: AudioEncoder.opus);
-        } else {
-          config = const RecordConfig(
-            encoder: AudioEncoder.aacLc,
+    if (kIsWeb) {
+      // On web, blob mode — path stays empty
+      _currentPath = '';
+      // Try Opus first (best compression), fallback to browser default
+      try {
+        const config = RecordConfig(encoder: AudioEncoder.opus);
+        await _audioRecorder!.start(config, path: '');
+        debugPrint("✅ Web compressed recording started: Opus/WebM");
+      } catch (e) {
+        debugPrint("⚠️ Opus encoder failed on web: $e. Using browser default.");
+        await _audioRecorder!.start(const RecordConfig(), path: '');
+        debugPrint("✅ Web recording started with browser-default encoder");
+      }
+    } else {
+      // Native (Android/iOS): prefer AAC → M4A
+      final Directory appDocDir = await getApplicationDocumentsDirectory();
+      final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+      path = '${appDocDir.path}/recording_$timestamp.m4a';
+      _currentPath = path;
+
+      try {
+        const config = RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          sampleRate: 16000,
+          numChannels: 1,
+        );
+        await _audioRecorder!.start(config, path: path);
+        debugPrint("✅ Native compressed recording started: AAC/M4A → $path");
+      } catch (e) {
+        // 🛡️ Fallback to WAV if AAC is not supported on this device
+        debugPrint("⚠️ AAC encoder failed: $e. Falling back to WAV.");
+        final wavPath = path.replaceAll('.m4a', '.wav');
+        _currentPath = wavPath;
+        await _audioRecorder!.start(
+          const RecordConfig(
+            encoder: AudioEncoder.wav,
             sampleRate: 16000,
             numChannels: 1,
-          );
-        }
-
-        await _audioRecorder!.start(config, path: path);
-        debugPrint("Started compressed recording to: $path (isWeb: $kIsWeb)");
-      } else {
-        throw Exception("Microphone permission denied");
+          ),
+          path: wavPath,
+        );
+        debugPrint("✅ WAV fallback recording started → $wavPath");
       }
-    } catch (e) {
-      debugPrint("Error starting compressed recording: $e");
-      rethrow;
     }
   }
+
 
   Future<String?> stopRecording() async {
     try {

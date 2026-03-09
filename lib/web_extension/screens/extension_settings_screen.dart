@@ -32,7 +32,7 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
   String _statusMessage = "Not Connected";
   Color _statusColor = Colors.grey;
 
-  String _sttEnginePref = 'groq';
+  String _sttEnginePref = 'gemini_oneshot';
   bool _useOracleWhisperModel = false;
 
   Map<String, dynamic>? _currentUser;
@@ -116,7 +116,7 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
     // but we load server IP
     setState(() {
       _ipController.text = prefs.getString('server_ip') ?? "192.168.1.100";
-      _sttEnginePref = prefs.getString('stt_engine_pref') ?? 'oracle_live';
+      _sttEnginePref = prefs.getString('stt_engine_pref') ?? 'gemini_oneshot';
       _useOracleWhisperModel = prefs.getBool('oracle_use_whisper_model') ?? true;
     });
     
@@ -425,8 +425,8 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                 child: Column(
                   children: [
                     RadioListTile<String>(
-                      title: Text("Groq (Cloud - High Accuracy)", style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
-                      subtitle: Text("Requires internet. Best for complex medical terms.", style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.54))),
+                      title: Text("High-Speed Dictation (Cloud)", style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
+                      subtitle: Text("Lightning-fast processing via cloud servers.", style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.54))),
                       value: 'groq',
                       groupValue: _sttEnginePref,
                       activeColor: AppTheme.accent,
@@ -439,8 +439,8 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                       },
                     ),
                     RadioListTile<String>(
-                      title: Text("System Native (Built-in)", style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
-                      subtitle: Text("Uses Apple/Google built-in speech engine.", style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.54))),
+                      title: Text("Offline Draft Mode (Built-in)", style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
+                      subtitle: Text("Basic transcription using device's internal engine.", style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.54))),
                       value: 'native',
                       groupValue: _sttEnginePref,
                       activeColor: AppTheme.accent,
@@ -453,8 +453,8 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                       },
                     ),
                     RadioListTile<String>(
-                      title: Text("Oracle OCI Live Speech (Cloud)", style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
-                      subtitle: Text("Real-time streaming via Oracle AI. Recommended.", style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.54))),
+                      title: Text("Specialized Medical Dictation", style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
+                      subtitle: Text("Cloud-based engine trained on complex medical terminology.", style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.54))),
                       value: 'oracle_live',
                       groupValue: _sttEnginePref,
                       activeColor: Colors.orange,
@@ -467,8 +467,8 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                       },
                     ),
                     RadioListTile<String>(
-                      title: Text("⚡ Gemini One-Shot AI", style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
-                      subtitle: Text("Audio + Template → Note in one step. No transcription.", style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.54))),
+                      title: Text("✨ Smart Magic Flow (Recommended)", style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.9) ?? Colors.amber)),
+                      subtitle: Text("Max speed! Audio maps directly to final formatted note.", style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.54))),
                       value: 'gemini_oneshot',
                       groupValue: _sttEnginePref,
                       activeColor: Colors.amber,
@@ -496,14 +496,14 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                                   children: [
                                     Text(
                                       _useOracleWhisperModel
-                                          ? 'Model: Whisper Generic'
-                                          : 'Model: Oracle Medical',
+                                          ? 'Engine: Ultra-Fast General'
+                                          : 'Engine: Deep Medical Focus',
                                       style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Theme.of(context).textTheme.bodyLarge?.color),
                                     ),
                                     Text(
                                       _useOracleWhisperModel
-                                          ? 'modelType=WHISPER domain=GENERIC'
-                                          : 'modelType=ORACLE domain=MEDICAL',
+                                          ? 'Prioritizes speed and general vocabulary'
+                                          : 'Prioritizes complex clinical terminology',
                                       style: const TextStyle(fontSize: 11, color: Colors.grey),
                                     ),
                                   ],
@@ -534,7 +534,7 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'Records audio, then sends audio + template directly to Gemini 2.5 Flash — no intermediate transcription step. Ideal for fast, high-quality notes.',
+                                'Records audio and applies your template in a single, lightning-fast step for ultimate speed and accuracy. Ideal for fast, high-quality notes.',
                                 style: TextStyle(fontSize: 12, color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.54), height: 1.4),
                               ),
                             ),

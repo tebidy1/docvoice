@@ -429,22 +429,28 @@ class _CompanyCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
+              icon: const Icon(Icons.settings, color: Colors.blueAccent),
+              onPressed: onSettings,
+              tooltip: 'Company Settings',
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              padding: EdgeInsets.zero,
+            ),
+            IconButton(
               icon: Icon(
                 company.isActive ? Icons.pause : Icons.play_arrow,
                 color: company.isActive ? Colors.orange : Colors.green,
               ),
               onPressed: onToggleStatus,
               tooltip: company.isActive ? 'Suspend' : 'Activate',
-            ),
-            IconButton(
-              icon: const Icon(Icons.settings, color: Colors.blueAccent),
-              onPressed: onSettings,
-              tooltip: 'Settings',
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              padding: EdgeInsets.zero,
             ),
             IconButton(
               icon: const Icon(Icons.delete, color: Colors.red),
               onPressed: onDelete,
               tooltip: 'Delete',
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              padding: EdgeInsets.zero,
             ),
           ],
         ),
