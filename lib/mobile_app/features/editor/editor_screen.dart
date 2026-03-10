@@ -28,6 +28,7 @@ import '../../../../services/department_service.dart';
 import '../../../../web_extension/services/extension_injection_service.dart';
 import '../../../../features/multimodal_ai/multimodal_ai_service.dart';
 import '../../../../features/multimodal_ai/ai_studio_multimodal_service.dart';
+import '../../../../features/multimodal_ai/gemini_transcription_helper.dart';
 import '../../../core/ai/ai_prompt_constants.dart';
 
 
@@ -129,6 +130,19 @@ class _EditorScreenState extends State<EditorScreen> {
 
         if (mounted) setState(() => _macros = filteredMacros);
       });
+
+      // ── 2-Step Architecture: Start background transcription ──
+      // Uses the unified GeminiTranscriptionHelper (single source of truth).
+      _backgroundTranscriptionFuture = () async {
+        final transcript = await GeminiTranscriptionHelper().transcribeFromPath(widget.oneShotAudioPath!);
+        if (transcript != null && mounted) {
+          setState(() {
+            _sourceController.text = transcript;
+            _isOneShotMode = false;
+          });
+        }
+      }();
+
       return;
     }
 
@@ -272,8 +286,6 @@ class _EditorScreenState extends State<EditorScreen> {
         if (result.success) {
           setState(() {
             _selectedMacro = macro;
-            // ✅ Populate the TRANSCRIPT tab with the generated text
-            _sourceController.text = result.formattedNote;
             _generatedOutputs.add(GeneratedOutput(title: macro.trigger, content: result.formattedNote));
             _activeTabIndex = _generatedOutputs.length;
             _finalController.text = result.formattedNote;
@@ -537,7 +549,8 @@ class _EditorScreenState extends State<EditorScreen> {
                 final prefs = await SharedPreferences.getInstance();
                 final sttEngine = prefs.getString('stt_engine_pref') ?? 'oracle_live';
                 
-                // ⚡ Skip STT transcription entirely if in Gemini One-Shot mode
+                // ⚡ Gemini One-Shot: Transcribe audio via Gemini (Step 1 of 2-Step Architecture)
+                // Uses the unified GeminiTranscriptionHelper (single source of truth).
                 if (sttEngine == 'gemini_oneshot') {
                   if (mounted) {
                     setState(() {
@@ -546,6 +559,18 @@ class _EditorScreenState extends State<EditorScreen> {
                        _isTemplateCardExpanded = true;
                     });
                   }
+                  
+                  // Use pre-loaded bytes for speed (already fetched above)
+                  final mimeType = GeminiTranscriptionHelper.detectMimeType(path);
+                  final transcript = await GeminiTranscriptionHelper().transcribeFromBytes(bytes!, mimeType: mimeType);
+                  
+                  if (transcript != null && mounted) {
+                    setState(() {
+                      _sourceController.text = transcript;
+                      _isOneShotMode = false;
+                    });
+                  }
+                  if (mounted) setState(() => _isLoading = false);
                   return;
                 }
                 
@@ -682,11 +707,22 @@ class _EditorScreenState extends State<EditorScreen> {
 
     // Optimistic UI: wait for background STT if not finished
     if (_backgroundTranscriptionFuture != null) {
+      if (mounted) {
+        // Show spinning indicator while we wait for the transcript
+        ScaffoldMessenger.of(context).showSnackBar(
+           const SnackBar(content: Text('⏳ Waiting for background transcription to finish...'), duration: Duration(seconds: 1)),
+        );
+      }
       await _backgroundTranscriptionFuture;
       _backgroundTranscriptionFuture = null;
       if (!mounted) return;
       if (_sourceController.text.isEmpty || _sourceController.text.startsWith('❌')) {
         setState(() => _isProcessing = false);
+        if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('⚠️ Cannot apply template: Background transcription failed or returned empty.'), backgroundColor: Colors.red),
+           );
+        }
         return; // Transcription failed, UI already shows error
       }
     }
@@ -1304,11 +1340,7 @@ class _EditorScreenState extends State<EditorScreen> {
                         selected: isSelected,
                         onSelected: (bool selected) {
                           if (selected) {
-                            if (_isOneShotMode) {
-                              _applyOneShotAI(macro);
-                            } else {
-                              _applyMacroWithAI(macro);
-                            }
+                            _applyMacroWithAI(macro);
                           }
                         },
                         backgroundColor: colorScheme.surface,
@@ -1535,11 +1567,7 @@ class _EditorScreenState extends State<EditorScreen> {
             onPressed: () {
                // Immediately dismiss template picker before processing
                setState(() => _showCleanTemplatePicker = false);
-               if (_isOneShotMode) {
-                 _applyOneShotAI(macro);
-               } else {
-                 _applyMacroWithAI(macro);
-               }
+               _applyMacroWithAI(macro);
             },
             backgroundColor: colorScheme.surface,
             labelStyle: GoogleFonts.inter(

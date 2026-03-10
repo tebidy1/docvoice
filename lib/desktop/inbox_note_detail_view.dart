@@ -18,13 +18,12 @@ import '../core/ai/text_processing_service.dart';
 import '../services/ai/ai_processing_service.dart';
 import '../services/windows_injector.dart';
 // ⚡ Multimodal AI — Windows Pilot (Phase 1)
-// To remove: delete this import + _applyOneShotAI() + the One-Shot button below
 import '../features/multimodal_ai/multimodal_ai_service.dart';
 import '../features/multimodal_ai/ai_studio_multimodal_service.dart';
+import '../features/multimodal_ai/gemini_transcription_helper.dart';
 import 'dart:io' show File;
 import '../core/medical_departments.dart';
 import '../services/department_service.dart';
-import '../core/ai/ai_prompt_constants.dart';
 class InboxNoteDetailView extends StatefulWidget {
   final NoteModel note;
   final Macro? autoStartMacro;
@@ -440,52 +439,23 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   Future<void> _proactiveTranscribe(String audioPath) async {
     // OPTIMISTIC UI: We intentionally DO NOT set _isLoadingText to true
     // so the user can immediately select a template while this runs in the background.
+    // Uses the unified GeminiTranscriptionHelper (single source of truth).
 
-    try {
-      final file = File(audioPath);
-      if (!await file.exists()) throw Exception('Audio file not found.');
-      
-      final audioBytes = await file.readAsBytes();
-      final ext = audioPath.split('.').last.toLowerCase();
-      final mimeType = switch (ext) {
-        'm4a'  => 'audio/m4a',
-        'mp4'  => 'audio/mp4',
-        'webm' => 'audio/webm',
-        'ogg'  => 'audio/ogg',
-        _      => 'audio/wav',
-      };
+    final transcript = await GeminiTranscriptionHelper().transcribeFromPath(audioPath);
 
-      final result = await _multimodalService.transcribeAudio(
-        audioBytes: audioBytes,
-        mimeType: mimeType,
-        globalPrompt: AIPromptConstants.goldenTranscriptionPrompt,
-      );
+    if (mounted) {
+      if (transcript != null) {
+        setState(() => _isOneShotMode = false);
 
-      if (mounted) {
-        if (result.success) {
-          final transcript = result.formattedNote;
-          setState(() {
-             // Now that we have real text, disable One-Shot generating mode 
-             // so templates use the standard text-based generator.
-             _isOneShotMode = false;
-          });
-          
-          widget.note.rawText = transcript;
-          widget.note.originalText = transcript;
-          
-          await _inboxService.updateNote(
-            widget.note.id,
-            rawText: transcript,
-          );
-          
-          print("✅ Proactive background transcription complete and saved.");
-        } else {
-          _showError('Transcription failed: ${result.errorMessage}');
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-         _showError('Error processing audio: $e');
+        widget.note.rawText = transcript;
+        widget.note.originalText = transcript;
+
+        await _inboxService.updateNote(
+          widget.note.id,
+          rawText: transcript,
+        );
+      } else {
+        _showError('⚠️ Background transcription failed.');
       }
     }
   }

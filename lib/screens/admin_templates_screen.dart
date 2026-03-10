@@ -29,10 +29,10 @@ class _AdminTemplatesScreenState extends State<AdminTemplatesScreen> {
     setState(() => _isLoading = true);
     try {
       final macros = await _macroService.getMacros();
-      // Deduplicate by trigger to avoid visual duplicates from API cache or legacy items
+      // Deduplicate by unique id/trigger to avoid visual duplicates from API cache
       final seen = <String>{};
       final unique = macros.where((m) {
-        final key = m.trigger;
+        final key = '${m.id}_${m.trigger}';
         return seen.add(key);
       }).toList();
       if (mounted) {

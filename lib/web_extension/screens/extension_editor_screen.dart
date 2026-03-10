@@ -21,6 +21,7 @@ import '../../mobile_app/models/generated_output.dart'; // import GeneratedOutpu
 // ⚡ Gemini One-Shot AI
 import '../../features/multimodal_ai/multimodal_ai_service.dart';
 import '../../features/multimodal_ai/ai_studio_multimodal_service.dart';
+import '../../features/multimodal_ai/gemini_transcription_helper.dart';
 import '../../core/ai/ai_prompt_constants.dart';
 import '../../core/medical_departments.dart';
 import '../../services/department_service.dart';
@@ -136,13 +137,11 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
         if (mounted) {
           setState(() {
             _isOneShotMode = true;
-            _isLoading = false;
             _isTemplateCardExpanded = true;
           });
         }
-      } else {
-        _backgroundTranscriptionFuture = _processAudioIfNeeded();
       }
+      _backgroundTranscriptionFuture = _processAudioIfNeeded();
     });
   }
 
@@ -247,8 +246,16 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
         final localGroqKey = prefs.getString('groq_api_key');
         final sttEngine = prefs.getString('stt_engine_pref') ?? 'oracle_live';
 
-        // gemini_oneshot is handled separately — should not reach here
+        // Gemini One-Shot: Transcribe via unified GeminiTranscriptionHelper
         if (sttEngine == 'gemini_oneshot') {
+          final transcript = await GeminiTranscriptionHelper().transcribeFromBytes(bytes, mimeType: 'audio/webm');
+          if (transcript != null && mounted) {
+            setState(() {
+              _sourceController.text = transcript;
+              _isOneShotMode = false;
+            });
+            _saveDraft();
+          }
           if (mounted) setState(() => _isLoading = false);
           return;
         }
@@ -365,7 +372,6 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
       if (result.success) {
         if (mounted) {
           setState(() {
-            _sourceController.text = result.formattedNote; // ✅ Populate TRANSCRIPT
             _generatedOutputs.add(GeneratedOutput(
                title: macro.trigger,
                content: result.formattedNote,
@@ -436,11 +442,17 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
        });
        
        if (_backgroundTranscriptionFuture != null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+               const SnackBar(content: Text('⏳ Waiting for background transcription to finish...'), duration: Duration(seconds: 1)),
+            );
+          }
           await _backgroundTranscriptionFuture;
           _backgroundTranscriptionFuture = null;
           if (!mounted) return;
           if (_sourceController.text.isEmpty || _sourceController.text.startsWith('Transcription Failed') || _sourceController.text.startsWith('Error')) {
              setState(() => _isGenerating = false);
+             _showError('⚠️ Cannot apply template: Background transcription failed or returned empty.');
              return;
           }
        }
@@ -819,12 +831,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
                       selected: isSelected,
                       onSelected: (bool selected) {
                         if (selected) {
-                          // Route to correct handler based on mode
-                          if (_isOneShotMode) {
-                            _applyOneShotAI(macro);
-                          } else {
-                            _applyTemplate(macro);
-                          }
+                          _applyTemplate(macro);
                         }
                       },
                       backgroundColor: Theme.of(context).dividerColor,
@@ -1116,11 +1123,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
             ),
             onPressed: () {
                setState(() => _showCleanTemplatePicker = false); // ✨ Immediate dismiss
-               if (_isOneShotMode) {
-                 _applyOneShotAI(macro);
-               } else {
-                 _applyTemplate(macro);
-               }
+               _applyTemplate(macro);
             },
             backgroundColor: Theme.of(context).dividerColor.withOpacity(0.3),
             labelStyle: TextStyle(
