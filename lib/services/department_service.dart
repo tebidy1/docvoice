@@ -20,11 +20,11 @@ class DepartmentService extends ValueNotifier<String?> {
     final prefs = await SharedPreferences.getInstance();
     value = prefs.getString(_prefKey);
 
+    // Load departments from API first
+    await MedicalDepartmentService().loadDepartments();
+
     // Sync from server if logged in
     await _syncFromServer();
-
-    // Also load departments from API
-    MedicalDepartmentService().loadDepartments();
   }
 
   Future<void> setDepartment(String? departmentId) async {
@@ -43,16 +43,30 @@ class DepartmentService extends ValueNotifier<String?> {
 
   Future<void> _syncFromServer() async {
     try {
-      // Use the new MedicalDepartmentService
+      // Use the new MedicalDepartmentService to sync from server
       await MedicalDepartmentService().syncUserDepartment();
 
-      final user = await AuthService().getCurrentUser();
-      if (user != null && user.containsKey('department')) {
-        final serverDept = user['department'] as String?;
-        if (serverDept != null && serverDept != value) {
-          value = serverDept;
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString(_prefKey, serverDept);
+      // Get the department ID from MedicalDepartmentService after sync
+      final medicalDeptService = MedicalDepartmentService();
+      final syncedDeptId = medicalDeptService.selectedDepartment?.id;
+      
+      if (syncedDeptId != null) {
+        value = syncedDeptId;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_prefKey, syncedDeptId);
+        return;
+      }
+
+      // Fallback: check local value or AuthService user data
+      if (value == null) {
+        final user = await AuthService().getCurrentUser();
+        if (user != null && user.containsKey('department')) {
+          final serverDept = user['department'] as String?;
+          if (serverDept != null) {
+            value = serverDept;
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString(_prefKey, serverDept);
+          }
         }
       }
     } catch (e) {
