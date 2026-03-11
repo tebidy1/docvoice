@@ -192,7 +192,11 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     } else if (widget.note.formattedText.isNotEmpty && !_isLoadingText) {
       // Legacy compatibility
       final legacyName = widget.note.summary ?? 'Legacy Note';
-      _generatedOutputs.add(GeneratedOutput(title: legacyName, content: widget.note.formattedText));
+      _generatedOutputs.add(GeneratedOutput(
+        title: legacyName, 
+        content: widget.note.formattedText,
+        macroId: widget.note.appliedMacroId,
+      ));
       _activeTabIndex = 1;
       _finalNoteController.text = widget.note.formattedText;
       _isTemplateCardExpanded = false;
@@ -228,7 +232,11 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
                  _isTemplateCardExpanded = false;
              } else if (_generatedOutputs.isEmpty && freshNote.formattedText.isNotEmpty) {
                  final legacyName = freshNote.summary ?? 'Legacy Note';
-                 _generatedOutputs.add(GeneratedOutput(title: legacyName, content: freshNote.formattedText));
+                 _generatedOutputs.add(GeneratedOutput(
+                   title: legacyName, 
+                   content: freshNote.formattedText,
+                   macroId: freshNote.appliedMacroId,
+                 ));
                  _activeTabIndex = 1;
                  _finalNoteController.text = freshNote.formattedText;
                  _isTemplateCardExpanded = false;
@@ -402,7 +410,11 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
       if (result.success) {
         if (enableSuggestions) {
           setState(() {
-            _generatedOutputs.add(GeneratedOutput(title: macro.trigger, content: result.formattedNote));
+            _generatedOutputs.add(GeneratedOutput(
+              macroId: macro.id,
+              title: macro.trigger, 
+              content: result.formattedNote
+            ));
             _activeTabIndex = _generatedOutputs.length;
             _finalNoteController.text = result.formattedNote;
             _suggestions = result.missingSuggestions
@@ -413,7 +425,11 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
           _autoSaveGeneratedContent(result.formattedNote, macro);
         } else {
           setState(() {
-            _generatedOutputs.add(GeneratedOutput(title: macro.trigger, content: result.formattedNote));
+            _generatedOutputs.add(GeneratedOutput(
+              macroId: macro.id,
+              title: macro.trigger, 
+              content: result.formattedNote
+            ));
             _activeTabIndex = _generatedOutputs.length;
             _finalNoteController.text = result.formattedNote;
             _suggestions = [];
@@ -537,7 +553,11 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
       if (result.success) {
         if (mounted) {
           setState(() {
-            _generatedOutputs.add(GeneratedOutput(title: macro.trigger, content: result.formattedNote));
+            _generatedOutputs.add(GeneratedOutput(
+              macroId: macro.id,
+              title: macro.trigger, 
+              content: result.formattedNote
+            ));
             _activeTabIndex = _generatedOutputs.length;
             _finalNoteController.text = result.formattedNote;
             _suggestions = []; // One-Shot mode has no separate suggestions

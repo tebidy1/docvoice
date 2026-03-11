@@ -194,7 +194,11 @@ class _EditorScreenState extends State<EditorScreen> {
     } else if (widget.draftNote != null && widget.draftNote!.formattedText.isNotEmpty) {
       // Legacy compatibility: migrate formattedText to a generated output
       final legacyTemplateName = widget.draftNote!.summary ?? 'Legacy Note';
-      _generatedOutputs.add(GeneratedOutput(title: legacyTemplateName, content: widget.draftNote!.formattedText));
+      _generatedOutputs.add(GeneratedOutput(
+        title: legacyTemplateName, 
+        content: widget.draftNote!.formattedText,
+        macroId: widget.draftNote!.appliedMacroId,
+      ));
       _activeTabIndex = 1;
       _finalController.text = widget.draftNote!.formattedText;
       _isTemplateCardExpanded = false;
@@ -286,7 +290,11 @@ class _EditorScreenState extends State<EditorScreen> {
         if (result.success) {
           setState(() {
             _selectedMacro = macro;
-            _generatedOutputs.add(GeneratedOutput(title: macro.trigger, content: result.formattedNote));
+            _generatedOutputs.add(GeneratedOutput(
+              macroId: macro.id,
+              title: macro.trigger, 
+              content: result.formattedNote
+            ));
             _activeTabIndex = _generatedOutputs.length;
             _finalController.text = result.formattedNote;
             _isTemplateCardExpanded = false;
@@ -779,7 +787,11 @@ class _EditorScreenState extends State<EditorScreen> {
       if (result.success) {
         if (mounted) {
           setState(() {
-            _generatedOutputs.add(GeneratedOutput(title: macro.trigger, content: result.formattedNote));
+            _generatedOutputs.add(GeneratedOutput(
+              macroId: macro.id,
+              title: macro.trigger, 
+              content: result.formattedNote
+            ));
             _activeTabIndex = _generatedOutputs.length;
             _finalController.text = result.formattedNote;
             _suggestions = result.missingSuggestions;

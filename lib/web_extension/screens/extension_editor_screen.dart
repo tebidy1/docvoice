@@ -112,7 +112,8 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
       _generatedOutputs.add(
         GeneratedOutput(
             title: widget.draftNote.summary ?? 'AI Note',
-            content: widget.draftNote.formattedText)
+            content: widget.draftNote.formattedText,
+            macroId: widget.draftNote.appliedMacroId)
       );
       _activeTabIndex = 1;
       _finalNoteController.text = widget.draftNote.formattedText;
@@ -373,6 +374,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
         if (mounted) {
           setState(() {
             _generatedOutputs.add(GeneratedOutput(
+               macroId: macro.id,
                title: macro.trigger,
                content: result.formattedNote,
             ));
