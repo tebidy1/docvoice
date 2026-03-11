@@ -5,6 +5,12 @@ class GeneratedOutput {
   String? content;
   int orderIndex = 0; // Order of the output
   
+  // Nested macro object from API (read-only)
+  Map<String, dynamic>? macro;
+  DateTime? createdAt;
+  DateTime? updatedAt;
+  int? inboxNoteId;
+  
   // Custom constructor
   GeneratedOutput({
     this.id,
@@ -12,6 +18,10 @@ class GeneratedOutput {
     this.title,
     this.content,
     this.orderIndex = 0,
+    this.macro,
+    this.createdAt,
+    this.updatedAt,
+    this.inboxNoteId,
   });
   
   // Convert from JSON (API response)
@@ -22,6 +32,10 @@ class GeneratedOutput {
       title: json['title'] as String?,
       content: json['content'] as String?,
       orderIndex: json['order_index'] is int ? json['order_index'] : int.tryParse(json['order_index']?.toString() ?? '0') ?? 0,
+      macro: json['macro'] != null ? Map<String, dynamic>.from(json['macro']) : null,
+      createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at']) : null,
+      updatedAt: json['updated_at'] != null ? DateTime.tryParse(json['updated_at']) : null,
+      inboxNoteId: json['inbox_note_id'] is int ? json['inbox_note_id'] : int.tryParse(json['inbox_note_id']?.toString() ?? ''),
     );
   }
   
