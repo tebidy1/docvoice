@@ -97,6 +97,15 @@ class NoteModelBase {
       }
     }
 
+    // Also check for 'outputs' field (alternative naming from backend)
+    if (json['outputs'] != null && note.generatedOutputs.isEmpty) {
+      if (json['outputs'] is List) {
+        note.generatedOutputs = (json['outputs'] as List)
+            .map((e) => GeneratedOutput.fromJson(Map<String, dynamic>.from(e)))
+            .toList();
+      }
+    }
+
     return note;
   }
 
