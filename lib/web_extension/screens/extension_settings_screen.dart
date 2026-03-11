@@ -15,6 +15,7 @@ import '../../mobile_app/services/macro_service.dart';
 import '../../mobile_app/services/websocket_service.dart';
 import '../../core/medical_departments.dart';
 import '../../services/department_service.dart';
+import '../../services/medical_department_service.dart';
 import '../../models/app_theme.dart' as global_theme;
 import '../../services/theme_service.dart';
 
@@ -617,6 +618,9 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
 
   void _showDepartmentPicker() {
     String searchQuery = '';
+    
+    // Ensure departments are loaded from API
+    MedicalDepartmentService().loadDepartments();
     
     showModalBottomSheet(
       context: context,

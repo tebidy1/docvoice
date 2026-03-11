@@ -15,6 +15,7 @@ import 'admin_dashboard_screen.dart';
 import 'company_settings_dialog.dart';
 import '../core/medical_departments.dart';
 import '../services/department_service.dart';
+import '../services/medical_department_service.dart';
 
 class SettingsDialog extends StatefulWidget {
   const SettingsDialog({super.key});
@@ -601,6 +602,9 @@ class _SettingsDialogState extends State<SettingsDialog> {
 
   void _showDepartmentPicker(AppTheme theme) {
     String searchQuery = '';
+    
+    // Ensure departments are loaded from API
+    MedicalDepartmentService().loadDepartments();
     
     showDialog(
       context: context,

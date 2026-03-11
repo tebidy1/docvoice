@@ -14,6 +14,7 @@ import 'company_settings_screen.dart';
 import 'macro_manager_screen.dart';
 import '../../../core/medical_departments.dart';
 import '../../../services/department_service.dart';
+import '../../../services/medical_department_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -665,6 +666,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _showDepartmentPicker() {
     String searchQuery = '';
+    
+    // Ensure departments are loaded from API
+    MedicalDepartmentService().loadDepartments();
     
     showModalBottomSheet(
       context: context,
