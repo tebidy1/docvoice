@@ -1,9 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'auth_service.dart';
+import 'api_service.dart';
 
 /// A medical department / specialty that users can select in their settings.
 /// This is fetched from the API only.
@@ -138,34 +137,16 @@ class MedicalDepartmentService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Try to fetch from API
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('auth_token');
-      final serverIp = prefs.getString('server_ip') ?? '127.0.0.1:8000';
+      final apiService = ApiService();
+      final response = await apiService.get('/medical-departments');
 
-      if (token != null && token.isNotEmpty) {
-        final url = Uri.parse('http://$serverIp/api/medical-departments');
-        final response = await http.get(
-          url,
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $token',
-            'Accept': 'application/json',
-            'Accept-Language': locale,
-          },
-        );
-
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          if (data['status'] == true && data['payload'] != null) {
-            _departments = (data['payload'] as List)
-                .map((e) => MedicalDepartment.fromJson(e))
-                .toList();
-            _isLoading = false;
-            notifyListeners();
-            return;
-          }
-        }
+      if (response['status'] == true && response['payload'] != null) {
+        _departments = (response['payload'] as List)
+            .map((e) => MedicalDepartment.fromJson(e))
+            .toList();
+        _isLoading = false;
+        notifyListeners();
+        return;
       }
     } catch (e) {
       debugPrint('Error loading departments from API: $e');
@@ -197,29 +178,13 @@ class MedicalDepartmentService extends ChangeNotifier {
   /// Sync user's department from server
   Future<void> syncUserDepartment() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('auth_token');
-      final serverIp = prefs.getString('server_ip') ?? '127.0.0.1:8000';
+      final apiService = ApiService();
+      final response = await apiService.get('/medical-departments/user/me');
 
-      if (token == null || token.isEmpty) return;
-
-      final url = Uri.parse('http://$serverIp/api/medical-departments/user/me');
-      final response = await http.get(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-          'Accept': 'application/json',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['status'] == true && data['payload'] != null) {
-          _userDepartmentId = data['payload']['id'] as String?;
-          _selectedDepartment = getById(_userDepartmentId);
-          notifyListeners();
-        }
+      if (response['status'] == true && response['payload'] != null) {
+        _userDepartmentId = response['payload']['id'] as String?;
+        _selectedDepartment = getById(_userDepartmentId);
+        notifyListeners();
       }
     } catch (e) {
       debugPrint('Error syncing user department: $e');
@@ -230,24 +195,14 @@ class MedicalDepartmentService extends ChangeNotifier {
   Future<bool> updateUserDepartment(String departmentId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('auth_token');
-      final serverIp = prefs.getString('server_ip') ?? '127.0.0.1:8000';
+      final apiService = ApiService();
 
-      if (token == null || token.isEmpty) return false;
-
-      final url =
-          Uri.parse('http://$serverIp/api/medical-departments/user/me');
-      final response = await http.put(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-          'Accept': 'application/json',
-        },
-        body: jsonEncode({'department_id': departmentId}),
+      final response = await apiService.put(
+        '/medical-departments/user/me',
+        body: {'department_id': departmentId},
       );
 
-      if (response.statusCode == 200) {
+      if (response['status'] == true) {
         _userDepartmentId = departmentId;
         _selectedDepartment = getById(departmentId);
 
