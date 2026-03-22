@@ -1,0 +1,102 @@
+hypertension
+hypotension
+tachycardia
+bradycardia
+arrhythmia
+atrial fibrillation
+myocardial infarction
+angina pectoris
+congestive heart failure
+diabetes mellitus
+hypoglycemia
+hyperglycemia
+hypothyroidism
+hyperthyroidism
+pneumonia
+bronchitis
+asthma
+COPD
+pulmonary embolism
+deep vein thrombosis
+cerebrovascular accident
+transient ischemic attack
+epilepsy
+migraine
+gastroesophageal reflux
+peptic ulcer
+cholecystitis
+appendicitis
+pancreatitis
+hepatitis
+cirrhosis
+anemia
+leukemia
+lymphoma
+thrombocytopenia
+sepsis
+meningitis
+cellulitis
+urinary tract infection
+pyelonephritis
+chronic kidney disease
+nephropathy
+retinopathy
+neuropathy
+osteoporosis
+rheumatoid arthritis
+systemic lupus erythematosus
+paracetamol
+acetaminophen
+ibuprofen
+aspirin
+metformin
+insulin
+lisinopril
+amlodipine
+atorvastatin
+omeprazole
+pantoprazole
+amoxicillin
+azithromycin
+ciprofloxacin
+ceftriaxone
+metronidazole
+prednisone
+dexamethasone
+warfarin
+heparin
+enoxaparin
+furosemide
+hydrochlorothiazide
+metoprolol
+losartan
+clopidogrel
+salbutamol
+ipratropium
+montelukast
+levothyroxine
+gabapentin
+tramadol
+morphine
+diazepam
+sertraline
+fluoxetine
+risperidone
+haloperidol
+ondansetron
+ranitidine
+lactulose
+potassium chloride
+calcium carbonate
+ferrous sulfate
+vitamin D
+folic acid
+erythropoietin
+albumin
+normal saline
+lactated ringer
+blood pressure
+heart rate
+respiratory rate
+oxygen saturation
+temperature

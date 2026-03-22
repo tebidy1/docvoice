@@ -90,10 +90,10 @@ class ConnectivityServer {
                 final InboxService inbox = InboxService();
 
                 // Add as generic note
-                final newId = await inbox.addNote(jsonStr);
+                final newNote = await inbox.addNote(jsonStr);
 
                 // Mark as Processed (Ready)
-                await inbox.updateStatus(newId, NoteStatus.processed);
+                await inbox.updateStatus(newNote.id, NoteStatus.processed);
 
                 _statusController.add("Saved from Mobile (Ready)");
                 webSocket.sink.add("SAVED_ACK");
@@ -158,43 +158,15 @@ class ConnectivityServer {
         throw Exception("Transcription result is empty");
       }
 
-      // 2. Detect Macro (Still local for now, but we can move to backend if needed)
-      final macroExpansion = await _macroService.findExpansion(rawText);
-      if (macroExpansion != null) {
-        _statusController.add("Macro Detected! Formatting...");
-      } else {
-        _statusController.add("Formatting (Gemini)...");
-      }
-
-      // 3. Process via Backend (Gemini)
-      final processingResult = await _apiService.post('/audio/process', body: {
-        'transcript': rawText,
-        'macro_context': macroExpansion,
-        'mode': 'fast', // or 'smart'
-      });
-
-      final formattedText = processingResult['payload']['text'] ?? rawText;
-      _statusController.add("Saving...");
-
       // Broadcast to Desktop UI
-      _textStreamController.add(formattedText);
-      
-      // Auto-save to InboxService
-      try {
-          final inbox = InboxService();
-          await inbox.addNote(formattedText, patientName: "Untitled", summary: "Audio Note");
-          print("✅ Automatically saved note to inbox");
-      } catch (saveError) {
-          print("❌ Failed to auto-save to inbox: $saveError");
-      }
-
+      _textStreamController.add(rawText);
       _statusController.add("Ready");
 
       // 🚀 SEND TO MOBILE CLIENT
       if (client != null) {
-         client.sink.add("TRANSCRIPT:$formattedText");
+         client.sink.add("TRANSCRIPT:$rawText");
       } else {
-         for (var c in _clients) c.sink.add("TRANSCRIPT:$formattedText");
+         for (var c in _clients) c.sink.add("TRANSCRIPT:$rawText");
       }
 
       // Clear buffer
@@ -203,6 +175,7 @@ class ConnectivityServer {
       print("Error processing WAV: $e");
       _statusController.add("Error: $e");
       client?.sink.add("ERROR:$e");
+      rethrow; // Pass error up to caller so UI handles it
     }
   }
 
@@ -248,28 +221,12 @@ class ConnectivityServer {
       final rawText = transcriptionResult['payload']['text'] ?? "";
       print("Backend Transcribed Text: $rawText");
 
-      // 2. Detect Macro
-      final macroExpansion = await _macroService.findExpansion(rawText);
-      if (macroExpansion != null) {
-        _statusController.add("Macro Detected! Formatting...");
-      } else {
-        _statusController.add("Formatting (Gemini)...");
-      }
-
-      // 3. Process via Backend
-      final processingResult = await _apiService.post('/audio/process', body: {
-        'transcript': rawText,
-        'macro_context': macroExpansion,
-      });
-
-      final formattedText = processingResult['payload']['text'] ?? rawText;
-      
       // Broadcast to Desktop UI
-      _textStreamController.add(formattedText);
+      _textStreamController.add(rawText);
       _statusController.add("Ready");
 
       // 🚀 SEND TO MOBILE CLIENT
-      client.sink.add("TRANSCRIPT:$formattedText");
+      client.sink.add("TRANSCRIPT:$rawText");
 
       // Clear buffer
       _audioBuffer.clear();

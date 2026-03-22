@@ -12,7 +12,7 @@ class HighlightLine extends StatelessWidget {
     final textStyle = Theme.of(context).textTheme.headlineMedium!.copyWith(
       color: Colors.white,
       fontWeight: FontWeight.bold,
-      fontSize: 28, // Distinctive highlight size
+      fontSize: MediaQuery.of(context).size.width < 600 ? 20 : 28, // Scaled for mobile
     );
 
     return Wrap( // Wrap to be safe on small screens

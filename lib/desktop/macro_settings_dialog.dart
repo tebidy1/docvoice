@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:window_manager/window_manager.dart';
 
 import 'qr_connect_dialog.dart';
 import 'gemini_test_dialog.dart';
+import '../../core/medical_departments.dart';
 
 class MacroSettingsDialog extends StatefulWidget {
   const MacroSettingsDialog({super.key});
@@ -18,16 +20,7 @@ class _MacroSettingsDialogState extends State<MacroSettingsDialog> {
   bool _enableAiMacros = false;
   bool _enableSmartSuggestions = true; // Default: enabled
 
-  final List<String> _specialties = [
-    "General Practice",
-    "Cardiology",
-    "Dermatology",
-    "Pediatrics",
-    "Psychiatry",
-    "Emergency Medicine",
-    "Surgery",
-    "Internal Medicine",
-  ];
+  // _specialties replaced by MedicalDepartments.departments
 
   @override
   void initState() {
@@ -38,7 +31,7 @@ class _MacroSettingsDialogState extends State<MacroSettingsDialog> {
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _specialty = prefs.getString('medical_specialty') ?? "General Practice";
+      _specialty = prefs.getString('specialty') ?? prefs.getString('medical_specialty') ?? "General Practice";
       _promptController.text = prefs.getString('global_ai_prompt') ?? 
           """You are an expert AI Medical Scribe.
 1. Extract all clinical info from transcript.
@@ -55,7 +48,8 @@ class _MacroSettingsDialogState extends State<MacroSettingsDialog> {
   Future<void> _saveSettings() async {
     setState(() => _isLoading = true);
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('medical_specialty', _specialty);
+    await prefs.setString('specialty', _specialty); // Unified key
+    await prefs.setString('medical_specialty', _specialty); // Legacy backup
     await prefs.setString('global_ai_prompt', _promptController.text);
     await prefs.setBool('enable_ai_macros', _enableAiMacros);
     await prefs.setBool('enable_smart_suggestions', _enableSmartSuggestions);
@@ -72,12 +66,22 @@ class _MacroSettingsDialogState extends State<MacroSettingsDialog> {
     return AlertDialog(
       backgroundColor: const Color(0xFF2A2A2A),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-      title: const Row(
-        children: [
-          Icon(Icons.settings, color: Colors.white70),
-          SizedBox(width: 10),
-          Text("Macro Settings", style: TextStyle(color: Colors.white)),
-        ],
+      title: GestureDetector(
+        onPanStart: (details) {
+          try {
+            windowManager.startDragging();
+          } catch (_) {}
+        },
+        child: Container(
+          color: Colors.transparent,
+          child: const Row(
+            children: [
+              Icon(Icons.settings, color: Colors.white70),
+              SizedBox(width: 10),
+              Text("Macro Settings", style: TextStyle(color: Colors.white)),
+            ],
+          ),
+        ),
       ),
       content: _isLoading
           ? const SizedBox(height: 100, child: Center(child: CircularProgressIndicator(color: Colors.amber)))
@@ -142,10 +146,10 @@ class _MacroSettingsDialogState extends State<MacroSettingsDialog> {
                         isExpanded: true,
                         dropdownColor: const Color(0xFF333333),
                         style: const TextStyle(color: Colors.white),
-                        items: _specialties.map((String value) {
+                        items: MedicalDepartments.all.map((dept) {
                           return DropdownMenuItem<String>(
-                            value: value,
-                            child: Text(value),
+                            value: dept.nameEn,
+                            child: Text(dept.nameEn),
                           );
                         }).toList(),
                         onChanged: (newValue) {

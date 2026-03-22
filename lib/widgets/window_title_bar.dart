@@ -22,7 +22,7 @@ class WindowTitleBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bgColor = backgroundColor ?? const Color(0xFF1E293B).withOpacity(0.8);
+    final bgColor = backgroundColor ?? const Color(0xFF1E293B).withValues(alpha: 0.8);
     final txtColor = textColor ?? Colors.grey[400]!;
     final barHeight = height ?? 32.0;
 
@@ -36,7 +36,7 @@ class WindowTitleBar extends StatelessWidget {
           color: bgColor,
           border: Border(
             bottom: BorderSide(
-              color: Colors.white.withOpacity(0.1),
+              color: Colors.white.withValues(alpha: 0.1),
               width: 1,
             ),
           ),

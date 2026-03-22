@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/api_service.dart';
+import '../../core/ai/ai_prompt_constants.dart';
 
 class MacroModel {
   // ID can be String (local) or int (API) - we'll manage both
@@ -107,6 +108,51 @@ class MacroService {
         
         final macros = data.map((json) => MacroModel.fromApi(json)).toList();
         
+        // --- NEW CLOUD AUTO-MIGRATION LOGIC ---
+        // The backend might still have the old hardcoded legacy macros.
+        // If we detect them, we need to wipe them from the user's account and re-seed the new AI ones.
+        final legacyTriggers = [
+          '📝 SOAP Note', '🤒 Sick Leave', '📄 Medical Report', 
+          '🏥 Referral', '☢️ Radiology Req', '🩸 Diabetic Follow-up', 
+          '🧠 Neuro Exam', '🦴 Joint Exam'
+        ];
+
+        final hasLegacy = macros.any((m) => legacyTriggers.contains(m.trigger) && !m.isAiMacro);
+        
+        if (hasLegacy) {
+          debugPrint("MacroService: Detected legacy macros in Cloud. Auto-migrating backend...");
+          
+          for (var m in macros) {
+            if (legacyTriggers.contains(m.trigger) && !m.isAiMacro) {
+               if (m.id != null) {
+                  try {
+                    await _apiService.delete('/macros/${m.id}');
+                  } catch (e) {
+                    debugPrint("Failed to delete legacy macro ${m.id}: $e");
+                  }
+               }
+            }
+          }
+          
+          // Seed the new unified AI defaults
+          await seedDefaultMacrosToCloud();
+          
+          // Re-fetch clean macros from the backend
+          return await getMacros();
+        }
+        // --- END AUTO-MIGRATION LOGIC ---
+        
+        // Auto-add Free Note to cloud if missing for existing users
+        if (!macros.any((m) => m.trigger == '✨ Free Note')) {
+           debugPrint("MacroService: '✨ Free Note' missing in Cloud. Auto-adding...");
+           try {
+             final freeNote = _defaultMacros().firstWhere((m) => m.trigger == '✨ Free Note');
+             await addMacro(freeNote);
+             macros.add(freeNote);
+           } catch (e) {
+             debugPrint("Failed to add Free Note to Cloud: $e");
+           }
+        }
         // Cache for offline use
         await _cacheLocally(macros);
         await _updateLastSync();
@@ -286,7 +332,26 @@ class MacroService {
     
     try {
       final List<dynamic> decoded = jsonDecode(data);
-      return decoded.map((e) => MacroModel.fromJson(e)).toList();
+      final macros = decoded.map((e) => MacroModel.fromJson(e)).toList();
+      
+      // Auto-upgrade legacy cache: if we detect the old hardcoded "📝 SOAP Note", replace with new AI Brain defaults.
+      if (macros.any((m) => m.trigger == '📝 SOAP Note' && !m.isAiMacro)) {
+        debugPrint("MacroService: Detected legacy macros in cache. Auto-upgrading to AI Brain defaults.");
+        final defaults = _defaultMacros();
+        await _cacheLocally(defaults);
+        return defaults;
+      }
+
+      // Auto-upgrade: make sure the Free Note exists for users who already have the new defaults
+      if (!macros.any((m) => m.trigger == '✨ Free Note')) {
+        debugPrint("MacroService: '✨ Free Note' missing in cache. Auto-upgrading...");
+        final defaults = _defaultMacros();
+        final freeNoteMacro = defaults.firstWhere((m) => m.trigger == '✨ Free Note');
+        macros.add(freeNoteMacro);
+        await _cacheLocally(macros);
+      }
+      
+      return macros;
     } catch (e) {
       return _defaultMacros();
     }
@@ -311,244 +376,51 @@ class MacroService {
     return [
       MacroModel(
         id: '1',
-        trigger: '📝 SOAP Note',
+        trigger: '📝 Classic SOAP',
         category: 'General',
         isFavorite: true,
-        content: '''
-SOAP NOTE
-
-SUBJECTIVE:
-• Chief Complaint: [Complaint]
-• HPI: [History of Present Illness]
-• ROS: [Relevant Systems / Negatives]
-
-OBJECTIVE:
-• Vitals: BP: [Value / mmHg] | HR: [Value / bpm] | Temp: [Value / °C]
-• General Appearance: [Description]
-• Systemic Exam: [Key Findings]
-
-ASSESSMENT:
-• Primary Diagnosis: [Dx]
-• Differential: [DDx]
-
-PLAN:
-• Pharmacotherapy: [Medication Name] [Dose] [Freq] [Duration]
-• Investigations: [Labs / Imaging]
-• Follow-up: [Timeframe]
-
-"Patient educated regarding diagnosis, plan, and red flags for ER return."
-''',
+        content: AIPromptConstants.templateClassicSoap,
+        isAiMacro: true,
       ),
       MacroModel(
         id: '2',
-        trigger: '🤒 Sick Leave',
-        category: 'Admin',
+        trigger: '🚨 ER SOAP',
+        category: 'Emergency',
         isFavorite: true,
-        content: '''
-SICK LEAVE RECOMMENDATION
-
-To: Employer / School Administrators
-
-CLINICAL STATUS:
-• Diagnosis: [Condition]
-
-RECOMMENDATION:
-"Based on the medical examination performed today, the above-named patient is found to be unfit for work/school."
-
-• Duration: [Number] Days
-• Starting From: [Start Date]
-• Ending On: [End Date]
-
-TREATING PHYSICIAN:
-[Dr. Name]
-[S.C.F.H.S License Number]
-''',
+        content: AIPromptConstants.templateErSoap,
+        isAiMacro: true,
       ),
       MacroModel(
         id: '3',
-        trigger: '📄 Medical Report',
-        category: 'Reports',
-        content: '''
-MEDICAL REPORT
-Date: [Date]
-
-TO WHOM IT MAY CONCERN,
-
-HISTORY & COURSE:
-[Detailed Clinical History and Progression]
-
-CLINICAL FINDINGS:
-[Examination Findings]
-
-INVESTIGATIONS:
-[Significant Lab/Radiology Results]
-
-FINAL DIAGNOSIS:
-[Diagnosis]
-
-PLAN & RECOMMENDATIONS:
-[Current Management Plan]
-
-"This report is issued upon the request of the patient for administrative purposes."
-''',
+        trigger: '📞 SBAR Consult',
+        category: 'Referral',
+        isFavorite: false,
+        content: AIPromptConstants.templateSbar,
+        isAiMacro: true,
       ),
       MacroModel(
         id: '4',
-        trigger: '🏥 Referral',
-        category: 'Referral',
-        content: '''
-REFERRAL LETTER
-
-TO: [Specialty Department]
-AT: [Receiving Hospital Name]
-
-FROM: [Referring Doctor Name]
-DATE: [Date]
-
-
-REASON FOR REFERRAL:
-[Specific Clinical Question or Service Needed]
-
-CLINICAL SUMMARY:
-[Brief History of Present Illness]
-[Relevant Past Medical History]
-
-CURRENT MEDICATIONS:
-[List]
-
-PENDING RESULTS:
-[Outstanding Labs/Images]
-
-"Thank you for accepting this patient for further management."
-''',
+        trigger: '📄 ER Discharge',
+        category: 'Emergency',
+        isFavorite: false,
+        content: AIPromptConstants.templateDischarge,
+        isAiMacro: true,
       ),
       MacroModel(
         id: '5',
-        trigger: '☢️ Radiology Req',
-        category: 'Orders',
-        content: '''
-RADIOLOGY REQUEST
-Priority: [Routine / Urgent]
-
-
-STUDY REQUESTED:
-[Modality: X-Ray/CT/MRI] of [Body Part]
-[Side: Left / Right / Bilateral]
-
-CLINICAL INDICATION:
-[Symptoms / Rule Out Diagnosis]
-
-SPECIFIC QUERY TO RADIOLOGIST:
-[What exactly are we looking for?]
-
-SAFETY CHECKLIST:
-• Pregnancy Status: [Yes / No / N/A]
-• Renal Function (eGFR/Cr): [Value / Not Indicated]
-• Contrast Allergy: [Denied / Present]
-
-"I certify that this examination is clinically indicated."
-''',
+        trigger: '🤒 Sick Leave',
+        category: 'Admin',
+        isFavorite: false,
+        content: AIPromptConstants.templateSickLeave,
+        isAiMacro: true,
       ),
-      // --- Internal Medicine ---
       MacroModel(
         id: '6',
-        trigger: '🩸 Diabetic Follow-up',
-        category: 'Internal Medicine',
-        content: '''
-DIABETES FOLLOW-UP
-
-SUBJECTIVE:
-• Home Glucose Readings: [Range / Control]
-• Hypoglycemia Episodes: [Yes / No]
-• Compliance: [Good / Poor]
-• Symptoms: [Polydipsia, Polyuria, Blurring Vision]
-
-OBJECTIVE:
-• Vitals: BP: [BP] | BMI: [Value]
-• Exam: [Foot Exam / Neuro / CV]
-• Labs: HbA1c: [Value]% | Kidney Function: [Value]
-
-ASSESSMENT:
-• Diabetes Type [1/2]: [Control Status]
-• Complications: [None / Neuropathy / etc]
-
-PLAN:
-• Medications: [Adjustments]
-• Lifestyle: [Diet / Exercise]
-• Follow-up: [Interval]
-''',
-      ),
-      // --- Neurology ---
-      MacroModel(
-        id: '7',
-        trigger: '🧠 Neuro Exam',
-        category: 'Neurology',
-        content: '''
-NEUROLOGICAL EXAMINATION
-
-MENTAL STATUS:
-• GCS: [Score / 15]
-• Orientation: [Time, Place, Person]
-• Speech: [Normal / Dysarthric / Aphasic]
-
-CRANIAL NERVES:
-• Pupils: [Size / Reactivity]
-• Face: [Symmetry]
-• Other: [Deficits]
-
-MOTOR SYSTEM:
-• Tone: [Normal / Increased / Decreased]
-• Power (Upper): R:[Grade/5] L:[Grade/5]
-• Power (Lower): R:[Grade/5] L:[Grade/5] 
-• Reflexes: [Run-down]
-
-SENSORY:
-• Light Touch/Pinprick: [Intact / Deficit Level]
-• Proprioception: [Intact / Impaired]
-
-COORDINATION & GAIT:
-• Finger-Nose: [Normal / Dysmetria]
-• Gait: [Normal / Ataxic / Hemiplegic]
-
-IMPRESSION:
-[Localization of Lesion]
-''',
-      ),
-      // --- Orthopedics ---
-      MacroModel(
-        id: '8',
-        trigger: '🦴 Joint Exam',
-        category: 'Orthopedics',
-        content: '''
-ORTHOPEDIC JOINT EXAMINATION
-Joint: [Shoulder / Knee / Hip / etc]
-Side: [Right / Left]
-
-INSPECTION:
-• Swelling: [Yes / No]
-• Deformity: [Description]
-• Skin: [Scars / Erythema]
-
-PALPATION:
-• Tenderness: [Specific Landmark]
-• Temperature: [Normal / Warm]
-• Effusion: [Present / Absent]
-
-RANGE OF MOTION (ROM):
-• Active: [Degree]
-• Passive: [Degree]
-• Pain on Motion: [Yes / No]
-
-SPECIAL TESTS:
-[Test Name]: [Positive / Negative]
-
-NEUROVASCULAR:
-• Pulses: [Palpable]
-• Sensation: [Intact]
-
-PLAN:
-[Imaging / Conservative / Surgical]
-''',
+        trigger: '✨ Free Note',
+        category: 'General',
+        isFavorite: false,
+        content: AIPromptConstants.templateFreeNote,
+        isAiMacro: true,
       ),
     ];
   }

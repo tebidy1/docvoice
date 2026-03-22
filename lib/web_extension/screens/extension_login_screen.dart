@@ -1,16 +1,19 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:qr_flutter/qr_flutter.dart';
-import '../../services/auth_service.dart';
-import '../../services/api_service.dart';
-import '../../mobile_app/services/websocket_service.dart' as unified_ws;
-import 'package:provider/provider.dart';
 import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+
+import '../../core/config/api_config.dart';
+import '../../mobile_app/services/websocket_service.dart' as unified_ws;
+import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
 import 'extension_home_screen.dart';
 
-/// Extension-specific login screen that displays a QR code for the mobile app to scan.
-/// This is similar to WhatsApp Web login flow.
+/// Extension login screen — shows credentials form + QR code together.
+/// QR is generated automatically (WhatsApp Web style).
 class ExtensionLoginScreen extends StatefulWidget {
   const ExtensionLoginScreen({super.key});
 
@@ -19,14 +22,22 @@ class ExtensionLoginScreen extends StatefulWidget {
 }
 
 class _ExtensionLoginScreenState extends State<ExtensionLoginScreen> {
+  // ── QR state ─────────────────────────────────────────────────
   String? _pairingId;
-  String? _pairingCode;
-  bool _isLoading = true;
-  String? _errorMessage;
-  final ApiService _apiService = ApiService();
-  final AuthService _authService = AuthService();
+  bool _qrLoading = true;
+  String? _qrError;
   StreamSubscription? _wsSubscription;
   Timer? _refreshTimer;
+  Timer? _pollTimer;
+
+  // ── Login form state ──────────────────────────────────────────
+  final _formKey = GlobalKey<FormState>();
+  final _emailCtrl = TextEditingController();
+  final _passwordCtrl = TextEditingController();
+  final _authService = AuthService();
+  bool _loginLoading = false;
+  bool _obscure = true;
+  String? _loginError;
 
   @override
   void initState() {
@@ -39,76 +50,98 @@ class _ExtensionLoginScreenState extends State<ExtensionLoginScreen> {
     _wsSubscription?.cancel();
     _refreshTimer?.cancel();
     _pollTimer?.cancel();
+    _emailCtrl.dispose();
+    _passwordCtrl.dispose();
     super.dispose();
   }
 
+  // ─── QR Pairing (raw HTTP — same endpoints as Dio/Windows) ───
+
   Future<void> _initPairing() async {
     setState(() {
-      _isLoading = true;
-      _errorMessage = null;
+      _qrLoading = true;
+      _qrError = null;
     });
-
     try {
-      final response = await _apiService.get('/pairing/initiate');
-      if (response['success'] == true) {
-        setState(() {
-          _pairingId = response['pairing_id'];
-          _pairingCode = response['pairing_code'];
-          _isLoading = false;
-        });
-        _listenForPairing();
-        _startRefreshTimer();
+      final baseUrl = ApiConfig.baseUrl;
+      final url = '$baseUrl/pairing/initiate';
+      debugPrint('QR: Initiating pairing at $url');
+
+      final response = await http.get(
+        Uri.parse(url),
+        headers: ApiConfig.defaultHeaders,
+      );
+
+      debugPrint(
+          'QR: Initiate response ${response.statusCode}: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final pairingId =
+            data['pairing_id'] ?? data['pairingId'] ?? data['id'];
+        if (pairingId != null) {
+          setState(() {
+            _pairingId = pairingId.toString();
+            _qrLoading = false;
+          });
+          _listenForPairing();
+          _startPollTimer();
+          // Auto-refresh QR every 2 minutes
+          _refreshTimer?.cancel();
+          _refreshTimer =
+              Timer.periodic(const Duration(minutes: 2), (_) => _initPairing());
+        } else {
+          throw Exception('No pairing_id in response: $data');
+        }
       } else {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = "Could not initiate pairing. Please try again.";
-        });
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
       }
     } catch (e) {
-      debugPrint("Pairing Init Failed: $e");
+      debugPrint('QR: Initiate error: $e');
       setState(() {
-        _isLoading = false;
-        _errorMessage = "Connection error. Please check your network.";
+        _qrLoading = false;
+        _qrError = 'تعذر توليد رمز QR: $e';
       });
     }
   }
 
-  Timer? _pollTimer;
-
-  void _startRefreshTimer() {
-    // Refresh QR code every 2 minutes to prevent expiration
-    _refreshTimer = Timer.periodic(const Duration(minutes: 2), (_) {
-      _initPairing();
-    });
-    
-    // Poll for pairing status every 3 seconds (fallback if WebSocket not connected)
-    _startPolling();
-  }
-
-  void _startPolling() {
+  void _startPollTimer() {
     _pollTimer?.cancel();
     _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
       if (_pairingId == null) return;
-      
       try {
-        final response = await _apiService.get('/pairing/status/$_pairingId');
-        
-        if (response['status'] == 'authorized' && response['token'] != null) {
-          _pollTimer?.cancel();
-          
-          final token = response['token'];
-          await _apiService.setToken(token);
-          
-          if (mounted) {
-            Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(builder: (_) => const ExtensionHomeScreen()),
-              (route) => false,
-            );
+        final baseUrl = ApiConfig.baseUrl;
+        // Use correct endpoint: /pairing/check/{id} (same as Dio/Windows)
+        final url = '$baseUrl/pairing/check/$_pairingId';
+
+        final response = await http.get(
+          Uri.parse(url),
+          headers: ApiConfig.defaultHeaders,
+        );
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          debugPrint('QR: Poll status: ${data['status']}');
+
+          if (data['status'] == 'authorized' && data['token'] != null) {
+            _pollTimer?.cancel();
+            _refreshTimer?.cancel();
+
+            // Save the token
+            final apiService = ApiService();
+            await apiService.setToken(data['token']);
+
+            if (mounted) {
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(
+                    builder: (_) => const ExtensionHomeScreen()),
+                (route) => false,
+              );
+            }
           }
         }
       } catch (e) {
-        // Silently ignore polling errors
-        debugPrint('Polling error: $e');
+        debugPrint('QR: Poll error: $e');
       }
     });
   }
@@ -116,203 +149,352 @@ class _ExtensionLoginScreenState extends State<ExtensionLoginScreen> {
   void _listenForPairing() {
     try {
       final ws = context.read<unified_ws.WebSocketService>();
-      
       _wsSubscription = ws.messages.listen((message) async {
         try {
           final data = jsonDecode(message.toString());
-          if (data['event'] == 'pairing.success' && data['pairingId'] == _pairingId) {
+          if (data['event'] == 'pairing.success' &&
+              data['pairingId'] == _pairingId) {
             final token = data['token'];
-            
             if (token != null) {
-              await _apiService.setToken(token);
-              
+              _pollTimer?.cancel();
+              _refreshTimer?.cancel();
+              final apiService = ApiService();
+              await apiService.setToken(token);
               if (mounted) {
                 Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const ExtensionHomeScreen()),
+                  MaterialPageRoute(
+                      builder: (_) => const ExtensionHomeScreen()),
                   (route) => false,
                 );
               }
             }
           }
-        } catch (e) {
-          // Silently ignore non-JSON or unrelated messages
-        }
+        } catch (_) {}
       });
     } catch (e) {
-      debugPrint("WebSocket not available: $e");
+      debugPrint('WebSocket not available: $e');
     }
   }
 
+  // ─── Credentials Login ────────────────────────────────────────
+
+  Future<void> _handleLogin() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() {
+      _loginLoading = true;
+      _loginError = null;
+    });
+    try {
+      final success = await _authService.login(
+        _emailCtrl.text.trim(),
+        _passwordCtrl.text,
+        deviceName: 'Chrome Extension',
+      );
+      if (success && mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const ExtensionHomeScreen()),
+          (route) => false,
+        );
+      } else {
+        setState(() {
+          _loginError = 'بيانات الدخول غير صحيحة';
+          _loginLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _loginError = 'خطأ في الاتصال بالخادم';
+        _loginLoading = false;
+      });
+    }
+  }
+
+  // ─── Build ────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final onSurface = colorScheme.onSurface;
+    final primary = colorScheme.primary;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Logo / Title
-                Text(
-                  "ScribeFlow",
-                  style: GoogleFonts.outfit(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // ── Logo ──────────────────────────────────
+              Text(
+                'ScribeFlow',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  color: onSurface,
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  "Medical Dictation Companion",
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    color: Colors.white70,
-                  ),
-                ),
-                const SizedBox(height: 40),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Medical Dictation Companion',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: onSurface.withValues(alpha: 0.54)),
+              ),
 
-                // Instructions
+              const SizedBox(height: 24),
+
+              // ── Login error ────────────────────────────
+              if (_loginError != null)
                 Container(
-                  padding: const EdgeInsets.all(16),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  margin: const EdgeInsets.only(bottom: 12),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                    color: colorScheme.error.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                    border:
+                        Border.all(color: colorScheme.error.withValues(alpha: 0.3)),
                   ),
-                  child: Column(
-                    children: [
-                      const Icon(Icons.phone_android, color: Colors.blue, size: 32),
-                      const SizedBox(height: 8),
-                      Text(
-                        "Scan with your phone",
-                        style: GoogleFonts.inter(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        "Open ScribeFlow app → Settings → Scan QR",
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: Colors.white60,
-                        ),
-                      ),
-                    ],
-                  ),
+                  child: Text(_loginError!,
+                      style:
+                          TextStyle(color: colorScheme.error, fontSize: 12)),
                 ),
-                const SizedBox(height: 24),
 
-                // QR Code Display
-                if (_errorMessage != null)
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
+              // ── Form ──────────────────────────────────
+              Form(
+                key: _formKey,
+                child: Column(
+                  children: [
+                    _buildField(
+                      controller: _emailCtrl,
+                      label: 'Email',
+                      icon: Icons.email_outlined,
+                      keyboard: TextInputType.emailAddress,
+                      validator: (v) {
+                        if (v == null || v.isEmpty) return 'Required';
+                        if (!v.contains('@')) return 'Invalid email';
+                        return null;
+                      },
                     ),
-                    child: Column(
-                      children: [
-                        Text(
-                          _errorMessage!,
-                          style: const TextStyle(color: Colors.redAccent),
-                          textAlign: TextAlign.center,
+                    const SizedBox(height: 10),
+                    _buildField(
+                      controller: _passwordCtrl,
+                      label: 'Password',
+                      icon: Icons.lock_outlined,
+                      obscure: _obscure,
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscure
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                          color: onSurface.withValues(alpha: 0.38),
+                          size: 18,
                         ),
-                        const SizedBox(height: 12),
-                        ElevatedButton.icon(
-                          onPressed: _initPairing,
-                          icon: const Icon(Icons.refresh, size: 18),
-                          label: const Text("Retry"),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red.shade700,
-                          ),
+                        onPressed: () =>
+                            setState(() => _obscure = !_obscure),
+                      ),
+                      onSubmitted: (_) => _handleLogin(),
+                      validator: (v) {
+                        if (v == null || v.isEmpty) return 'Required';
+                        if (v.length < 6) return 'Too short';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 44,
+                      child: ElevatedButton(
+                        onPressed: _loginLoading ? null : _handleLogin,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primary,
+                          foregroundColor: colorScheme.onPrimary,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
                         ),
-                      ],
-                    ),
-                  )
-                else
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.blue.withOpacity(0.3),
-                          blurRadius: 20,
-                          spreadRadius: 2,
-                        ),
-                      ],
-                    ),
-                    child: _isLoading
-                        ? const SizedBox(
-                            width: 180,
-                            height: 180,
-                            child: Center(child: CircularProgressIndicator()),
-                          )
-                        : QrImageView(
-                            data: 'pairing:$_pairingId',
-                            version: QrVersions.auto,
-                            size: 180.0,
-                          ),
-                  ),
-
-                const SizedBox(height: 24),
-
-                // Manual Code Entry Option
-                if (!_isLoading && _pairingCode != null) ...[
-                  Text(
-                    "Or enter this code on your phone:",
-                    style: GoogleFonts.inter(color: Colors.white60, fontSize: 12),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.white10,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white24),
-                    ),
-                    child: Text(
-                      _pairingCode!,
-                      style: GoogleFonts.robotoMono(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue,
-                        letterSpacing: 6,
+                        child: _loginLoading
+                            ? SizedBox(
+                                height: 18,
+                                width: 18,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: colorScheme.onPrimary),
+                              )
+                            : const Text('Sign In',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14)),
                       ),
                     ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 22),
+
+              // ── QR Divider ─────────────────────────────
+              Row(
+                children: [
+                  Expanded(
+                      child: Divider(
+                          color: theme.dividerColor, thickness: 1)),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Text(
+                      'Or scan QR with your phone',
+                      style: TextStyle(
+                          color: onSurface.withValues(alpha: 0.38), fontSize: 11),
+                    ),
+                  ),
+                  Expanded(
+                      child: Divider(
+                          color: theme.dividerColor, thickness: 1)),
+                ],
+              ),
+
+              const SizedBox(height: 14),
+
+              // ── Instructions ───────────────────────────
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.phone_android,
+                      color: primary, size: 16),
+                  const SizedBox(width: 6),
+                  Text(
+                    'App → Settings → Scan QR to Authorize',
+                    style: TextStyle(
+                        color: onSurface.withValues(alpha: 0.54), fontSize: 11),
                   ),
                 ],
+              ),
 
-                const SizedBox(height: 32),
+              const SizedBox(height: 14),
 
-                // Session Info
-                if (!_isLoading && _pairingId != null)
-                  Text(
-                    "Session: ${_pairingId!.substring(0, 8)}...",
-                    style: GoogleFonts.robotoMono(color: Colors.white24, fontSize: 10),
-                  ),
+              // ── QR Code ────────────────────────────────
+              Center(
+                child: _qrError != null
+                    ? Column(
+                        children: [
+                          Icon(Icons.wifi_off,
+                              color: onSurface.withValues(alpha: 0.3), size: 32),
+                          const SizedBox(height: 6),
+                          Text(_qrError!,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                  color: colorScheme.error, fontSize: 11)),
+                          const SizedBox(height: 8),
+                          TextButton(
+                            onPressed: _initPairing,
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      )
+                    : _qrLoading || _pairingId == null
+                        ? Container(
+                            width: 180,
+                            height: 180,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Center(
+                                child: CircularProgressIndicator(
+                                    color: primary)),
+                          )
+                        : Column(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: primary.withValues(alpha: 0.3),
+                                      blurRadius: 20,
+                                      spreadRadius: 2,
+                                    ),
+                                  ],
+                                ),
+                                child: QrImageView(
+                                  data: 'pairing:$_pairingId',
+                                  version: QrVersions.auto,
+                                  size: 160.0,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              TextButton.icon(
+                                onPressed: () {
+                                  _pollTimer?.cancel();
+                                  _refreshTimer?.cancel();
+                                  _initPairing();
+                                },
+                                icon: Icon(Icons.refresh,
+                                    size: 13,
+                                    color: onSurface.withValues(alpha: 0.3)),
+                                label: Text('Generate New Code',
+                                    style: TextStyle(
+                                        color: onSurface.withValues(alpha: 0.3),
+                                        fontSize: 11)),
+                              ),
+                            ],
+                          ),
+              ),
 
-                const SizedBox(height: 24),
-
-                // Refresh Button
-                TextButton.icon(
-                  onPressed: _initPairing,
-                  icon: const Icon(Icons.refresh, size: 16, color: Colors.white54),
-                  label: Text(
-                    "Generate New Code",
-                    style: GoogleFonts.inter(color: Colors.white54, fontSize: 12),
-                  ),
-                ),
-              ],
-            ),
+              const SizedBox(height: 16),
+            ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    TextInputType? keyboard,
+    bool obscure = false,
+    Widget? suffixIcon,
+    String? Function(String?)? validator,
+    void Function(String)? onSubmitted,
+  }) {
+    final theme = Theme.of(context);
+    final onSurface = theme.colorScheme.onSurface;
+
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboard,
+      obscureText: obscure,
+      onFieldSubmitted: onSubmitted,
+      style: TextStyle(color: onSurface, fontSize: 13),
+      validator: validator,
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(color: onSurface.withValues(alpha: 0.38), fontSize: 12),
+        prefixIcon: Icon(icon, color: onSurface.withValues(alpha: 0.38), size: 16),
+        suffixIcon: suffixIcon,
+        filled: true,
+        fillColor: theme.inputDecorationTheme.fillColor ??
+            theme.colorScheme.surface,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: theme.dividerColor),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: theme.dividerColor),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide:
+              BorderSide(color: theme.colorScheme.primary, width: 1.5),
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       ),
     );
   }

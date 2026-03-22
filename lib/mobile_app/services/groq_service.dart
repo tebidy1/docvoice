@@ -8,7 +8,7 @@ class GroqService {
   
   // Hardcoded for standalone test - ideally moved to secure storage or settings
   GroqService({String? apiKey}) 
-      : apiKey = apiKey ?? dotenv.env['GROQ_API_KEY'] ?? "";
+      : apiKey = apiKey ?? (dotenv.isInitialized ? dotenv.env['GROQ_API_KEY'] ?? "" : "");
 
   Future<String> transcribe(Uint8List audioBytes, {String filename = 'recording.m4a', String modelId = 'whisper-large-v3'}) async {
     // Check if key is valid (simple check)

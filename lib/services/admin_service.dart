@@ -16,7 +16,8 @@ class AdminService {
   }
 
   Future<Map<String, dynamic>> getCompaniesStatistics() async {
-    final response = await _apiService.get('/admin/dashboard/companies-statistics');
+    final response =
+        await _apiService.get('/admin/dashboard/companies-statistics');
     return response['payload'] as Map<String, dynamic>;
   }
 
@@ -46,7 +47,8 @@ class AdminService {
     if (dateFrom != null) queryParams['date_from'] = dateFrom;
     if (dateTo != null) queryParams['date_to'] = dateTo;
 
-    final response = await _apiService.get('/admin/companies', queryParams: queryParams);
+    final response =
+        await _apiService.get('/admin/companies', queryParams: queryParams);
     return response['payload'] as Map<String, dynamic>;
   }
 
@@ -78,7 +80,8 @@ class AdminService {
     return Company.fromJson(response['payload'] as Map<String, dynamic>);
   }
 
-  Future<Company> updateCompany(int id, {
+  Future<Company> updateCompany(
+    int id, {
     String? name,
     String? domain,
     String? invitationCode,
@@ -100,12 +103,50 @@ class AdminService {
     await _apiService.delete('/admin/companies/$id');
   }
 
+  Future<Map<String, dynamic>?> getCompanySettings(int companyId) async {
+    try {
+      final response =
+          await _apiService.get('/admin/companies/$companyId/settings');
+      
+      if (response['status'] == true || response['success'] == true) {
+        final payload = response['payload'];
+        if (payload != null && payload is Map<String, dynamic>) {
+          if (payload.containsKey('settings')) {
+            return payload['settings'] as Map<String, dynamic>;
+          }
+          return payload;
+        }
+        if (response.containsKey('settings')) {
+          return response['settings'] as Map<String, dynamic>;
+        }
+      }
+    } catch (e) {
+      print('Get company settings admin error: $e');
+    }
+    return null;
+  }
+
+  Future<bool> updateCompanySettings(
+      int companyId, Map<String, dynamic> settings) async {
+    try {
+      final response = await _apiService
+          .patch('/admin/companies/$companyId/settings', body: settings);
+      
+      return response['status'] == true || response['success'] == true;
+    } catch (e) {
+      print('Update company settings admin error: $e');
+      rethrow;
+    }
+  }
+
   Future<Company> toggleCompanyStatus(int id) async {
-    final response = await _apiService.patch('/admin/companies/$id/toggle-status', body: {});
+    final response =
+        await _apiService.patch('/admin/companies/$id/toggle-status', body: {});
     return Company.fromJson(response['payload'] as Map<String, dynamic>);
   }
 
-  Future<Map<String, dynamic>> getCompanyUsers(int companyId, {
+  Future<Map<String, dynamic>> getCompanyUsers(
+    int companyId, {
     int? page,
     int? perPage,
   }) async {
@@ -113,7 +154,8 @@ class AdminService {
     if (page != null) queryParams['page'] = page.toString();
     if (perPage != null) queryParams['per_page'] = perPage.toString();
 
-    final response = await _apiService.get('/admin/companies/$companyId/users', queryParams: queryParams);
+    final response = await _apiService.get('/admin/companies/$companyId/users',
+        queryParams: queryParams);
     return response['payload'] as Map<String, dynamic>;
   }
 
@@ -138,7 +180,8 @@ class AdminService {
     if (sortBy != null) queryParams['sort_by'] = sortBy;
     if (sortDirection != null) queryParams['sort_direction'] = sortDirection;
 
-    final response = await _apiService.get('/admin/users', queryParams: queryParams);
+    final response =
+        await _apiService.get('/admin/users', queryParams: queryParams);
     return response['payload'] as Map<String, dynamic>;
   }
 
@@ -168,7 +211,8 @@ class AdminService {
     return User.fromJson(response['payload'] as Map<String, dynamic>);
   }
 
-  Future<User> updateUser(int id, {
+  Future<User> updateUser(
+    int id, {
     String? name,
     String? email,
     String? password,
@@ -202,10 +246,10 @@ class AdminService {
   }
 
   Future<User> resetUserPassword(int id, String newPassword) async {
-    final response = await _apiService.post('/admin/users/$id/reset-password', body: {
+    final response =
+        await _apiService.post('/admin/users/$id/reset-password', body: {
       'password': newPassword,
     });
     return User.fromJson(response['payload'] as Map<String, dynamic>);
   }
 }
-

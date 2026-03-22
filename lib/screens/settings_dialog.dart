@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:screen_retriever/screen_retriever.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../desktop/qr_pairing_dialog.dart';
-import '../mobile_app/features/auth/qr_scanner_screen.dart';
+
 import '../models/app_theme.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
@@ -12,6 +13,9 @@ import '../services/theme_service.dart';
 import '../utils/window_manager_helper.dart';
 import 'admin_dashboard_screen.dart';
 import 'company_settings_dialog.dart';
+import '../core/medical_departments.dart';
+import '../services/department_service.dart';
+import '../services/medical_department_service.dart';
 
 class SettingsDialog extends StatefulWidget {
   const SettingsDialog({super.key});
@@ -22,6 +26,8 @@ class SettingsDialog extends StatefulWidget {
 
 class _SettingsDialogState extends State<SettingsDialog> {
   String _localIp = "Loading...";
+  String _sttEnginePref = 'groq';
+  bool _useOracleWhisperModel = false;
   // Track initial values to determine if changes occurred
 
   @override
@@ -34,6 +40,20 @@ class _SettingsDialogState extends State<SettingsDialog> {
       if (mounted) setState(() {});
     });
     _resizeWindow(true);
+    
+    DepartmentService().addListener(_onDepartmentChanged);
+  }
+
+  @override
+  void dispose() {
+    WindowManagerHelper.setTransparencyLocked(false);
+    _resizeWindow(false);
+    DepartmentService().removeListener(_onDepartmentChanged);
+    super.dispose();
+  }
+
+  void _onDepartmentChanged() {
+    if (mounted) setState(() {});
   }
 
   final ApiService _apiService = ApiService();
@@ -65,7 +85,10 @@ class _SettingsDialogState extends State<SettingsDialog> {
     }
 
     if (mounted) {
-      setState(() {});
+      setState(() {
+        _sttEnginePref = prefs.getString('stt_engine_pref') ?? 'gemini_oneshot';
+        _useOracleWhisperModel = prefs.getBool('oracle_use_whisper_model') ?? true;
+      });
     }
   }
 
@@ -74,26 +97,38 @@ class _SettingsDialogState extends State<SettingsDialog> {
     if (mounted) setState(() => _localIp = ip);
   }
 
-  @override
-  void dispose() {
-    WindowManagerHelper.setTransparencyLocked(false);
-    _resizeWindow(false);
-    super.dispose();
-  }
-
   Future<void> _resizeWindow(bool expanded) async {
-    // Enable resizing temporarily to animate/change size
     await windowManager.setResizable(true);
     if (expanded) {
-      await windowManager
-          .setSize(const Size(500, 600)); // Comfortable Settings Size
-      await windowManager.center();
+      await WindowManagerHelper.expandToCustomSizeBottomRight(500, 600);
     } else {
-      await windowManager
-          .setSize(const Size(350, 56)); // Restore to Native Utility Toolbar
-      await windowManager.setResizable(false); // Lock it back
+      // Defer collapse AFTER the widget is fully removed from the tree
+      // to avoid layout overflow while the dialog is still rendering.
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        // Do NOT collapse if a logout is in progress — the login screen
+        // will be shown at full size and we must not shrink behind it.
+        if (WindowManagerHelper.isLoggingOut) return;
+
+        try {
+          await windowManager.setSize(const Size(350, 56));
+          await windowManager.setAlwaysOnTop(true);
+          await windowManager.setResizable(false);
+
+          // Re-position to right-center after collapsing
+          final display = await screenRetriever.getPrimaryDisplay();
+          final screenSize = display.size;
+          const w = 350.0;
+          const h = 56.0;
+          final x = screenSize.width - w - 20;
+          final y = screenSize.height - h - 80;
+          await windowManager.setPosition(Offset(x, y));
+        } catch (e) {
+          print('Error collapsing settings window: $e');
+        }
+      });
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -176,6 +211,14 @@ class _SettingsDialogState extends State<SettingsDialog> {
                               },
                               theme: currentTheme,
                             ),
+                            
+                            _buildMenuItem(
+                              icon: MedicalDepartments.getById(DepartmentService().value)?.icon ?? Icons.local_hospital,
+                              label: "Medical Department",
+                              subtitle: MedicalDepartments.getById(DepartmentService().value)?.nameEn ?? "Tap to select specialty",
+                              onTap: () => _showDepartmentPicker(currentTheme),
+                              theme: currentTheme,
+                            ),
 
                             const SizedBox(height: 16),
 
@@ -197,20 +240,99 @@ class _SettingsDialogState extends State<SettingsDialog> {
                               },
                               theme: currentTheme,
                             ),
-                            _buildMenuItem(
-                              icon: Icons.qr_code_scanner,
-                              label: "Scan QR to Authorize",
-                              subtitle: "Authorize another device's login",
-                              onTap: () async {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (context) =>
-                                          const QrScannerScreen()),
-                                );
-                              },
+
+
+                            const SizedBox(height: 16),
+                            _buildSectionHeader("Speech-to-Text Engine", currentTheme),
+                            _buildSttItem(
+                              title: "High-Speed Dictation (Cloud)",
+                              value: 'groq',
                               theme: currentTheme,
                             ),
+                            _buildSttItem(
+                              title: "Offline Draft Mode (Built-in)",
+                              value: 'native',
+                              theme: currentTheme,
+                            ),
+                            _buildSttItem(
+                              title: "Specialized Medical Dictation",
+                              value: 'oracle_live',
+                              theme: currentTheme,
+                            ),
+                            _buildSttItem(
+                              title: "✨ Smart Magic Flow (Recommended)",
+                              subtitle: "Skip transcription! Audio + Template → Final Note in 1 step.",
+                              value: 'gemini_oneshot',
+                              theme: currentTheme,
+                            ),
+                            _buildSttItem(
+                              title: "Offline Draft Mode (Local Whisper)",
+                              value: 'offline_whisper',
+                              theme: currentTheme,
+                            ),
+                            if (_sttEnginePref == 'oracle_live') ...[
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.science_outlined, size: 20, color: Colors.orange),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            _useOracleWhisperModel ? 'Engine: Ultra-Fast General' : 'Engine: Deep Medical Focus',
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: currentTheme.iconColor,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          Text(
+                                            _useOracleWhisperModel ? 'Prioritizes speed and general vocabulary' : 'Prioritizes complex clinical terminology',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: currentTheme.iconColor.withOpacity(0.6),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Switch(
+                                      value: _useOracleWhisperModel,
+                                      activeColor: Colors.orange,
+                                      onChanged: (val) async {
+                                        setState(() => _useOracleWhisperModel = val);
+                                        final prefs = await SharedPreferences.getInstance();
+                                        await prefs.setBool('oracle_use_whisper_model', val);
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            if (_sttEnginePref == 'gemini_oneshot') ...[
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.info_outline, size: 18, color: Colors.amber),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        'Records audio and applies your template in a single, lightning-fast step for ultimate speed and accuracy. No intermediate typing required.',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: currentTheme.iconColor.withOpacity(0.65),
+                                          height: 1.4,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
 
                             const SizedBox(height: 16),
 
@@ -437,6 +559,185 @@ class _SettingsDialogState extends State<SettingsDialog> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildSttItem({
+    required String title,
+    String? subtitle,
+    required String value,
+    required AppTheme theme,
+  }) {
+    final isSelected = _sttEnginePref == value;
+    final primaryColor = value == 'offline_whisper'
+        ? Colors.green
+        : value == 'oracle_live'
+            ? Colors.orange
+            : value == 'gemini_oneshot'
+                ? Colors.amber
+                : Colors.blue;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: isSelected
+            ? theme.micIdleBackground.withOpacity(0.8)
+            : theme.backgroundColor,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+            color: isSelected ? primaryColor : theme.dividerColor,
+            width: isSelected ? 2 : 1),
+      ),
+      child: RadioListTile<String>(
+        title: Text(title, style: TextStyle(color: theme.iconColor, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+        subtitle: subtitle != null
+            ? Text(subtitle, style: TextStyle(color: theme.iconColor.withOpacity(0.6), fontSize: 12))
+            : null,
+        value: value,
+        groupValue: _sttEnginePref,
+        activeColor: primaryColor,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+        onChanged: (val) async {
+          if (val != null) {
+            setState(() => _sttEnginePref = val);
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('stt_engine_pref', val);
+          }
+        },
+      ),
+    );
+  }
+
+  void _showDepartmentPicker(AppTheme theme) {
+    String searchQuery = '';
+    
+    // Ensure departments are loaded from API
+    MedicalDepartmentService().loadDepartments();
+    
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final filteredDepts = MedicalDepartments.all.where((dept) {
+              final q = searchQuery.toLowerCase();
+              return dept.nameEn.toLowerCase().contains(q) || 
+                     dept.nameAr.contains(q);
+            }).toList();
+
+            return Dialog(
+              backgroundColor: theme.backgroundColor,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Container(
+                width: 400,
+                height: 500,
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.local_hospital, color: theme.iconColor),
+                        const SizedBox(width: 12),
+                        Text("Select Department", 
+                          style: TextStyle(
+                            fontSize: 18, 
+                            fontWeight: FontWeight.bold,
+                            color: theme.iconColor,
+                          )
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          color: theme.iconColor.withOpacity(0.5),
+                          onPressed: () => Navigator.pop(context),
+                        )
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      style: TextStyle(color: theme.iconColor),
+                      decoration: InputDecoration(
+                        hintText: "Search specialties...",
+                        hintStyle: TextStyle(color: theme.iconColor.withOpacity(0.5)),
+                        prefixIcon: Icon(Icons.search, color: theme.iconColor.withOpacity(0.5)),
+                        filled: true,
+                        fillColor: theme.micIdleBackground,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                      onChanged: (val) {
+                        setDialogState(() {
+                          searchQuery = val;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: filteredDepts.length,
+                        itemBuilder: (context, index) {
+                          final dept = filteredDepts[index];
+                          final isSelected = DepartmentService().value == dept.id;
+                          
+                          return Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () {
+                                DepartmentService().setDepartment(dept.id);
+                                Navigator.pop(context);
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              hoverColor: theme.hoverColor,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: dept.color.withOpacity(0.2),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(dept.icon, color: dept.color, size: 20),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(dept.nameEn, 
+                                            style: TextStyle(
+                                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                              color: isSelected ? Colors.blue : theme.iconColor,
+                                            )
+                                          ),
+                                          Text(dept.nameAr, 
+                                            style: TextStyle(
+                                              fontSize: 13, 
+                                              color: theme.iconColor.withOpacity(0.6),
+                                            )
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (isSelected) 
+                                      const Icon(Icons.check_circle, color: Colors.blue)
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

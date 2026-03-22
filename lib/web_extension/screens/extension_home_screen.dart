@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
-import '../../mobile_app/core/theme.dart';
-import '../../mobile_app/features/inbox/inbox_screen.dart';
 import '../../mobile_app/services/audio_recording_service.dart';
-import 'package:record/record.dart'; // For Amplitude
-import 'package:flutter_animate/flutter_animate.dart';
 import 'extension_settings_screen.dart';
 import 'extension_inbox_screen.dart'; // New Extension Inbox
 import 'extension_editor_screen.dart';
 import '../../mobile_app/models/note_model.dart';
 import 'package:uuid/uuid.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:web/web.dart' as web;
+import 'dart:js_interop';
+import '../../../widgets/animated_record_button.dart';
+import '../../../widgets/listening_mode_view.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ExtensionHomeScreen extends StatefulWidget {
   const ExtensionHomeScreen({super.key});
@@ -23,7 +25,8 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
   final AudioRecordingService _audioService = AudioRecordingService();
   final GlobalKey<ExtensionInboxScreenState> _inboxKey = GlobalKey<ExtensionInboxScreenState>();
 
-  late final List<Widget> _screens;
+  late List<Widget> _screens;
+  String _currentSttEngine = 'oracle_live';
 
   @override
   void initState() {
@@ -32,6 +35,14 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
       ExtensionInboxScreen(key: _inboxKey), // Use Extension Version
       const ExtensionSettingsScreen(),
     ];
+    _loadPreferences();
+  }
+
+  Future<void> _loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _currentSttEngine = prefs.getString('stt_engine_pref') ?? 'oracle_live';
+    });
   }
 
   void _onItemTapped(int index) {
@@ -40,40 +51,78 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
     });
   }
   
-  // Minimal FAB logic for extension (simplified from Unified Home)
-  Future<void> _handleTitanTap() async {
-    if (!_isRecording) {
-      if (!await _audioService.hasPermission()) {
-        if (mounted) {
-           ScaffoldMessenger.of(context).showSnackBar(
-             const SnackBar(content: Text("Microphone permission required")),
-           );
-        }
-        return;
+  Future<void> _startRecording() async {
+    try {
+      // 1. Explicit Web Permission Check (Force Prompt)
+      if (kIsWeb) {
+         try {
+           final stream = await web.window.navigator.mediaDevices.getUserMedia(
+             web.MediaStreamConstraints(audio: true.toJS)
+           ).toDart;
+           
+           // Got permission! Stop these tracks immediately to release mic for the actual recorder
+           final tracks = stream.getTracks().toDart;
+           for (final track in tracks) {
+             track.stop();
+           }
+         } catch (e) {
+           print("Web Permission Error: $e");
+           if (mounted) {
+             ScaffoldMessenger.of(context).showSnackBar(
+               SnackBar(
+                 content: const Text("Microphone access denied."),
+                 action: SnackBarAction(
+                   label: "Fix Permissions", 
+                   textColor: Colors.white,
+                   onPressed: () {
+                      web.window.open('permissions.html', '_blank');
+                   }
+                 ),
+                 duration: const Duration(seconds: 5),
+               ),
+             );
+           }
+           if (mounted) setState(() => _isRecording = false);
+           return; // Stop here
+         }
       }
       
-      await _audioService.startRecording();
-      setState(() => _isRecording = true);
-    } else {
-      setState(() => _isRecording = false);
+      // 2. Refresh preferences and Start Recording
+      await _loadPreferences();
+      if (_currentSttEngine == 'gemini_oneshot') {
+        await _audioService.startRecordingCompressed();
+      } else {
+        await _audioService.startRecording();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+        );
+      }
+      if (mounted) setState(() => _isRecording = false);
+    }
+  }
+
+  Future<void> _stopRecording() async {
+    try {
       final path = await _audioService.stopRecording();
       
       if (path != null && mounted) {
         final draft = NoteModel()
           ..uuid = const Uuid().v4()
           ..title = "Extension Note"
-          ..content = "Processing..."
+          ..content = ""
           ..audioPath = path
           ..status = NoteStatus.draft
           ..createdAt = DateTime.now()
           ..updatedAt = DateTime.now();
-
-        
+  
          final result = await Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => ExtensionEditorScreen(draftNote: draft)),
           );
-
+  
           if (result != null && result is String) {
              draft.content = result;
              draft.status = NoteStatus.processed;
@@ -83,55 +132,76 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
              });
           }
       }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final backgroundColor = theme.scaffoldBackgroundColor;
+    final surfaceColor = theme.cardTheme.color ?? (theme.brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.white);
+
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: backgroundColor,
       body: SafeArea(
-        child: IndexedStack(
-          index: _selectedIndex,
-          children: _screens,
+        child: Stack(
+          children: [
+            IndexedStack(
+              index: _selectedIndex,
+              children: _screens,
+            ),
+            if (_isRecording)
+              Positioned.fill(
+                child: ListeningModeView(
+                  getAmplitude: () async {
+                    final prefs = await SharedPreferences.getInstance();
+                    // Web typically doesn't use the system_native STT.
+                    final amp = await _audioService.getAmplitude();
+                    return amp.current;
+                  },
+                ),
+              ),
+
+            // AAC/M4A/WebM indicator — must be ABOVE ListeningModeView
+            if (_isRecording && _currentSttEngine == 'gemini_oneshot')
+              Positioned(
+                bottom: 60,
+                left: 12,
+                child: Text(
+                  "WebM / Opus",
+                  style: TextStyle(
+                    color: Colors.blueGrey.withOpacity(0.6),
+                    fontSize: 9,
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
       floatingActionButton: SizedBox(
         width: 70, // Slightly smaller for extension
         height: 70,
-        child: _isRecording 
-          ? StreamBuilder<Amplitude>(
-              stream: _audioService.onAmplitudeChanged,
-              builder: (context, snapshot) {
-                 final amp = snapshot.data?.current ?? -160.0;
-                 double normalized = (amp.clamp(-60.0, 0.0) + 60) / 60; 
-                 double scale = 1.0 + (normalized * 0.3);
-                 
-                 return Transform.scale(
-                   scale: scale,
-                   child: Container(
-                     decoration: BoxDecoration(
-                       shape: BoxShape.circle,
-                       boxShadow: [
-                         BoxShadow(
-                           color: AppTheme.recordRed.withOpacity(0.5 * normalized),
-                           blurRadius: 15 * normalized,
-                         )
-                       ]
-                     ),
-                     child: _buildFab(),
-                   ),
-                 );
-              }
-            )
-          : _buildFab(),
+        child: AnimatedRecordButton(
+          initialIsRecording: _isRecording,
+          onStartRecording: _startRecording,
+          onStopRecording: _stopRecording,
+          onRecordingStateChanged: (isRecording) {
+            setState(() => _isRecording = isRecording);
+          },
+        ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: BottomAppBar(
         shape: const CircularNotchedRectangle(),
         notchMargin: 6.0,
-        color: const Color(0xFF1E1E1E),
+        color: surfaceColor,
         child: SizedBox(
           height: 50.0, // Comapct
           child: Row(
@@ -139,32 +209,20 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
             children: [
               IconButton(
                 icon: const Icon(Icons.inbox),
-                color: _selectedIndex == 0 ? const Color(0xFF4A90E2) : const Color(0xFF757575),
+                color: _selectedIndex == 0 ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
                 onPressed: () => _onItemTapped(0),
                 tooltip: 'Inbox',
               ),
               const SizedBox(width: 32),
               IconButton(
                 icon: const Icon(Icons.settings),
-                color: _selectedIndex == 1 ? const Color(0xFF4A90E2) : const Color(0xFF757575),
+                color: _selectedIndex == 1 ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
                 onPressed: () => _onItemTapped(1),
                 tooltip: 'Settings',
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildFab() {
-    return FloatingActionButton(
-      onPressed: _handleTitanTap,
-      backgroundColor: _isRecording ? AppTheme.recordRed : const Color(0xFF303030),
-      shape: const CircleBorder(),
-      child: Icon(
-        _isRecording ? Icons.stop : Icons.mic,
-        color: Colors.white,
       ),
     );
   }

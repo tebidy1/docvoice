@@ -1,7 +1,10 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../core/config/api_config.dart';
 
 class ApiService {
   static final ApiService _instance = ApiService._internal();
@@ -13,11 +16,12 @@ class ApiService {
   final int _timeout =
       int.tryParse(dotenv.env['API_TIMEOUT'] ?? '30000') ?? 30000;
 
+  bool get hasToken => _token != null && _token!.isNotEmpty;
+
   Future<void> init() async {
-    _baseUrl =
-        dotenv.env['API_BASE_URL'] ?? 'https://docvoice.gumra-ai.com/api';
+    _baseUrl = ApiConfig.baseUrl;
     // Ensure base URL doesn't end with a slash to avoid double slashes with endpoint
-    if (_baseUrl!.endsWith('/')) {
+    if (_baseUrl != null && _baseUrl!.endsWith('/')) {
       _baseUrl = _baseUrl!.substring(0, _baseUrl!.length - 1);
     }
     print('ApiService initialized with baseUrl: $_baseUrl');
@@ -161,6 +165,11 @@ class ApiService {
         if (_token != null) 'Authorization': 'Bearer $_token',
       });
 
+      print("DEBUG: Multipart POST to $endpoint");
+      print(
+          "DEBUG: Token Prefix: ${_token != null && _token!.length > 10 ? _token!.substring(0, 10) : _token}");
+      print("DEBUG: File Size: ${fileBytes.length} bytes");
+
       // Add fields
       if (fields != null) {
         request.fields.addAll(fields);
@@ -173,7 +182,8 @@ class ApiService {
         filename: filename,
       ));
 
-      final streamedResponse = await request.send().timeout(Duration(milliseconds: _timeout));
+      final streamedResponse =
+          await request.send().timeout(Duration(milliseconds: _timeout));
       final response = await http.Response.fromStream(streamedResponse);
 
       return _handleResponse(response);
@@ -200,17 +210,17 @@ class ApiService {
 
     try {
       final dynamic decoded = jsonDecode(responseBody);
-      
+
       // Handle List Response (Wrap it)
       if (decoded is List) {
-         if (statusCode >= 200 && statusCode < 300) {
-            return {
-              'status': true,
-              'code': statusCode,
-              'message': 'Success',
-              'data': decoded
-            };
-         }
+        if (statusCode >= 200 && statusCode < 300) {
+          return {
+            'status': true,
+            'code': statusCode,
+            'message': 'Success',
+            'data': decoded
+          };
+        }
       }
 
       final data = decoded as Map<String, dynamic>;
@@ -264,6 +274,8 @@ class ApiService {
         };
       }
 
+      print("API Error ($statusCode): $responseBody"); // Log full body
+
       throw ApiException(
         data['message'] ?? 'Request failed',
         statusCode,
@@ -271,6 +283,7 @@ class ApiService {
       );
     } catch (e) {
       if (e is ApiException) rethrow;
+      print("Response Parsing Error: $e \nBody: $responseBody");
       throw ApiException('Failed to parse response: $e', statusCode);
     }
   }

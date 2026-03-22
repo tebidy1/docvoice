@@ -71,9 +71,12 @@ class InboxNoteApiService extends BaseApiService {
 
   /// Update an existing note
   Future<NoteModel> updateNote(String id, NoteModel note) async {
+    final payload = note.toJson();
+    payload.remove('uuid'); // Prevent Laravel "uuid has already been taken" validation error
+    
     return await update<NoteModel>(
       id: id,
-      data: note.toJson(),
+      data: payload,
       fromJson: (json) => NoteModelJson.fromJson(json),
     );
   }

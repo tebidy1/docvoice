@@ -1,30 +1,44 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // For Clipboard
-import 'dart:ui'; // For PointerDeviceKind
-import '../../../widgets/pattern_highlight_controller.dart';
-import '../../../services/api_service.dart';
+import 'package:flutter/services.dart';
+import 'dart:async';
+import 'package:flutter/foundation.dart';
+import 'package:universal_io/io.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
+// App Widgets & Services
+import '../../../widgets/pattern_highlight_controller.dart';
+import '../../../widgets/processing_overlay.dart';
 import '../../core/theme.dart';
 import '../../models/note_model.dart';
-import 'package:provider/provider.dart';
-import '../../services/websocket_service.dart';
-import 'dart:async';
-import 'package:universal_io/io.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../../services/macro_service.dart';
-import 'package:http/http.dart' as http; // For Web Blob fetching
-import 'package:flutter/foundation.dart'; // For kIsWeb
+import '../../models/generated_output.dart';
 import '../../services/inbox_service.dart';
-import '../../models/note_model.dart'; // Ensure NoteModel is imported
-import 'package:uuid/uuid.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'animated_loading_text.dart';
-import 'dart:math'; // For exponential backoff in retry logic
+import '../../services/macro_service.dart';
+import '../../services/whisper_local_stub.dart'
+    if (dart.library.io) '../../services/whisper_local_service.dart';
+import '../../services/model_download_service.dart';
+import '../../../services/api_service.dart';
+import '../../services/groq_service.dart'; // Direct Groq for faster Web transcription
+import '../../../core/ai/ai_regex_patterns.dart';
+import '../../../core/ai/text_processing_service.dart';
+import '../../../services/ai/ai_processing_service.dart';
+import '../../../../core/medical_departments.dart';
+import '../../../../services/department_service.dart';
+import '../../../../web_extension/services/extension_injection_service.dart';
+import '../../../../features/multimodal_ai/multimodal_ai_service.dart';
+import '../../../../features/multimodal_ai/ai_studio_multimodal_service.dart';
+import '../../../../features/multimodal_ai/gemini_transcription_helper.dart';
+import '../../../core/ai/ai_prompt_constants.dart';
+
 
 class EditorScreen extends StatefulWidget {
   final NoteModel? draftNote;
+  final Future<String>? oracleTranscriptFuture;
+  final int noteNumber;
+  final String? oneShotAudioPath; // ⚡ Non-null = Gemini One-Shot mode
   
-  const EditorScreen({super.key, this.draftNote});
+  const EditorScreen({super.key, this.draftNote, this.oracleTranscriptFuture, this.noteNumber = 0, this.oneShotAudioPath});
 
   @override
   State<EditorScreen> createState() => _EditorScreenState();
@@ -35,29 +49,111 @@ class _EditorScreenState extends State<EditorScreen> {
   late TextEditingController _sourceController; // Top: Raw Transcript
   late TextEditingController _finalController;  // Bottom: Final Note
   
-  bool _isKeyboardVisible = false;
   List<MacroModel> _macros = []; 
   MacroModel? _selectedMacro; // Track selected template 
   StreamSubscription? _wsSubscription;
-  bool _isLoading = true; // For initial transcription
+  late bool _isLoading; // Set dynamically in initState
   bool _isProcessing = false; // For AI generation
   List<Map<String, dynamic>> _suggestions = [];
-  bool _isSourceExpanded = false; // Toggle source view
-  bool _useHighAccuracy = false; // Toggle for AI Mode (Standard vs Suggestions)
+  bool _isTemplateCardExpanded = true;  // Template card: expanded by default
   
+  // Smart Tabs State
+  int _activeTabIndex = 0; // 0 = Transcript, 1+ = Generated Outputs
+  List<GeneratedOutput> _generatedOutputs = [];
+  
+  // ⚡ Gemini One-Shot mode
+  bool _isOneShotMode = false;
+  bool _isOneShotGenerating = false;
+  final MultimodalAIService _multimodalService = AIStudioMultimodalService();
+
   // Auto-Save State
   int? _currentNoteId; // Track the cloud note ID for updates
-  bool _hasUnsavedChanges = false;
   Timer? _debounceTimer; // For manual edit auto-save
+  Future<void>? _backgroundTranscriptionFuture; // Optimistic UI: track background STT
+  bool _showCleanTemplatePicker = false; // ✨ For Optimistic Clean UI
 
   @override
   void initState() {
     super.initState();
     
+    // ⚡ Detect Gemini One-Shot mode
+    if (widget.oneShotAudioPath != null) {
+      _isOneShotMode = true;
+      _isLoading = false;         // No transcription needed
+      _isTemplateCardExpanded = true;  // Open template picker directly
+      _showCleanTemplatePicker = true; // ✨ Shows the clean UI
+
+      if (widget.draftNote != null) {
+        _currentNoteId = (widget.draftNote!.id > 0) ? widget.draftNote!.id : int.tryParse(widget.draftNote!.uuid);
+        _generatedOutputs = List<GeneratedOutput>.from(widget.draftNote!.generatedOutputs);
+      }
+
+      // Initialize controllers (required by build())
+      _sourceController = TextEditingController(text: "");
+      _finalController = PatternHighlightController(
+        text: "",
+        patternStyles: {
+          AIRegexPatterns.selectPlaceholderPattern:
+              const TextStyle(color: Colors.orange, backgroundColor: Color(0x33FF9800), fontWeight: FontWeight.bold),
+          AIRegexPatterns.anyBracketPattern:
+              const TextStyle(color: Colors.orange, backgroundColor: Color(0x33FF9800)),
+          AIRegexPatterns.headerPattern: const TextStyle(
+            decoration: TextDecoration.underline, decorationColor: Colors.white,
+            decorationThickness: 2.0, fontWeight: FontWeight.bold, color: Colors.white,
+          ),
+        },
+      );
+      _finalController.addListener(_onManualEdit);
+
+      // Initialize note ID if available
+      if (widget.draftNote != null) {
+        _currentNoteId = (widget.draftNote!.id > 0) ? widget.draftNote!.id : int.tryParse(widget.draftNote!.uuid);
+      }
+
+      // Load macros then wait for user to pick a template
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final allMacros = await MacroService().getMacros();
+        final prefs = await SharedPreferences.getInstance();
+        final deptId = DepartmentService().value ?? prefs.getString('specialty');
+        final allowedCategories = (deptId != null 
+            ? MedicalDepartments.getRelevantCategories(deptId)
+            : ['General']).map((c) => c.toLowerCase()).toList();
+
+        final filteredMacros = allMacros.where((m) {
+          final cleanCat = m.category.replaceAll('[', '').replaceAll(']', '').replaceAll('"', '').replaceAll("'", "");
+          final cats = cleanCat.split(',').map((e) => e.trim().toLowerCase()).where((e) => e.isNotEmpty).toList();
+          
+          if (cats.isEmpty) return true;
+          if (cats.any((c) => c == 'general' || c == 'general practice')) return true;
+          return cats.any((c) => allowedCategories.contains(c));
+        }).toList();
+
+        if (mounted) setState(() => _macros = filteredMacros);
+      });
+
+      // ── 2-Step Architecture: Start background transcription ──
+      // Uses the unified GeminiTranscriptionHelper (single source of truth).
+      _backgroundTranscriptionFuture = () async {
+        final transcript = await GeminiTranscriptionHelper().transcribeFromPath(widget.oneShotAudioPath!);
+        if (transcript != null && mounted) {
+          setState(() {
+            _sourceController.text = transcript;
+            _isOneShotMode = false;
+          });
+        }
+      }();
+
+      return;
+    }
+
+    // Optimistic UI: never block visually, transcript happens in background
+    _isLoading = false; 
+    
     // Initialize ID if opening existing draft
     if (widget.draftNote != null) {
       // Prefer server ID if valid (> 0), otherwise fallback to UUID parsing
       _currentNoteId = (widget.draftNote!.id > 0) ? widget.draftNote!.id : int.tryParse(widget.draftNote!.uuid);
+      _generatedOutputs = List<GeneratedOutput>.from(widget.draftNote!.generatedOutputs);
     }
 
     // Load Content
@@ -65,19 +161,68 @@ class _EditorScreenState extends State<EditorScreen> {
     _sourceController = TextEditingController(text: widget.draftNote?.originalText ?? widget.draftNote?.content ?? "");
     
     // Final: Formatted text if exists
-    // Use PatternHighlightController to highlight [brackets] or "Not Reported"
+    // Use PatternHighlightController with centralized AIRegexPatterns
     _finalController = PatternHighlightController(
       text: widget.draftNote?.formattedText ?? "",
       patternStyles: {
-        RegExp(r'\[(.*?)\]'): const TextStyle(color: Colors.orange, backgroundColor: Color(0x33FF9800)),
+        // Orange for [ Select ] — highest priority
+        AIRegexPatterns.selectPlaceholderPattern:
+            const TextStyle(
+                color: Colors.orange,
+                backgroundColor: Color(0x33FF9800),
+                fontWeight: FontWeight.bold),
+        // Orange for any remaining [bracket] placeholder
+        AIRegexPatterns.anyBracketPattern:
+            const TextStyle(
+                color: Colors.orange,
+                backgroundColor: Color(0x33FF9800)),
+        // Bold underlined WHITE for SECTION HEADERS (e.g. SUBJECTIVE:)
+        AIRegexPatterns.headerPattern: const TextStyle(
+          decoration: TextDecoration.underline,
+          decorationColor: Colors.white,
+          decorationThickness: 2.0,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+        ),
       },
-    ); 
+    );
+
+    if (_generatedOutputs.isNotEmpty) {
+      _isTemplateCardExpanded = false;
+      _activeTabIndex = _generatedOutputs.length; // Select the latest generated map
+      _finalController.text = _generatedOutputs.last.content ?? "";
+    } else if (widget.draftNote != null && widget.draftNote!.formattedText.isNotEmpty) {
+      // Legacy compatibility: migrate formattedText to a generated output
+      final legacyTemplateName = widget.draftNote!.summary ?? 'Legacy Note';
+      _generatedOutputs.add(GeneratedOutput(
+        title: legacyTemplateName, 
+        content: widget.draftNote!.formattedText,
+        macroId: widget.draftNote!.appliedMacroId,
+      ));
+      _activeTabIndex = 1;
+      _finalController.text = widget.draftNote!.formattedText;
+      _isTemplateCardExpanded = false;
+    } else {
+      _isTemplateCardExpanded = true;
+      _finalController.text = _sourceController.text; // Default to transcript if nothing generated
+    }
     
     // Auto-save on manual edits
     _finalController.addListener(_onManualEdit);
     
+    // 🌐 PWA Fix: If we are on web and the text is the placeholder, clear it 
+    // so the clean template picker triggers correctly.
+    if (kIsWeb && _sourceController.text == "Transcribing...") {
+      _sourceController.text = "";
+    }
+
+    if ((widget.draftNote?.audioPath != null || widget.oneShotAudioPath != null) && 
+      _sourceController.text.trim().isEmpty) {
+      _showCleanTemplatePicker = true;
+    }
+    
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initStandalone();
+      _backgroundTranscriptionFuture = _initStandalone();
     });
   }
 
@@ -90,9 +235,137 @@ class _EditorScreenState extends State<EditorScreen> {
     super.dispose();
   }
 
+  /// ⚡ Gemini One-Shot: read audio file bytes → processAudioNote → display result
+  Future<void> _applyOneShotAI(MacroModel macro) async {
+    final audioPath = widget.oneShotAudioPath ?? widget.draftNote?.audioPath;
+    if (audioPath == null || audioPath.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('⚡ No audio file available for One-Shot AI.'), backgroundColor: Colors.red));
+        setState(() => _isOneShotGenerating = false);
+      }
+      return;
+    }
+    setState(() {
+      _isOneShotGenerating = true;
+      // Immediately dismiss the clean template picker and show overlay
+      _showCleanTemplatePicker = false;
+    });
+
+    try {
+      // ── Load audio bytes: Web → fetch blob URL, Native → read local file ──
+      Uint8List audioBytes;
+      String mimeType;
+
+      if (kIsWeb) {
+        // PWA: stopRecording() returns a blob:// URL — fetch it via HTTP
+        final response = await http.get(Uri.parse(audioPath));
+        if (response.statusCode != 200) {
+          throw Exception('Failed to fetch audio blob (${response.statusCode})');
+        }
+        audioBytes = response.bodyBytes;
+        mimeType = 'audio/webm'; // Chrome/Chromium records as WebM/Opus
+      } else {
+        // Android: audioPath is a local file path
+        final audioFile = File(audioPath);
+        if (!audioFile.existsSync()) throw Exception('Audio file not found: $audioPath');
+        audioBytes = await audioFile.readAsBytes();
+        final ext = audioPath.toLowerCase();
+        mimeType = ext.endsWith('.mp3') ? 'audio/mp3'
+            : ext.endsWith('.m4a') ? 'audio/m4a'
+            : ext.endsWith('.ogg') ? 'audio/ogg'
+            : 'audio/wav';
+      }
+
+      // Load AI context from SharedPreferences (same as extension)
+      final prefs = await SharedPreferences.getInstance();
+      final result = await _multimodalService.processAudioNote(
+        audioBytes: audioBytes,
+        mimeType: mimeType,
+        macroContent: macro.content,
+        specialty: await AIProcessingService.getEffectiveSpecialty(),
+        globalPrompt: prefs.getString('global_ai_prompt') ?? AIPromptConstants.globalMasterPrompt,
+      );
+
+      if (mounted) {
+        if (result.success) {
+          setState(() {
+            _selectedMacro = macro;
+            _generatedOutputs.add(GeneratedOutput(
+              macroId: macro.id,
+              title: macro.trigger, 
+              content: result.formattedNote
+            ));
+            _activeTabIndex = _generatedOutputs.length;
+            _finalController.text = result.formattedNote;
+            _isTemplateCardExpanded = false;
+            _isOneShotGenerating = false;
+          });
+          
+          if (_currentNoteId == null) {
+            try {
+              final inboxService = InboxService();
+              final noteId = await inboxService.addNote(
+                result.formattedNote,
+                patientName: macro.trigger,
+                audioPath: widget.oneShotAudioPath,
+              );
+              setState(() => _currentNoteId = noteId);
+              
+              await inboxService.updateNote(
+                noteId,
+                rawText: result.formattedNote,
+                formattedText: _generatedOutputs.isNotEmpty ? _generatedOutputs.last.content ?? '' : '',
+                generatedOutputs: _generatedOutputs.map((e) => e.toJson()).toList(),
+                suggestedMacroId: int.tryParse(macro.id.toString()) ?? 0,
+                summary: macro.trigger,
+                patientName: macro.trigger,
+              );
+            } catch (e) {
+              debugPrint('❌ Auto-save new note failed: $e');
+            }
+          } else {
+            await _saveDraftUpdate();
+          }
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Row(children: [
+              const Icon(Icons.bolt, color: Colors.amber, size: 16),
+              const SizedBox(width: 8),
+              Expanded(child: Text('⚡ One-Shot complete (${result.providerName})', style: const TextStyle(fontSize: 13))),
+            ]),
+            backgroundColor: const Color(0xFF1B5E20),
+            duration: const Duration(seconds: 3),
+          ));
+        } else {
+          setState(() => _isOneShotGenerating = false);
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('⚡ One-Shot failed: ${result.errorMessage}'),
+            backgroundColor: Colors.red,
+          ));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isOneShotGenerating = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('⚡ Gemini One-Shot error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   void _onManualEdit() {
     // Only auto-save if we have a draft ID
     if (_currentNoteId == null) return;
+
+    // Save content to active tab
+    if (_activeTabIndex == 0) {
+      _sourceController.text = _finalController.text;
+    } else if (_activeTabIndex > 0 && _activeTabIndex <= _generatedOutputs.length) {
+      _generatedOutputs[_activeTabIndex - 1].content = _finalController.text;
+    }
 
     if (_debounceTimer?.isActive ?? false) _debounceTimer!.cancel();
     
@@ -101,31 +374,7 @@ class _EditorScreenState extends State<EditorScreen> {
     });
   }
 
-  /// Retry helper with exponential backoff
-  Future<T> _retryOperation<T>(
-    Future<T> Function() operation, {
-    int maxRetries = 3,
-    Duration initialDelay = const Duration(seconds: 1),
-  }) async {
-    int attempt = 0;
-    
-    while (true) {
-      try {
-        return await operation();
-      } catch (e) {
-        attempt++;
-        
-        if (attempt >= maxRetries) {
-          debugPrint('❌ Retry failed after $maxRetries attempts');
-          rethrow;
-        }
-        
-        final delay = initialDelay * pow(2, attempt - 1).toInt();
-        debugPrint('⏳ Retry attempt $attempt/$maxRetries after ${delay.inSeconds}s');
-        await Future.delayed(delay);
-      }
-    }
-  }
+
 
   Future<void> _saveDraftUpdate() async {
     if (_currentNoteId == null) return;
@@ -134,8 +383,9 @@ class _EditorScreenState extends State<EditorScreen> {
       final inboxService = InboxService();
       await inboxService.updateNote(
         _currentNoteId!,
-        rawText: _sourceController.text, // REQUIRED by backend
-        formattedText: _finalController.text,
+        rawText: _sourceController.text.isNotEmpty ? _sourceController.text : 'لا يوجد نص اصلي عند اختيار هذا النموذج', // REQUIRED by backend
+        formattedText: _generatedOutputs.isNotEmpty ? _generatedOutputs.last.content : '', // Legacy fallback
+        generatedOutputs: _generatedOutputs.map((e) => e.toJson()).toList(),
         // We persist the original transcript too if needed
       );
       debugPrint("📝 Auto-saved manual edits to cloud");
@@ -146,7 +396,21 @@ class _EditorScreenState extends State<EditorScreen> {
 
   Future<void> _initStandalone() async {
      final macroService = MacroService();
-     final macros = await macroService.getMacros();
+     final allMacros = await macroService.getMacros();
+     
+     final prefs = await SharedPreferences.getInstance();
+     final deptId = DepartmentService().value ?? prefs.getString('specialty');
+     final allowedCategories = (deptId != null 
+         ? MedicalDepartments.getRelevantCategories(deptId)
+         : ['General']).map((c) => c.toLowerCase()).toList();
+
+     final macros = allMacros.where((m) {
+       final cleanCat = m.category.replaceAll('[', '').replaceAll(']', '').replaceAll('"', '').replaceAll("'", "");
+       final cats = cleanCat.split(',').map((e) => e.trim().toLowerCase()).where((e) => e.isNotEmpty).toList();
+       if (cats.isEmpty) return true;
+       if (cats.any((c) => c == 'general' || c == 'general practice')) return true;
+       return cats.any((c) => allowedCategories.contains(c));
+     }).toList();
      
      // 🚀 FETCH LATEST DATA: But only if we don't have fresh content
      // This prevents cache from overwriting AI-generated results
@@ -159,7 +423,8 @@ class _EditorScreenState extends State<EditorScreen> {
            if (freshNote.formattedText.isNotEmpty) {
              debugPrint("🔄 Loading saved AI result from cloud...");
              debugPrint("   Formatted Text Length: ${freshNote.formattedText.length}");
-             _finalController.text = freshNote.formattedText;
+              _finalController.text = freshNote.formattedText;
+              _isTemplateCardExpanded = false;
            }
            if (freshNote.originalText.isNotEmpty) {
              _sourceController.text = freshNote.originalText;
@@ -179,21 +444,81 @@ class _EditorScreenState extends State<EditorScreen> {
          if (!a.isFavorite && b.isFavorite) return 1;
          return a.trigger.compareTo(b.trigger);
        });
-       setState(() => _macros = macros);
-       
-       // Restore selected macro from draft if available
+
+       // Restore selected macro from draft and move to front
+       MacroModel? restoredMacro;
        if (widget.draftNote != null && widget.draftNote!.appliedMacroId != null) {
           try {
-             final restored = macros.firstWhere((m) => m.id == widget.draftNote!.appliedMacroId);
-             setState(() => _selectedMacro = restored);
+             restoredMacro = macros.firstWhere((m) => m.id == widget.draftNote!.appliedMacroId);
+             macros.remove(restoredMacro);
+             macros.insert(0, restoredMacro);
           } catch (e) {
              debugPrint("Could not restore selected macro: $e");
           }
        }
+
+       setState(() {
+         _macros = macros;
+         if (restoredMacro != null) _selectedMacro = restoredMacro;
+       });
      }
 
      final path = widget.draftNote?.audioPath;
-     if (path != null) {
+     final oracleFuture = widget.oracleTranscriptFuture;
+
+     // ── Oracle Live Speech: transcript arrives via Future ───────────────
+     if (oracleFuture != null) {
+       try {
+         final transcript = await oracleFuture;
+         if (mounted) {
+           setState(() => _isLoading = false);
+           final cleanText = transcript.trim();
+           if (cleanText.isNotEmpty) {
+             _sourceController.text = cleanText;
+             // AUTO-SAVE: Create draft immediately after transcription
+             try {
+               final inboxService = InboxService();
+               final noteId = await inboxService.addNote(
+                 cleanText,
+                 patientName: "Draft Note",
+               );
+               setState(() => _currentNoteId = noteId);
+               if (mounted) {
+                 ScaffoldMessenger.of(context).showSnackBar(
+                   const SnackBar(
+                     content: Text("📝 Draft saved to cloud"),
+                     backgroundColor: Colors.blueGrey,
+                     duration: Duration(seconds: 2),
+                   )
+                 );
+               }
+             } catch (e) {
+               debugPrint("Auto-save draft failed: $e");
+             }
+           } else {
+             _sourceController.text = "";
+             if (mounted) {
+               ScaffoldMessenger.of(context).showSnackBar(
+                 const SnackBar(
+                   content: Text('No speech detected by Oracle'),
+                   backgroundColor: Colors.orange,
+                 ),
+               );
+             }
+           }
+         }
+       } catch (e) {
+         debugPrint("Oracle transcript error: $e");
+         if (mounted) {
+           setState(() => _isLoading = false);
+           _sourceController.text = "❌ Oracle transcription error: $e";
+         }
+       }
+       return;
+     }
+
+     // ── Groq / file-based STT flow ─────────────────────────────────────
+     if (path != null && path.isNotEmpty) {
          
          Uint8List? bytes;
          // --- Web Logic ---
@@ -227,51 +552,143 @@ class _EditorScreenState extends State<EditorScreen> {
          }
 
          // --- Processing ---
-         if (bytes != null) {
+         if (path.isNotEmpty) {
               try {
-                final apiService = ApiService();
-                final result = await apiService.multipartPost(
-                  '/audio/transcribe',
-                  fileBytes: bytes,
-                  filename: kIsWeb ? 'recording.webm' : 'recording.m4a',
-                );
-
-                if (result['status'] == true) {
-                  final transcript = result['payload']['text'] ?? "";
-                  
+                final prefs = await SharedPreferences.getInstance();
+                final sttEngine = prefs.getString('stt_engine_pref') ?? 'oracle_live';
+                
+                // ⚡ Gemini One-Shot: Transcribe audio via Gemini (Step 1 of 2-Step Architecture)
+                // Uses the unified GeminiTranscriptionHelper (single source of truth).
+                if (sttEngine == 'gemini_oneshot') {
                   if (mounted) {
-                    setState(() => _isLoading = false);
-                    
-                    final cleanText = transcript.trim();
-                    if (cleanText.isNotEmpty) {
-                        _sourceController.text = cleanText;
-                        
-                        // AUTO-SAVE: Create draft immediately after transcription
-                        try {
-                          final inboxService = InboxService();
-                          final noteId = await inboxService.addNote(
-                            cleanText,
-                            patientName: "Draft Note",
-                          );
-                          
-                          setState(() => _currentNoteId = noteId);
-                          
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text("📝 Draft saved to cloud"),
-                                backgroundColor: Colors.blueGrey,
-                                duration: Duration(seconds: 2),
-                              )
-                            );
-                          }
-                        } catch (e) {
-                          debugPrint("Auto-save draft failed: $e");
-                        }
-                    }
+                    setState(() {
+                       _isOneShotMode = true;
+                       _isLoading = false;
+                       _isTemplateCardExpanded = true;
+                    });
                   }
+                  
+                  // Use pre-loaded bytes for speed (already fetched above)
+                  final mimeType = GeminiTranscriptionHelper.detectMimeType(path);
+                  final transcript = await GeminiTranscriptionHelper().transcribeFromBytes(bytes!, mimeType: mimeType);
+                  
+                  if (transcript != null && mounted) {
+                    setState(() {
+                      _sourceController.text = transcript;
+                      _isOneShotMode = false;
+                    });
+                  }
+                  if (mounted) setState(() => _isLoading = false);
+                  return;
+                }
+                
+                String transcript = "";
+                
+                if (sttEngine == 'whisper_local' && !kIsWeb) {
+                    // --- Whisper Local On-Device Transcription ---
+                    debugPrint("🎙️ Using Whisper Local STT");
+                    
+                    // Check if model is downloaded
+                    final downloadService = ModelDownloadService();
+                    if (!await downloadService.isModelReady()) {
+                      // Show download dialog
+                      if (!mounted) return;
+                      final shouldDownload = await showDialog<bool>(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (ctx) => _ModelDownloadDialog(),
+                      );
+                      if (shouldDownload != true) {
+                        setState(() { _isProcessing = false; });
+                        return;
+                      }
+                    }
+                    
+                    final whisperService = WhisperLocalService();
+                    transcript = await whisperService.transcribeAudioUrl(path);
+                    
+                    if (transcript.startsWith('Error')) {
+                        throw Exception(transcript);
+                    }
                 } else {
-                  throw result['message'] ?? 'Transcription failed';
+                    // --- Cloud Transcription (Groq) ---
+                    if (bytes != null) {
+                        // ⚡ STRATEGY: On Web, call Groq DIRECTLY for speed.
+                        // Backend proxy adds a full network round-trip + possible transcoding.
+                        // Direct call: Browser→Groq (fast)
+                        // Backend proxy: Browser→Backend→Groq→Backend→Browser (slow)
+                        bool transcribed = false;
+                        
+                        if (kIsWeb) {
+                          final prefs2 = await SharedPreferences.getInstance();
+                          final localGroqKey = prefs2.getString('groq_api_key') ?? 
+                              (dotenv.isInitialized ? dotenv.env['GROQ_API_KEY'] ?? '' : '');
+                          
+                          if (localGroqKey.isNotEmpty) {
+                            debugPrint("⚡ Web: Using Direct Groq API (fast path)");
+                            final groqService = GroqService(apiKey: localGroqKey);
+                            final directResult = await groqService.transcribe(bytes, filename: 'recording.webm');
+                            
+                            if (!directResult.startsWith('Error')) {
+                              transcript = directResult;
+                              transcribed = true;
+                            } else {
+                              debugPrint("⚠️ Direct Groq failed: $directResult. Falling back to backend proxy.");
+                            }
+                          }
+                        }
+                        
+                        // Fallback: Backend Proxy (for Mobile, or if Direct Groq failed)
+                        if (!transcribed) {
+                          debugPrint("☁️ Using Backend Proxy for STT");
+                          final apiService = ApiService();
+                          final result = await apiService.multipartPost(
+                            '/audio/transcribe',
+                            fileBytes: bytes,
+                            filename: kIsWeb ? 'recording.webm' : 'recording.wav',
+                          );
+
+                          if (result['status'] == true) {
+                            transcript = result['payload']['text'] ?? "";
+                          } else {
+                            throw Exception(result['message'] ?? 'Transcription failed');
+                          }
+                        }
+                    } else {
+                        throw Exception("No audio bytes available for Cloud STT.");
+                    }
+                }
+
+                if (mounted) {
+                  setState(() => _isLoading = false);
+                  
+                  final cleanText = transcript.trim();
+                  if (cleanText.isNotEmpty) {
+                      _sourceController.text = cleanText;
+                      
+                      // AUTO-SAVE: Create draft immediately after transcription
+                      try {
+                        final inboxService = InboxService();
+                        final noteId = await inboxService.addNote(
+                          cleanText,
+                          patientName: "Draft Note",
+                        );
+                        
+                        setState(() => _currentNoteId = noteId);
+                        
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text("📝 Draft saved to cloud"),
+                              backgroundColor: Colors.blueGrey,
+                              duration: Duration(seconds: 2),
+                            )
+                          );
+                        }
+                      } catch (e) {
+                        debugPrint("Auto-save draft failed: $e");
+                      }
+                  }
                 }
               } catch (e) {
                 debugPrint("Transcription Error: $e");
@@ -280,18 +697,43 @@ class _EditorScreenState extends State<EditorScreen> {
                   _sourceController.text = "❌ Transcription error: $e";
                 }
               }
-         }
- else {
-             debugPrint("No audio bytes found/loaded.");
+         } else {
+             debugPrint("No audio path found to transcribe.");
              if (mounted) setState(() => _isLoading = false);
-        }
+         }
      } else {
        if (mounted) setState(() => _isLoading = false);
      }
   }
 
   Future<void> _applyMacroWithAI(MacroModel macro) async {
-    setState(() => _selectedMacro = macro);
+    setState(() {
+      _selectedMacro = macro;
+      _isProcessing = true;
+      _isTemplateCardExpanded = false;   // Collapse template card
+    });
+
+    // Optimistic UI: wait for background STT if not finished
+    if (_backgroundTranscriptionFuture != null) {
+      if (mounted) {
+        // Show spinning indicator while we wait for the transcript
+        ScaffoldMessenger.of(context).showSnackBar(
+           const SnackBar(content: Text('⏳ Waiting for background transcription to finish...'), duration: Duration(seconds: 1)),
+        );
+      }
+      await _backgroundTranscriptionFuture;
+      _backgroundTranscriptionFuture = null;
+      if (!mounted) return;
+      if (_sourceController.text.isEmpty || _sourceController.text.startsWith('❌')) {
+        setState(() => _isProcessing = false);
+        if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('⚠️ Cannot apply template: Background transcription failed or returned empty.'), backgroundColor: Colors.red),
+           );
+        }
+        return; // Transcription failed, UI already shows error
+      }
+    }
 
     final prefs = await SharedPreferences.getInstance();
     String? geminiKey = prefs.getString('gemini_api_key');
@@ -332,27 +774,28 @@ class _EditorScreenState extends State<EditorScreen> {
     }
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final apiService = ApiService();
+      // ✅ Use AIProcessingService — centralized AI call (Phase 1 refactor)
+      final aiService = AIProcessingService();
+      final mode = await AIProcessingService.getEffectiveMode();
       
-      final response = await apiService.post('/audio/process', body: {
-        'transcript': _sourceController.text,
-        'macro_context': macro.content,
-        'specialty': prefs.getString('specialty') ?? 'General Practice',
-        'global_prompt': prefs.getString('global_ai_prompt') ?? '',
-        'mode': _useHighAccuracy ? 'smart' : 'fast',
-      });
+      final result = await aiService.processNote(
+        transcript: _sourceController.text,
+        macroContent: macro.content,
+        mode: mode,
+      );
 
-      if (response['status'] == true) {
-        final payload = response['payload'];
+      if (result.success) {
         if (mounted) {
           setState(() {
-            _finalController.text = payload['final_note'] ?? payload['text'] ?? '';
-            if (payload.containsKey('missing_suggestions')) {
-              _suggestions = (payload['missing_suggestions'] as List).cast<Map<String, dynamic>>();
-            } else {
-              _suggestions = [];
-            }
+            _generatedOutputs.add(GeneratedOutput(
+              macroId: macro.id,
+              title: macro.trigger, 
+              content: result.formattedNote
+            ));
+            _activeTabIndex = _generatedOutputs.length;
+            _finalController.text = result.formattedNote;
+            _suggestions = result.missingSuggestions;
+            _showCleanTemplatePicker = false; // ✨ Transition to normal editor
           });
 
           // 5. AUTO-SAVE: Update existing note or create new one
@@ -362,8 +805,10 @@ class _EditorScreenState extends State<EditorScreen> {
               await inboxService.updateNote(
                 _currentNoteId!,
                 rawText: _sourceController.text,
-                formattedText: _finalController.text,
+                formattedText: _generatedOutputs.isNotEmpty ? _generatedOutputs.last.content : '',
+                generatedOutputs: _generatedOutputs.map((e) => e.toJson()).toList(),
                 suggestedMacroId: int.tryParse(macro.id.toString()) ?? 0,
+                summary: macro.trigger, // Changed to summary for template name badge
                 patientName: macro.trigger,
               );
               
@@ -375,8 +820,10 @@ class _EditorScreenState extends State<EditorScreen> {
             } else {
               final noteId = await inboxService.addNote(
                 _sourceController.text,
-                formattedText: _finalController.text,
+                formattedText: _generatedOutputs.isNotEmpty ? _generatedOutputs.last.content : '',
+                generatedOutputs: _generatedOutputs.map((e) => e.toJson()).toList(),
                 suggestedMacroId: int.tryParse(macro.id.toString()) ?? 0,
+                summary: macro.trigger, // Changed to summary for template name badge
                 patientName: macro.trigger,
               );
               setState(() => _currentNoteId = noteId);
@@ -391,7 +838,7 @@ class _EditorScreenState extends State<EditorScreen> {
           }
         }
       } else {
-        throw response['message'] ?? 'Processing failed';
+        throw result.errorMessage ?? 'Processing failed';
       }
     } catch (e, stackTrace) {
       debugPrint('❌ FULL AI ERROR: $e');
@@ -470,77 +917,81 @@ class _EditorScreenState extends State<EditorScreen> {
   void _handleTextFieldTap() {
     final text = _finalController.text;
     final selection = _finalController.selection;
-    
     if (selection.baseOffset < 0) return;
-    
-    // Check if cursor is inside [ ... ]
-    // Use RegExp to find all placeholders
-    final matches = RegExp(r'\[(.*?)\]').allMatches(text);
-    
-    for (final match in matches) {
-      if (selection.baseOffset >= match.start && selection.baseOffset <= match.end) {
-        // Select the whole match
-        _finalController.selection = TextSelection(
-          baseOffset: match.start, 
-          extentOffset: match.end
-        );
-        break;
-      }
+
+    // ✅ Use TextProcessingService.findPlaceholderAtCursor (Phase 1 refactor)
+    final placeholder = TextProcessingService.findPlaceholderAtCursor(
+        text, selection.baseOffset);
+
+    if (placeholder != null) {
+      _finalController.selection = TextSelection(
+        baseOffset: placeholder.start,
+        extentOffset: placeholder.end,
+      );
     }
   }
 
-  void _copyCleanText() {
-    final text = _finalController.text;
+  void _copyCleanText() async {
+    final text = _activeTabIndex == 0 ? _sourceController.text : _finalController.text;
     if (text.isEmpty) return;
 
-    // 1. Split into lines
-    final List<String> lines = text.split('\n');
-    final List<String> cleanLines = [];
+    if (kIsWeb) {
+        // Use the centralized Extension Injection Service
+        final result = await ExtensionInjectionService.smartCopyAndInject(text);
+        if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(result.message),
+              backgroundColor: result.status == InjectionStatus.success ? Colors.green : Colors.blue,
+              duration: const Duration(seconds: 2),
+           ));
+        }
+    } else {
+        // ✅ Use TextProcessingService.applySmartCopy (Phase 1 refactor)
+        // FIXED: No longer deletes entire lines — removes only placeholder tokens
+        final placeholderCount = TextProcessingService.countPlaceholders(text);
+        final cleanText = TextProcessingService.applySmartCopy(text);
 
-    // 2. Filter lines
-    for (var line in lines) {
-      // Logic: If line contains [Not Reported] or just [...], skip it.
-      // We can be aggressive or specific.
-      // User requested: "remove lines with [Not Reported]"
-      
-      bool isDirty = false;
-      
-      if (line.contains('[Not Reported]')) isDirty = true;
-      if (line.contains('Not Reported')) isDirty = true;
-      // if (line.trim() == '[]') isDirty = true; 
+        await Clipboard.setData(ClipboardData(text: cleanText));
 
-      if (!isDirty) {
-        cleanLines.add(line);
-      }
-    }
-
-    final cleanText = cleanLines.join('\n');
-
-    // 3. Copy to Clipboard
-    Clipboard.setData(ClipboardData(text: cleanText));
-
-    // 4. Feedback
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.cleaning_services, color: Colors.white, size: 20),
-              const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
                 children: [
-                  const Text("✅ Text Cleaned & Copied!", style: TextStyle(fontWeight: FontWeight.bold)),
-                  Text("Removed ${lines.length - cleanLines.length} lines with missing info.", style: const TextStyle(fontSize: 12)),
+                  const Icon(Icons.cleaning_services, color: Colors.white, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text("✅ Smart Copy Active",
+                            style: TextStyle(fontWeight: FontWeight.bold)),
+                        Text(
+                          placeholderCount > 0
+                              ? "Copied without $placeholderCount placeholder token(s)."
+                              : "Copied — note is complete, no placeholders found.",
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
-            ],
-          ),
-          backgroundColor: Colors.green[700],
-          duration: const Duration(seconds: 3),
-        )
-      );
+              backgroundColor: Colors.green[700],
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+    }
+    
+    // Auto-update status to COPIED if we have a draft ID
+    if (_currentNoteId != null) {
+        try {
+            await InboxService().updateStatus(_currentNoteId!, NoteStatus.copied);
+        } catch(e) {
+            debugPrint("Failed to update status to copied: $e");
+        }
     }
   }
 
@@ -574,421 +1025,663 @@ class _EditorScreenState extends State<EditorScreen> {
     setState(() => _suggestions.remove(suggestion));
   }
 
-  Widget _buildSmartHeader() {
-      // Status Logic
-      String statusText = "DRAFT";
-      Color statusColor = Colors.orange;
-      
-      // We can infer status from draftNote or current state
-      // For now, simple logic
-      if (_finalController.text.isNotEmpty && !_hasUnsavedChanges) {
-          statusText = "READY";
-          statusColor = AppTheme.success;
-      }
-
-      return Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          color: const Color(0xFF121212), // Dark header
-          child: SafeArea(
-            bottom: false,
-            child: Row(
-                children: [
-                    IconButton(
-                        icon: const Icon(Icons.arrow_back, color: Colors.white),
-                        onPressed: () => Navigator.pop(context),
-                        tooltip: 'Back',
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                        child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                                Text(
-                                    "Pocket Editor",
-                                    style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
-                                ),
-                                const SizedBox(height: 2),
-                                Row(
-                                    children: [
-                                       Text(widget.draftNote?.title ?? "New Note", style: GoogleFonts.inter(color: Colors.white70, fontSize: 11)),
-                                       const SizedBox(width: 8),
-                                       Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(
-                                              color: statusColor.withOpacity(0.1),
-                                              borderRadius: BorderRadius.circular(4),
-                                              border: Border.all(color: statusColor.withOpacity(0.3)),
-                                          ),
-                                          child: Text(statusText, style: GoogleFonts.inter(color: statusColor, fontSize: 9, fontWeight: FontWeight.bold)),
-                                      ),
-                                    ],
-                                )
-                            ],
-                        ),
-                    ),
-                    
-                    // "Use Raw Text" Button (from old UI, preserved as requesting in plan)
-                    if (_sourceController.text.isNotEmpty)
-                    InkWell(
-                      onTap: () {
-                          setState(() {
-                            _finalController.text = _sourceController.text;
-                          });
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text("⬇️ Copied raw text to editor"),
-                              duration: Duration(milliseconds: 1000),
-                              backgroundColor: Color(0xFF2C2C2C),
-                            )
-                          );
-                      },
-                      borderRadius: BorderRadius.circular(4),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.arrow_downward_rounded, color: AppTheme.accent, size: 14),
-                            const SizedBox(width: 4),
-                            Text(
-                              "Use Raw",
-                              style: GoogleFonts.inter(
-                                color: AppTheme.accent,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                ],
-            ),
-          ),
-      );
-  }
-
-  Widget _buildSourceAccordion() {
-      if (_sourceController.text.isEmpty && !_isLoading) return const SizedBox.shrink();
-
-      final lines = _sourceController.text.split('\n');
-      final preview = lines.take(1).join(' ') + (lines.length > 1 ? '...' : '');
-
-      return AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-          decoration: BoxDecoration(
-             color: const Color(0xFF1E1E1E),
-             borderRadius: BorderRadius.circular(8),
-             border: Border.all(color: Colors.white10),
-          ),
-          child: Column(
-              children: [
-                  InkWell(
-                      onTap: () => setState(() => _isSourceExpanded = !_isSourceExpanded),
-                      borderRadius: BorderRadius.circular(8),
-                      child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                                Row(
-                                    children: [
-                                        const Icon(Icons.mic_none, size: 14, color: Colors.white38),
-                                        const SizedBox(width: 8),
-                                        const Text("Source Transcript", style: TextStyle(color: Colors.white70, fontSize: 12)),
-                                        const Spacer(),
-                                        // Always visible Copy Button
-                                        InkWell(
-                                            onTap: () {
-                                                Clipboard.setData(ClipboardData(text: _sourceController.text));
-                                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Copied raw text"), duration: Duration(seconds: 1)));
-                                            },
-                                            child: const Padding(padding: EdgeInsets.all(4), child: Icon(Icons.copy, size: 14, color: AppTheme.accent)),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Icon(_isSourceExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 16, color: Colors.white38),
-                                    ],
-                                ),
-                                const SizedBox(height: 4),
-                                // Always visible textual preview (First Line)
-                                Text(
-                                  preview, 
-                                  maxLines: 1, 
-                                  overflow: TextOverflow.ellipsis, 
-                                  style: const TextStyle(color: Colors.white60, fontSize: 11, fontStyle: FontStyle.italic)
-                                ),
-                            ],
-                          ),
-                      ),
-                  ),
-                  if (_isSourceExpanded)
-                      Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                          constraints: const BoxConstraints(maxHeight: 150),
-                          child: TextField(
-                            controller: _sourceController,
-                            style: GoogleFonts.inter(fontSize: 13, color: Colors.white70, height: 1.4),
-                            maxLines: null,
-                            decoration: const InputDecoration(border: InputBorder.none),
-                          ),
-                      )
-              ],
-          ),
-      );
-  }
-
-  Widget _buildEditorToolbar() {
-     // Ensure we don't crash if macros list is empty or null, though it's initialized to []
-     final displayedMacros = _macros.take(10).toList();
-     
-     return Container(
-         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-         color: const Color(0xFF121212), // Match App Background
-         child: ScrollConfiguration(
-             behavior: ScrollConfiguration.of(context).copyWith(
-               dragDevices: {
-                 PointerDeviceKind.touch,
-                 PointerDeviceKind.mouse,
-               },
-             ),
-             child: SingleChildScrollView(
-                 scrollDirection: Axis.horizontal,
-                 child: Row(
-                     children: [
-                         Text("TEMPLATES:", style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white38)),
-                         const SizedBox(width: 8),
-                         ...displayedMacros.map((macro) {
-                             final isSelected = _selectedMacro?.id == macro.id;
-                             
-                             return Padding(
-                                 padding: const EdgeInsets.only(right: 6),
-                                 child: InkWell(
-                                     onTap: () => _applyMacroWithAI(macro),
-                                     borderRadius: BorderRadius.circular(20),
-                                     child: Container(
-                                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                         decoration: BoxDecoration(
-                                             color: isSelected ? AppTheme.accent.withOpacity(0.2) : AppTheme.surface,
-                                             borderRadius: BorderRadius.circular(20),
-                                             border: Border.all(color: isSelected ? AppTheme.accent : Colors.white24, width: isSelected ? 1.5 : 1)
-                                         ),
-                                         child: Row(
-                                           mainAxisSize: MainAxisSize.min,
-                                           children: [
-                                              if (isSelected) ...[
-                                                const Icon(Icons.check_circle, size: 12, color: AppTheme.accent),
-                                                const SizedBox(width: 4),
-                                              ],
-                                              Text(
-                                                macro.trigger, 
-                                                style: GoogleFonts.inter(fontSize: 11, fontWeight: isSelected ? FontWeight.bold : FontWeight.w500, color: isSelected ? AppTheme.accent : Colors.white70)
-                                              ),
-                                           ],
-                                         ),
-                                     ),
-                                 ),
-                             );
-                         }).toList(),
-                         
-                         // More Button
-                         IconButton(
-                             icon: const Icon(Icons.more_horiz, size: 16, color: Colors.white38),
-                             onPressed: _showAllTemplates,
-                             tooltip: "All Templates",
-                             padding: EdgeInsets.zero,
-                             constraints: const BoxConstraints(),
-                         )
-                     ],
-                 ),
-             ),
-         ),
-     );
-  }
 
 
 
-  void _showAllTemplates() {
-      showModalBottomSheet(
-          context: context,
-          backgroundColor: const Color(0xFF181818),
-          isScrollControlled: true,
-          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-          builder: (context) {
-              return DraggableScrollableSheet(
-                  initialChildSize: 0.5,
-                  minChildSize: 0.3,
-                  maxChildSize: 0.9,
-                  expand: false,
-                  builder: (context, scrollController) {
-                      return Column(
-                          children: [
-                              const SizedBox(height: 12),
-                              // Handle
-                              Center(
-                                child: Container(
-                                  width: 40, height: 4, 
-                                  decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2))
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
-                                child: Text("All Templates", style: GoogleFonts.inter(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                              ),
-                              const SizedBox(height: 16),
-                              Expanded(
-                                  child: ListView.separated(
-                                      controller: scrollController,
-                                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 30),
-                                      itemCount: _macros.length,
-                                      separatorBuilder: (_,__) => const SizedBox(height: 10),
-                                      itemBuilder: (context, index) {
-                                          final macro = _macros[index];
-                                          final isSelected = _selectedMacro?.id == macro.id;
-                                          return InkWell(
-                                              onTap: () {
-                                                  Navigator.pop(context);
-                                                  _applyMacroWithAI(macro);
-                                              },
-                                              borderRadius: BorderRadius.circular(12),
-                                              child: Container(
-                                                  padding: const EdgeInsets.all(12),
-                                                  decoration: BoxDecoration(
-                                                      color: isSelected ? AppTheme.accent.withOpacity(0.1) : const Color(0xFF2C2C2C),
-                                                      borderRadius: BorderRadius.circular(12),
-                                                      border: Border.all(color: isSelected ? AppTheme.accent : Colors.white10),
-                                                  ),
-                                                  child: Row(
-                                                      children: [
-                                                          Icon(
-                                                              isSelected ? Icons.check_circle : (macro.isFavorite ? Icons.star : Icons.article),
-                                                              size: 18,
-                                                              color: isSelected ? AppTheme.accent : (macro.isFavorite ? Colors.amber : Colors.white38),
-                                                          ),
-                                                          const SizedBox(width: 12),
-                                                          Expanded(
-                                                              child: Column(
-                                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                                  children: [
-                                                                      Text(macro.trigger, style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14)),
-                                                                      if (macro.aiInstruction != null && macro.aiInstruction!.isNotEmpty)
-                                                                      Text(macro.aiInstruction!, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.inter(color: Colors.white54, fontSize: 11)),
-                                                                  ],
-                                                              ),
-                                                          ),
-                                                          Icon(Icons.arrow_forward_ios, size: 12, color: Colors.white12),
-                                                      ],
-                                                  ),
-                                              ),
-                                          );
-                                      },
-                                  ),
-                              ),
-                          ],
-                      );
-                  }
-              );
-          }
-      );
-  }
 
-  Widget _buildActionDock() {
-      return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-              color: const Color(0xFF1E1E1E),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10, offset: const Offset(0, -5))]
-          ),
-          child: Row(
-              children: [
-                  Expanded(
-                      flex: 10,
-                      child: ElevatedButton(
-                          onPressed: _finalController.text.isEmpty ? null : _copyCleanText,
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.accent,
-                              foregroundColor: Colors.black, // Dark theme contrast
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              elevation: 2,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          child: const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                  Icon(Icons.copy_all, size: 18), 
-                                  SizedBox(width: 8),
-                                  Text("SMART COPY / FINISH", style: TextStyle(fontWeight: FontWeight.bold)),
-                              ],
-                          ),
-                      ),
-                  ),
-              ],
-          ),
-      );
-  }
-
-
+  // _showAllTemplates() removed to show inline instead
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    _isKeyboardVisible = bottomInset > 0;
-
+    if (_showCleanTemplatePicker) {
+      return _buildCleanTemplateScreen(context);
+    }
+    
     return Scaffold(
-      backgroundColor: const Color(0xFF121212), // Dark background
-      body: Column(
-        children: [
-           _buildSmartHeader(),
-           
-           _buildSourceAccordion(),
-           
-           // Unified Editor Area
-           Expanded(
-               child: Container(
-                   margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                   decoration: BoxDecoration(
-                       color: const Color(0xFF1E1E1E), // Dark surface
-                       borderRadius: BorderRadius.circular(16),
-                       border: Border.all(color: Colors.white10),
-                       boxShadow: [
-                           BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 4, offset: const Offset(0, 2)),
-                       ]
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: AppBar(
+        title: Text(
+          widget.noteNumber > 0 ? 'NO-${widget.noteNumber}' : 'Draft Note',
+          style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                 // Scrollable Content
+                 Expanded(
+                   child: SingleChildScrollView(
+                     padding: const EdgeInsets.all(16),
+                     child: Column(
+                       crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                           _buildTemplateSelectorCard(),
+                           const SizedBox(height: 16),
+                           _buildSmartTabsEditorCard(),
+                           const SizedBox(height: 80), // Space for bottom dock
+                        ],
+                     ),
                    ),
-                   child: Column(
-                       children: [
-                           _buildEditorToolbar(),
-                           const Divider(height: 1, color: Colors.white10),
-                           Expanded(
-                               child: _isProcessing 
-                               ? const Center(child: AnimatedLoadingText())
-                               : Padding(
-                                   padding: const EdgeInsets.all(16),
-                                   child: TextField(
-                                       controller: _finalController,
-                                       maxLines: null,
-                                       expands: true,
-                                       style: GoogleFonts.inter(fontSize: 16, color: Colors.white, height: 1.5),
-                                       onTap: _handleTextFieldTap,
-                                       decoration: const InputDecoration(
-                                           border: InputBorder.none,
-                                           hintText: "Generated note will appear here...",
-                                           hintStyle: TextStyle(color: Colors.white24)
-                                       ),
-                                   ),
-                               )
-                           ),
-                       ],
-                   ),
+                 ),
+                 
+                  // Sticky Action Dock
+                 _buildStickyActionDock(),
+              ],
+            ),
+            
+            // Overlay for Initial Transcription
+            if (_isLoading)
+               const Positioned.fill(child: ProcessingOverlay()),
+
+            // Overlay for AI Generation
+            if (_isProcessing)
+               const Positioned.fill(
+                 child: ProcessingOverlay(
+                   cyclingMessages: [
+                      'جاري معالجة الملاحظة...',
+                      'التواصل مع الذكاء الاصطناعي...',
+                      'تنسيق وهيكلة الملاحظة...',
+                   ],
+                 ),
                ),
-           ),
-           
-           _buildActionDock(),
+
+            // ⚡ One-Shot Overlay
+            if (_isOneShotGenerating)
+               const Positioned.fill(
+                 child: ProcessingOverlay(
+                   cyclingMessages: [
+                      '⚡ إرسال الصوت إلى Gemini...',
+                      '⚡ تحليل الصوت والقالب...',
+                      '⚡ توليد الملاحظة الطبية...',
+                      '⚡ تنسيق النتيجة النهائية...',
+                   ],
+                 ),
+               ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSmartTabsEditorCard() {
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _activeTabIndex > 0
+              ? colorScheme.primary.withValues(alpha: 0.5)
+              : colorScheme.outline.withValues(alpha: 0.3),
+          width: _activeTabIndex > 0 ? 1.5 : 1.0,
+        ),
+        boxShadow: _activeTabIndex > 0 ? [
+          BoxShadow(
+            color: colorScheme.primary.withValues(alpha: 0.08),
+            blurRadius: 12,
+            spreadRadius: 0,
+          )
+        ] : [],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Tab Bar Header ──
+          Container(
+            height: 48,
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: colorScheme.outline.withValues(alpha: 0.2))),
+              color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.2),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+            ),
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: 1 + _generatedOutputs.length,
+              itemBuilder: (context, index) {
+                final isSelected = index == _activeTabIndex;
+                final title = index == 0 ? "Transcript" : (_generatedOutputs[index - 1].title ?? "Note $index");
+                final icon = index == 0 ? Icons.description_outlined : Icons.bolt;
+                
+                return InkWell(
+                  onTap: () {
+                    if (isSelected) return;
+                    _switchTab(index);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: isSelected ? colorScheme.primary : Colors.transparent,
+                          width: 2,
+                        ),
+                      ),
+                      color: isSelected ? colorScheme.primary.withValues(alpha: 0.05) : Colors.transparent,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(icon, size: 16, color: isSelected ? colorScheme.primary : colorScheme.onSurface.withValues(alpha: 0.5)),
+                        const SizedBox(width: 8),
+                        Text(
+                          title,
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                            color: isSelected ? colorScheme.primary : colorScheme.onSurface.withValues(alpha: 0.7),
+                          ),
+                        ),
+                        if (index > 0) ...[
+                          const SizedBox(width: 8),
+                          InkWell(
+                            onTap: () => _deleteTab(index),
+                            child: Icon(Icons.close, size: 14, color: colorScheme.onSurface.withValues(alpha: 0.4)),
+                          )
+                        ]
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          
+          // ── Editor Area ──
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: _isProcessing
+                ? const SizedBox(height: 100, child: Center(child: CircularProgressIndicator()))
+                : TextField(
+                    controller: _activeTabIndex == 0 ? _sourceController : _finalController,
+                    maxLines: null,
+                    minLines: 5,
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      color: colorScheme.onSurface,
+                      height: 1.6,
+                    ),
+                    decoration: InputDecoration(
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                      hintText: _activeTabIndex == 0 ? "Transcript empty..." : "AI generated note will appear here...",
+                      hintStyle: TextStyle(
+                        color: colorScheme.onSurface.withValues(alpha: 0.25),
+                      ),
+                    ),
+                    onTap: _activeTabIndex == 0 ? null : _handleTextFieldTap,
+                  ),
+          ),
+          
+          if (_activeTabIndex > 0 && _suggestions.isNotEmpty)
+             _buildSuggestionsArea(),
         ],
       ),
+    );
+  }
+
+  void _switchTab(int index) {
+    setState(() {
+      // Save current selection text back to the array before switching
+      if (_activeTabIndex > 0 && _activeTabIndex <= _generatedOutputs.length) {
+         _generatedOutputs[_activeTabIndex - 1].content = _finalController.text;
+      }
+
+      _activeTabIndex = index;
+      
+      // Load new text
+      if (_activeTabIndex > 0 && _activeTabIndex <= _generatedOutputs.length) {
+         _finalController.text = _generatedOutputs[_activeTabIndex - 1].content ?? "";
+      }
+    });
+  }
+
+  void _deleteTab(int index) {
+    if (index > 0 && index <= _generatedOutputs.length) {
+      setState(() {
+        _generatedOutputs.removeAt(index - 1);
+        if (_activeTabIndex >= index) {
+           _switchTab(_activeTabIndex - 1);
+        }
+      });
+      _onManualEdit(); // Trigger auto-save
+    }
+  }
+
+  Widget _buildTemplateSelectorCard() {
+    final colorScheme = Theme.of(context).colorScheme;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOutCubic,
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _isTemplateCardExpanded
+              ? colorScheme.primary.withValues(alpha: 0.5)
+              : colorScheme.outline.withValues(alpha: 0.3),
+          width: _isTemplateCardExpanded ? 1.5 : 1.0,
+        ),
+        boxShadow: _isTemplateCardExpanded ? [
+          BoxShadow(
+            color: colorScheme.primary.withValues(alpha: 0.08),
+            blurRadius: 12,
+            spreadRadius: 0,
+          )
+        ] : [],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Header — always visible, tappable to toggle ──
+          InkWell(
+            onTap: () => setState(() => _isTemplateCardExpanded = !_isTemplateCardExpanded),
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
+              child: Row(
+                children: [
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    child: Icon(
+                      _isTemplateCardExpanded ? Icons.extension : Icons.extension_outlined,
+                      key: ValueKey(_isTemplateCardExpanded),
+                      color: _isTemplateCardExpanded
+                          ? colorScheme.primary
+                          : colorScheme.onSurface.withValues(alpha: 0.5),
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                   Text(
+                      _isOneShotMode ? "⚡ Choose Template (One-Shot)" : "Choose Template",
+                      style: GoogleFonts.inter(
+                       fontSize: 16,
+                       fontWeight: FontWeight.w600,
+                       color: _isOneShotMode ? Colors.amber : colorScheme.onSurface,
+                     ),
+                   ),
+                  // Show selected macro name when collapsed
+                  if (!_isTemplateCardExpanded && _selectedMacro != null) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _selectedMacro!.trigger,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: colorScheme.primary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ] else const Spacer(),
+                  // Just a standard arrow icon showing state
+                  Icon(
+                    _isTemplateCardExpanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    size: 18,
+                    color: colorScheme.onSurface.withValues(alpha: 0.4),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // ── Content — only visible when expanded ──
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 300),
+            crossFadeState: _isTemplateCardExpanded
+                ? CrossFadeState.showFirst
+                : CrossFadeState.showSecond,
+            firstChild: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: SizedBox(
+                width: double.infinity,
+                child: Wrap(
+                  spacing: 8.0,
+                  runSpacing: 8.0,
+                  children: _macros.map((macro) {
+                    final isSelected = _selectedMacro?.id == macro.id;
+                       return FilterChip(
+                        label: Text(macro.trigger),
+                        selected: isSelected,
+                        onSelected: (bool selected) {
+                          if (selected) {
+                            _applyMacroWithAI(macro);
+                          }
+                        },
+                        backgroundColor: colorScheme.surface,
+                        selectedColor: _isOneShotMode
+                            ? Colors.amber.withValues(alpha: 0.15)
+                            : colorScheme.primary.withValues(alpha: 0.15),
+                        checkmarkColor: _isOneShotMode ? Colors.amber : colorScheme.primary,
+                        labelStyle: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: isSelected
+                              ? (_isOneShotMode ? Colors.amber : colorScheme.primary)
+                              : colorScheme.onSurface.withValues(alpha: 0.7),
+                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          side: BorderSide(
+                            color: isSelected
+                                ? (_isOneShotMode ? Colors.amber : colorScheme.primary)
+                                : colorScheme.outline.withValues(alpha: 0.4),
+                          ),
+                        ),
+                        showCheckmark: true,
+                      );
+                  }).toList(),
+                ),
+              ),
+            ),
+            secondChild: const SizedBox(width: double.infinity, height: 0),
+          ),
+        ],
+      ),
+    );
+  }
+  Widget _buildSuggestionsArea() {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E3A8A).withValues(alpha: 0.1),
+        border: Border(top: BorderSide(color: colorScheme.primary.withValues(alpha: 0.2))),
+        borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.info_outline, color: colorScheme.primary, size: 16),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  "AI Suggestions (${_suggestions.length})",
+                  style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: colorScheme.primary),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _suggestions.map((suggestion) {
+              return ActionChip(
+                label: Text(
+                  suggestion['field_name'] ?? 'Suggestion',
+                  style: GoogleFonts.inter(fontSize: 11, color: colorScheme.primary),
+                ),
+                backgroundColor: colorScheme.primary.withValues(alpha: 0.1),
+                side: BorderSide(color: colorScheme.primary.withValues(alpha: 0.3)),
+                onPressed: () => _insertSuggestion(suggestion),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStickyActionDock() {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+            color: colorScheme.surface,
+            border: Border(top: BorderSide(color: colorScheme.outline.withValues(alpha: 0.4), width: 1)),
+        ),
+        child: ElevatedButton.icon(
+            onPressed: () {
+                 _copyCleanText();
+            },
+            icon: const Icon(Icons.content_copy_rounded, size: 18),
+            label: const Text("SMART COPY / INJECT"),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: colorScheme.primary,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 48),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+        ),
+    );
+  }
+
+  // ✨ NEW: Clean Template Selection UI for Mobile
+  Widget _buildCleanTemplateScreen(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Scaffold(
+      // Ensure the background is solid (Theme's background color)
+      backgroundColor: theme.scaffoldBackgroundColor,
+      appBar: AppBar(
+        title: Text(
+          widget.noteNumber > 0 ? 'NO-${widget.noteNumber}' : 'Draft Note',
+          style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                Expanded(
+                  child: Center(
+                    // Slide up & fade in animation
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 300.0, end: 0.0),
+                      duration: const Duration(milliseconds: 800),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, value, child) {
+                        return Transform.translate(
+                          offset: Offset(0, value),
+                          child: Opacity(
+                            opacity: (1.0 - (value / 300.0)).clamp(0.0, 1.0),
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.auto_awesome, size: 48, color: colorScheme.primary.withValues(alpha: 0.8)),
+                            const SizedBox(height: 16),
+                            Text(
+                              "How would you like to format this note?",
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.inter(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: colorScheme.onSurface,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              "Choose a template to get started.",
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.inter(
+                                fontSize: 14,
+                                color: colorScheme.onSurface.withValues(alpha: 0.5),
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+                            // Wrapping the chips in a constrained box to make them look good on mobile
+                            _buildCleanTemplateChips(theme),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            
+            // Overlays
+            if (_isLoading)
+               const Positioned.fill(child: ProcessingOverlay()),
+
+            if (_isProcessing)
+               const Positioned.fill(
+                 child: ProcessingOverlay(
+                   cyclingMessages: [
+                      'Processing Medical Note...',
+                      'Consulting AI Model...',
+                      'Formatting and Structuring...',
+                   ],
+                 ),
+               ),
+
+            if (_isOneShotGenerating)
+               const Positioned.fill(
+                 child: ProcessingOverlay(
+                   cyclingMessages: [
+                      '⚡ Sending Audio to Gemini...',
+                      '⚡ Analyzing Audio & Template...',
+                      '⚡ Generating Medical Note...',
+                      '⚡ Formatting Final Result...',
+                   ],
+                 ),
+               ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCleanTemplateChips(ThemeData theme) {
+    final colorScheme = theme.colorScheme;
+    return SingleChildScrollView(
+      child: Wrap(
+        spacing: 12.0,
+        runSpacing: 12.0,
+        alignment: WrapAlignment.center,
+        children: _macros.map((macro) {
+          return ActionChip(
+            label: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+              child: Text(macro.trigger),
+            ),
+            onPressed: () {
+               // Immediately dismiss template picker before processing
+               setState(() => _showCleanTemplatePicker = false);
+               _applyMacroWithAI(macro);
+            },
+            backgroundColor: colorScheme.surface,
+            labelStyle: GoogleFonts.inter(
+              fontSize: 15,
+              color: colorScheme.onSurface,
+              fontWeight: FontWeight.w500,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(
+                color: colorScheme.outline.withValues(alpha: 0.3),
+              ),
+            ),
+            elevation: 1,
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Model Download Dialog (shown when Whisper model is not installed)
+// ─────────────────────────────────────────────────────────────
+class _ModelDownloadDialog extends StatefulWidget {
+  @override
+  _ModelDownloadDialogState createState() => _ModelDownloadDialogState();
+}
+
+class _ModelDownloadDialogState extends State<_ModelDownloadDialog> {
+  bool _downloading = false;
+  double _progress = 0.0;
+  String _currentFile = '';
+  String? _error;
+
+  Future<void> _startDownload() async {
+    setState(() {
+      _downloading = true;
+      _error = null;
+    });
+
+    try {
+      await ModelDownloadService().downloadModel(
+        onProgress: (downloaded, total, fileName) {
+          if (mounted) {
+            setState(() {
+              _progress = total > 0 ? downloaded / total : 0.0;
+              _currentFile = fileName;
+            });
+          }
+        },
+      );
+
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _downloading = false;
+          _error = 'Download failed: $e';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Speech Model Required'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (!_downloading && _error == null)
+            const Text(
+              'The offline speech recognition model (~245 MB) needs to be downloaded. This is a one-time download.',
+            ),
+          if (_downloading) ...[
+            const SizedBox(height: 16),
+            LinearProgressIndicator(value: _progress),
+            const SizedBox(height: 8),
+            Text(
+              '${(_progress * 100).toStringAsFixed(1)}% — $_currentFile',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            Text(_error!, style: const TextStyle(color: Colors.red)),
+          ],
+        ],
+      ),
+      actions: [
+        if (!_downloading)
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+        if (!_downloading)
+          ElevatedButton(
+            onPressed: _startDownload,
+            child: Text(_error != null ? 'Retry' : 'Download'),
+          ),
+      ],
     );
   }
 }

@@ -12,14 +12,14 @@ class WindowManagerHelper {
     try {
       final primaryDisplay = await screenRetriever.getPrimaryDisplay();
       final screenSize = primaryDisplay.size;
-      
-      // Expand to full sidebar dimensions
-      final height = screenSize.height - 60; // Account for taskbar
+      // Provide a reasonable max height, leaving space for top hospital system headers
+      final height = screenSize.height * 0.75; // 75% of screen height
       await windowManager.setSize(Size(sidebarWidth, height));
       
-      // Position at right edge, top aligned
-      final x = screenSize.width - sidebarWidth;
-      await windowManager.setPosition(Offset(x, 0));
+      // Position at bottom-right edge, avoiding taskbar
+      final x = screenSize.width - sidebarWidth - 20; // 20px padding from right
+      final y = screenSize.height - height - 80; // 80px padding from bottom
+      await windowManager.setPosition(Offset(x, y));
     } catch (e) {
       print("Error expanding to sidebar: $e");
     }
@@ -30,7 +30,7 @@ class WindowManagerHelper {
     try {
       final primaryDisplay = await screenRetriever.getPrimaryDisplay();
       final screenSize = primaryDisplay.size;
-      const pillWidth = 350.0; // Native Utility Width
+      const pillWidth = 300.0; // Matches actual button content width
       const pillHeight = 56.0; // Native Utility Height
       
       // Shrink to pill size
@@ -39,10 +39,9 @@ class WindowManagerHelper {
         await windowManager.setSize(const Size(pillWidth, pillHeight));
         await windowManager.setResizable(false); // Lock it back
       } catch (e) { print(e); }
-      
-      // Position at right-center
-      final x = screenSize.width - pillWidth - 10;
-      final y = (screenSize.height - pillHeight) / 2;
+      // Position at bottom-right (leaving margin for taskbar and edge)
+      final x = screenSize.width - pillWidth - 20; // 20px padding from right
+      final y = screenSize.height - pillHeight - 80; // 80px padding from bottom to avoid taskbar
       await windowManager.setPosition(Offset(x, y));
     } catch (e) {
       print("Error collapsing to pill: $e");
@@ -65,14 +64,33 @@ class WindowManagerHelper {
     }
   }
 
-  /// Restores the window to a centered dialog size (for Macro Manager etc)
+  /// Restores the window to a dialog size and places it on the bottom right
   static Future<void> centerDialog() async {
-    await windowManager.setSize(const Size(900, 700));
-    await windowManager.center();
+    await expandToCustomSizeBottomRight(900, 700);
     await windowManager.setAlwaysOnTop(false);
   }
 
+  /// Expands to a custom size but keeps it aligned bottom-right like the sidebar and pill
+  static Future<void> expandToCustomSizeBottomRight(double width, double height) async {
+    if (kIsWeb) return;
+    try {
+      final primaryDisplay = await screenRetriever.getPrimaryDisplay();
+      final screenSize = primaryDisplay.size;
+      
+      await windowManager.setSize(Size(width, height));
+      
+      final x = screenSize.width - width - 20; // 20px padding from right
+      final y = screenSize.height - height - 80; // 80px padding from bottom
+      await windowManager.setPosition(Offset(x, y));
+    } catch (e) {
+      print("Error expanding: $e");
+    }
+  }
+
   static bool _isTransparencyLocked = false;
+
+  /// When true, suppresses any window collapse calls (e.g. during logout)
+  static bool isLoggingOut = false;
 
   /// Locks opacity to 1.0 (prevent dimming)
   static void setTransparencyLocked(bool locked) {

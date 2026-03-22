@@ -1,8 +1,8 @@
 import 'package:dio/dio.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../../core/config/api_config.dart';
 import '../../data/datasources/pairing_remote_datasource.dart';
 import '../../data/repositories/pairing_repository_impl.dart';
 import '../../domain/entities/pairing_session.dart';
@@ -10,8 +10,7 @@ import '../../domain/repositories/pairing_repository.dart';
 
 // Dio Provider
 final dioProvider = Provider<Dio>((ref) {
-  final baseUrl =
-      dotenv.env['API_BASE_URL'] ?? 'https://docvoice.gumra-ai.com/api';
+  final baseUrl = ApiConfig.baseUrl;
   final dio = Dio(BaseOptions(
     baseUrl: baseUrl.endsWith('/') ? baseUrl : '$baseUrl/',
     headers: {

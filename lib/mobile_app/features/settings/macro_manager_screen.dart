@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme.dart';
 import '../../services/macro_service.dart';
+import '../../../../core/medical_departments.dart';
+import '../../../../services/department_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'macro_editor_screen.dart';
 
 class MacroManagerScreen extends StatefulWidget {
@@ -22,16 +26,36 @@ class _MacroManagerScreenState extends State<MacroManagerScreen> {
     _loadMacros();
   }
 
+  // Helper to parse CSV categories
+  List<String> _getCategories(MacroModel m) {
+    if (m.category.isEmpty) return [];
+    return m.category.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+  }
+
   Future<void> _loadMacros() async {
     setState(() => _isLoading = true);
-    final data = await _service.getMacros();
+    final allData = await _service.getMacros();
+    
+    final prefs = await SharedPreferences.getInstance();
+    final deptId = DepartmentService().value ?? prefs.getString('specialty');
+    final deptNameEn = deptId != null ? MedicalDepartments.getById(deptId)?.nameEn : 'General Practice';
+    
+    final filteredData = allData.where((m) {
+      final cats = _getCategories(m);
+      if (cats.isEmpty) return true; // uncategorized are general?
+      if (cats.contains('General') || cats.contains('General Practice')) return true;
+      if (deptId != null && cats.contains(deptId)) return true;
+      if (deptNameEn != null && cats.contains(deptNameEn)) return true; // legacy support
+      return false;
+    }).toList();
+
     setState(() {
-      _macros = data;
+      _macros = filteredData;
       _isLoading = false;
     });
   }
 
-  Future<void> _navigateToEditor({MacroModel? macro}) async {
+  Future<void> _navigateToEditor([MacroModel? macro]) async {
     final result = await Navigator.push(
       context, 
       MaterialPageRoute(builder: (_) => MacroEditorScreen(macro: macro))
@@ -86,25 +110,41 @@ class _MacroManagerScreenState extends State<MacroManagerScreen> {
     final Map<String, List<MacroModel>> grouped = {};
     
     // Always add Favorites section first if there are any
-    final favorites = _macros.where((m) => m.isFavorite).toList();
+    final favorites = _macros.where((m) => m.isFavorite == true).toList();
     if (favorites.isNotEmpty) {
       grouped['Most Used (Favorites)'] = favorites;
     }
 
-    // Group the rest by category
+    // Group the rest by department/category
     for (var m in _macros) {
-      if (!grouped.containsKey(m.category)) {
-        grouped[m.category] = [];
+      if (m.isFavorite == true) continue;
+      
+      final cats = _getCategories(m);
+      if (cats.isEmpty) {
+        if (!grouped.containsKey('General')) grouped['General'] = [];
+        grouped['General']!.add(m);
+        continue;
       }
-      grouped[m.category]!.add(m);
+
+      // We group them under the first category they have for display purposes
+      // Wait, if they are filtered to the user's dept, we can just put them under "Templates"
+      String displayCat = 'Templates'; 
+      if (cats.isNotEmpty) {
+        // Try to show a nice name
+        final firstCat = cats.first;
+        final dept = MedicalDepartments.getById(firstCat);
+        displayCat = dept != null ? dept.nameEn : firstCat;
+      }
+
+      if (!grouped.containsKey(displayCat)) {
+        grouped[displayCat] = [];
+      }
+      grouped[displayCat]!.add(m);
     }
     
-    // Sort Categories: "General" first (after Favorites), then Alphabetical
     final sortedKeys = grouped.keys.toList()..sort((a, b) {
       if (a == 'Most Used (Favorites)') return -1;
       if (b == 'Most Used (Favorites)') return 1;
-      if (a == 'General') return -1;
-      if (b == 'General') return 1;
       return a.compareTo(b);
     });
 
@@ -203,27 +243,27 @@ class _MacroManagerScreenState extends State<MacroManagerScreen> {
                             child: ListTile(
                               leading: IconButton(
                                 icon: Icon(
-                                  m.isFavorite ? Icons.star : Icons.star_border, 
-                                  color: m.isFavorite ? Colors.amber : Colors.white30
+                                  m.isFavorite == true ? Icons.star : Icons.star_border, 
+                                  color: m.isFavorite == true ? Colors.amber : Colors.white30
                                 ),
                                 onPressed: () async {
                                   // Optimistically toggle locally for instant feedback
                                   setState(() {
-                                    m.isFavorite = !m.isFavorite;
+                                    m.isFavorite = !(m.isFavorite ?? false);
                                   });
                                   await _service.toggleFavorite(m.id);
                                   _loadMacros(); // Reload to confirm state
                                 },
                               ),
-                              title: Text(m.trigger, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                              title: Text(m.trigger ?? '', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                               subtitle: Text(
-                                m.content.replaceAll('\n', ' '), 
+                                (m.content ?? '').replaceAll('\n', ' '), 
                                 maxLines: 1, 
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(color: Colors.white54)
                               ),
                               trailing: const Icon(Icons.edit, color: Colors.white30, size: 20),
-                              onTap: () => _navigateToEditor(macro: m),
+                              onTap: () => _navigateToEditor(m),
                             ),
                           ),
                         );

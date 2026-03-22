@@ -301,8 +301,17 @@ class AuthService {
   Future<Map<String, dynamic>?> getCompanySettings() async {
     try {
       final response = await _apiService.get('/company/settings');
-      if (response['success'] == true) {
-        return response['settings'];
+      if (response['status'] == true || response['success'] == true) {
+        final payload = response['payload'];
+        if (payload != null && payload is Map<String, dynamic>) {
+          if (payload.containsKey('settings')) {
+            return payload['settings'] as Map<String, dynamic>;
+          }
+          return payload;
+        }
+        if (response.containsKey('settings')) {
+          return response['settings'] as Map<String, dynamic>;
+        }
       }
       return null;
     } catch (e) {
@@ -319,7 +328,7 @@ class AuthService {
       return response['success'] == true;
     } catch (e) {
       print('Update company settings error: $e');
-      return false;
+      rethrow; // Rethrow to let UI show the error
     }
   }
 }

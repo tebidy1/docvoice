@@ -1,6 +1,7 @@
 import 'dart:async';
 import '../models/note_model.dart';
 import '../../services/api_service.dart';
+import '../models/generated_output.dart';
 
 // Unified InboxService for Mobile (API Based)
 class InboxService {
@@ -26,6 +27,8 @@ class InboxService {
     int? suggestedMacroId,
     // Add formatted text support as Mobile processes it locally first
     String? formattedText, 
+    String? audioPath,
+    List<Map<String, dynamic>>? generatedOutputs,
   }) async {
     try {
       await init();
@@ -37,6 +40,8 @@ class InboxService {
         // Mobile sends the processed text directly if available
         if (formattedText != null) 'formatted_text': formattedText,
         if (formattedText != null) 'status': 'processed', // Auto-mark as processed if we send formatted text
+        if (audioPath != null) 'audio_path': audioPath,
+        if (generatedOutputs != null) 'generated_outputs': generatedOutputs,
       };
 
       final response = await _apiService.post('/inbox-notes', body: body);
@@ -62,17 +67,34 @@ class InboxService {
     String? summary,
     int? suggestedMacroId,
     String? status, // Added status update support
+    List<Map<String, dynamic>>? generatedOutputs,
   }) async {
     try {
       await init();
       final body = <String, dynamic>{};
       
-      if (rawText != null) body['raw_text'] = rawText;
+      // API requires raw_text on PUT. If not provided, fetch the note first.
+      if (rawText == null) {
+        try {
+          final noteResponse = await _apiService.get('/inbox-notes/$noteId');
+          if (noteResponse['status'] == true && noteResponse['payload'] != null) {
+            final noteData = noteResponse['payload'];
+            body['raw_text'] = noteData['raw_text'] ?? noteData['original_text'] ?? '';
+          }
+        } catch (e) {
+          print('Warning: Could not fetch note for raw_text: $e');
+          body['raw_text'] = ''; // Fallback empty string
+        }
+      } else {
+        body['raw_text'] = rawText;
+      }
+      
       if (formattedText != null) body['formatted_text'] = formattedText;
       if (patientName != null) body['patient_name'] = patientName;
       if (summary != null) body['summary'] = summary;
       if (suggestedMacroId != null) body['suggested_macro_id'] = suggestedMacroId;
       if (status != null) body['status'] = status;
+      if (generatedOutputs != null) body['generated_outputs'] = generatedOutputs;
       
       // Update status to processed if formatted text is provided
       if (formattedText != null && formattedText.isNotEmpty && status == null) {
@@ -160,6 +182,7 @@ class InboxService {
         : DateTime.now();
     note.uuid = json['uuid'] ?? json['id'].toString(); // Fallback to ID if UUID missing
     note.content = note.formattedText.isNotEmpty ? note.formattedText : note.originalText; // Populate content
+    note.audioPath = json['audio_path']; // Add this line to map audio path
     note.updatedAt = json['updated_at'] != null 
         ? DateTime.parse(json['updated_at']) 
         : note.createdAt;
@@ -169,6 +192,27 @@ class InboxService {
       note.appliedMacroId = json['suggested_macro_id'] is int 
           ? json['suggested_macro_id'] 
           : int.tryParse(json['suggested_macro_id'].toString());
+    }
+
+    // Map summary (template name for badge display)
+    if (json['summary'] != null) {
+      note.summary = json['summary'];
+    }
+
+    // Map generated outputs
+    if (json['generated_outputs'] != null && json['generated_outputs'] is List) {
+      note.generatedOutputs = (json['generated_outputs'] as List)
+          .map((e) => GeneratedOutput.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    }
+    
+    // Also check for 'outputs' field (alternative naming from backend)
+    if (json['outputs'] != null && note.generatedOutputs.isEmpty) {
+      if (json['outputs'] is List) {
+        note.generatedOutputs = (json['outputs'] as List)
+            .map((e) => GeneratedOutput.fromJson(Map<String, dynamic>.from(e)))
+            .toList();
+      }
     }
     
     return note;

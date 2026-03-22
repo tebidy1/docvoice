@@ -3,6 +3,7 @@ import '../models/macro.dart';
 import 'database_service.dart';
 import 'dart:async';
 import 'dart:convert';
+import '../core/ai/ai_prompt_constants.dart';
 
 class MacroService {
   // Singleton pattern
@@ -35,16 +36,18 @@ class MacroService {
       final count = await isar.macros.count();
       print("MacroService: Current macro count: $count");
       
-      if (count == 0) {
-        print("MacroService: Database is empty, adding default macros...");
+      final firstMacro = await isar.macros.where().findFirst();
+      final hasMarkdown = firstMacro?.content.contains('**') ?? false;
+
+      // Force update: wipe old macros and seed the new CBAHI ones
+      if (count != 6 || hasMarkdown) {
+        print("MacroService: DB state needs update (count: $count, hasMarkdown: $hasMarkdown). Clearing and re-seeding...");
+        await isar.writeTxn(() async {
+          await isar.macros.clear();
+        });
         await seedDefaultMacros();
       } else {
-        print("MacroService: Database already contains $count macros");
-        // List existing macros for debugging
-        final macros = await getAllMacros();
-        for (var macro in macros) {
-          print("MacroService: Existing macro - '${macro.trigger}': ${macro.content.substring(0, 30)}...");
-        }
+        print("MacroService: Database already contains $count macros (CBAHI templates confirmed).");
       }
     } catch (e) {
       print("MacroService: Error checking/seeding macros: $e");
@@ -56,257 +59,53 @@ class MacroService {
     try {
       print("MacroService: Seeding default macros...");
       
-      // 1. SOAP Note
+      // 1. Classic Clinic SOAP Note
       await addMacro(
-        "📝 SOAP Note", 
-        '''
-SOAP NOTE
-
-SUBJECTIVE:
-• Chief Complaint: [Complaint]
-• HPI: [History of Present Illness]
-• ROS: [Relevant Systems / Negatives]
-
-OBJECTIVE:
-• Vitals: BP: [Value / mmHg] | HR: [Value / bpm] | Temp: [Value / °C]
-• General Appearance: [Description]
-• Systemic Exam: [Key Findings]
-
-ASSESSMENT:
-• Primary Diagnosis: [Dx]
-• Differential: [DDx]
-
-PLAN:
-• Pharmacotherapy: [Medication Name] [Dose] [Freq] [Duration]
-• Investigations: [Labs / Imaging]
-• Follow-up: [Timeframe]
-
-"Patient educated regarding diagnosis, plan, and red flags for ER return."
-''', 
+        "📝 Classic SOAP", 
+        AIPromptConstants.templateClassicSoap, 
         category: "General"
       );
-      print("MacroService: ✓ Added 'SOAP Note'");
+      print("MacroService: ✓ Added 'Classic SOAP'");
 
-      // 2. Sick Leave
+      // 2. ER SOAP Note
+      await addMacro(
+        "🚨 ER SOAP", 
+        AIPromptConstants.templateErSoap, 
+        category: "Emergency"
+      );
+      print("MacroService: ✓ Added 'ER SOAP'");
+
+      // 3. SBAR Consultation
+      await addMacro(
+        "📞 SBAR Consult", 
+        AIPromptConstants.templateSbar, 
+        category: "Referral"
+      );
+      print("MacroService: ✓ Added 'SBAR Consult'");
+
+      // 4. ER Discharge Summary
+      await addMacro(
+        "📄 ER Discharge", 
+        AIPromptConstants.templateDischarge, 
+        category: "Emergency"
+      );
+      print("MacroService: ✓ Added 'ER Discharge'");
+
+      // 5. Sick Leave
       await addMacro(
         "🤒 Sick Leave", 
-        '''
-SICK LEAVE RECOMMENDATION
-
-To: Employer / School Administrators
-
-CLINICAL STATUS:
-• Diagnosis: [Condition]
-
-RECOMMENDATION:
-"Based on the medical examination performed today, the above-named patient is found to be unfit for work/school."
-
-• Duration: [Number] Days
-• Starting From: [Start Date]
-• Ending On: [End Date]
-
-TREATING PHYSICIAN:
-[Dr. Name]
-[S.C.F.H.S License Number]
-''', 
+        AIPromptConstants.templateSickLeave, 
         category: "Admin"
       );
       print("MacroService: ✓ Added 'Sick Leave'");
 
-      // 3. Medical Report
+      // 6. Free Note
       await addMacro(
-        "📄 Medical Report", 
-        '''
-MEDICAL REPORT
-Date: [Date]
-
-TO WHOM IT MAY CONCERN,
-
-HISTORY & COURSE:
-[Detailed Clinical History and Progression]
-
-CLINICAL FINDINGS:
-[Examination Findings]
-
-INVESTIGATIONS:
-[Significant Lab/Radiology Results]
-
-FINAL DIAGNOSIS:
-[Diagnosis]
-
-PLAN & RECOMMENDATIONS:
-[Current Management Plan]
-
-"This report is issued upon the request of the patient for administrative purposes."
-''', 
-        category: "Reports"
+        "✨ Free Note", 
+        AIPromptConstants.templateFreeNote, 
+        category: "General"
       );
-      print("MacroService: ✓ Added 'Medical Report'");
-
-      // 4. Referral
-      await addMacro(
-        "🏥 Referral", 
-        '''
-REFERRAL LETTER
-
-TO: [Specialty Department]
-AT: [Receiving Hospital Name]
-
-FROM: [Referring Doctor Name]
-DATE: [Date]
-
-
-REASON FOR REFERRAL:
-[Specific Clinical Question or Service Needed]
-
-CLINICAL SUMMARY:
-[Brief History of Present Illness]
-[Relevant Past Medical History]
-
-CURRENT MEDICATIONS:
-[List]
-
-PENDING RESULTS:
-[Outstanding Labs/Images]
-
-"Thank you for accepting this patient for further management."
-''', 
-        category: "Referral"
-      );
-      print("MacroService: ✓ Added 'Referral'");
-
-      // 5. Radiology Req
-      await addMacro(
-        "☢️ Radiology Req", 
-        '''
-RADIOLOGY REQUEST
-Priority: [Routine / Urgent]
-
-
-STUDY REQUESTED:
-[Modality: X-Ray/CT/MRI] of [Body Part]
-[Side: Left / Right / Bilateral]
-
-CLINICAL INDICATION:
-[Symptoms / Rule Out Diagnosis]
-
-SPECIFIC QUERY TO RADIOLOGIST:
-[What exactly are we looking for?]
-
-SAFETY CHECKLIST:
-• Pregnancy Status: [Yes / No / N/A]
-• Renal Function (eGFR/Cr): [Value / Not Indicated]
-• Contrast Allergy: [Denied / Present]
-
-"I certify that this examination is clinically indicated."
-''', 
-        category: "Orders"
-      );
-      print("MacroService: ✓ Added 'Radiology Req'");
-
-      // 6. Diabetic Follow-up
-      await addMacro(
-        "🩸 Diabetic Follow-up", 
-        '''
-DIABETES FOLLOW-UP
-
-SUBJECTIVE:
-• Home Glucose Readings: [Range / Control]
-• Hypoglycemia Episodes: [Yes / No]
-• Compliance: [Good / Poor]
-• Symptoms: [Polydipsia, Polyuria, Blurring Vision]
-
-OBJECTIVE:
-• Vitals: BP: [BP] | BMI: [Value]
-• Exam: [Foot Exam / Neuro / CV]
-• Labs: HbA1c: [Value]% | Kidney Function: [Value]
-
-ASSESSMENT:
-• Diabetes Type [1/2]: [Control Status]
-• Complications: [None / Neuropathy / etc]
-
-PLAN:
-• Medications: [Adjustments]
-• Lifestyle: [Diet / Exercise]
-• Follow-up: [Interval]
-''', 
-        category: "Internal Medicine"
-      );
-      print("MacroService: ✓ Added 'Diabetic Follow-up'");
-
-      // 7. Neuro Exam
-      await addMacro(
-        "🧠 Neuro Exam", 
-        '''
-NEUROLOGICAL EXAMINATION
-
-MENTAL STATUS:
-• GCS: [Score / 15]
-• Orientation: [Time, Place, Person]
-• Speech: [Normal / Dysarthric / Aphasic]
-
-CRANIAL NERVES:
-• Pupils: [Size / Reactivity]
-• Face: [Symmetry]
-• Other: [Deficits]
-
-MOTOR SYSTEM:
-• Tone: [Normal / Increased / Decreased]
-• Power (Upper): R:[Grade/5] L:[Grade/5]
-• Power (Lower): R:[Grade/5] L:[Grade/5] 
-• Reflexes: [Run-down]
-
-SENSORY:
-• Light Touch/Pinprick: [Intact / Deficit Level]
-• Proprioception: [Intact / Impaired]
-
-COORDINATION & GAIT:
-• Finger-Nose: [Normal / Dysmetria]
-• Gait: [Normal / Ataxic / Hemiplegic]
-
-IMPRESSION:
-[Localization of Lesion]
-''', 
-        category: "Neurology"
-      );
-      print("MacroService: ✓ Added 'Neuro Exam'");
-
-      // 8. Joint Exam
-      await addMacro(
-        "🦴 Joint Exam", 
-        '''
-ORTHOPEDIC JOINT EXAMINATION
-Joint: [Shoulder / Knee / Hip / etc]
-Side: [Right / Left]
-
-INSPECTION:
-• Swelling: [Yes / No]
-• Deformity: [Description]
-• Skin: [Scars / Erythema]
-
-PALPATION:
-• Tenderness: [Specific Landmark]
-• Temperature: [Normal / Warm]
-• Effusion: [Present / Absent]
-
-RANGE OF MOTION (ROM):
-• Active: [Degree]
-• Passive: [Degree]
-• Pain on Motion: [Yes / No]
-
-SPECIAL TESTS:
-[Test Name]: [Positive / Negative]
-
-NEUROVASCULAR:
-• Pulses: [Palpable]
-• Sensation: [Intact]
-
-PLAN:
-[Imaging / Conservative / Surgical]
-''', 
-        category: "Orthopedics"
-      );
-      print("MacroService: ✓ Added 'Joint Exam'");
+      print("MacroService: ✓ Added 'Free Note'");
       
       final isar = await _dbService.isar;
       final finalCount = await isar.macros.count();
@@ -387,6 +186,9 @@ PLAN:
     final isar = await _dbService.isar;
     return await isar.macros.where().findAll();
   }
+
+  /// Alias for getAllMacros() - used by cross-platform widgets
+  Future<List<Macro>> getMacros() => getAllMacros();
 
   /// Get macros by category
   Future<List<Macro>> getMacrosByCategory(String category) async {

@@ -16,11 +16,20 @@ class FinalCTASection extends StatelessWidget {
       height: 600, // Fixed height for impact
       child: Stack(
         children: [
-          // 1. Background Image
+          // 1. Background Gradient (Replaced missing asset with professional medical-themed gradient)
           Positioned.fill(
-            child: Image.asset(
-              'assets/images/cta_bg.png',
-              fit: BoxFit.cover,
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF0B1F3B), // Navy from logo
+                    Color(0xFF082E5A),
+                    Color(0xFF06B6D4), // Cyan from logo
+                  ],
+                ),
+              ),
             ),
           ),
           
@@ -54,7 +63,7 @@ class FinalCTASection extends StatelessWidget {
                     Text(
                       "استعد وقتك المفقود مع العائلة.",
                       style: Theme.of(context).textTheme.headlineMedium!.copyWith(
-                        fontSize: 48, // Bigger impact
+                        fontSize: MediaQuery.of(context).size.width < 600 ? 32 : 48,
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                         shadows: [
@@ -65,8 +74,8 @@ class FinalCTASection extends StatelessWidget {
                     ),
                     const SizedBox(height: 24),
                     const Text(
-                      "أنهِ عيادتك في وقتها تماماً. جرب MedNote AI الآن.",
-                      style: TextStyle(color: MedColors.textMuted, fontSize: 20, height: 1.6),
+                      "أنهِ عيادتك في وقتها تماماً. جرب SoutNote الآن.",
+                      style: TextStyle(color: MedColors.textMuted, fontSize: 16, height: 1.6),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 48),

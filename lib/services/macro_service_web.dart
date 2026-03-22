@@ -1,5 +1,6 @@
 import '../models/macro.dart';
 import 'dart:async';
+import '../core/ai/ai_prompt_constants.dart';
 
 /// Web-compatible stub for MacroService
 /// On web, local database features are not supported
@@ -35,12 +36,12 @@ class MacroService {
   Future<void> seedDefaultMacros() async {
     print("MacroService (Web): Adding default macros to memory...");
     
-    await addMacro("Normal Cardio", "Regular rate and rhythm. No murmurs, rubs, or gallops. S1 and S2 normal.", category: "Cardiology");
-    await addMacro("Normal Lung", "Lungs clear to auscultation bilaterally. No wheezes, rales, or rhonchi.", category: "Pulmonology");
-    await addMacro("Normal Abdomen", "Soft, non-tender, non-distended. Bowel sounds present. No organomegaly.", category: "Gastroenterology");
-    await addMacro("Insert Normal BP", "Blood Pressure: 120/80 mmHg, Heart Rate: 72 bpm, Regular rhythm, SPO2: 98% on room air.", category: "General");
-    await addMacro("Normal Neuro", "Alert and oriented x3. Cranial nerves II-XII intact. Motor strength 5/5 in all extremities. Sensory intact to light touch.", category: "Neurology");
-    await addMacro("Plan Diabetes", "1. Continue Metformin 500mg BID\n2. Check HbA1c in 3 months\n3. Self-monitoring blood glucose\n4. Diet and exercise counseling", category: "General");
+    await addMacro("📝 Classic SOAP", AIPromptConstants.templateClassicSoap, category: "General");
+    await addMacro("🚨 ER SOAP", AIPromptConstants.templateErSoap, category: "Emergency");
+    await addMacro("📞 SBAR Consult", AIPromptConstants.templateSbar, category: "Referral");
+    await addMacro("📄 ER Discharge", AIPromptConstants.templateDischarge, category: "Emergency");
+    await addMacro("🤒 Sick Leave", AIPromptConstants.templateSickLeave, category: "Admin");
+    await addMacro("✨ Free Note", AIPromptConstants.templateFreeNote, category: "General");
     
     print("MacroService (Web): ✅ Default macros seeded in memory (${_inMemoryMacros.length} total)");
   }
@@ -94,6 +95,9 @@ class MacroService {
     await init();
     return List.from(_inMemoryMacros);
   }
+
+  /// Alias for getAllMacros() - used by cross-platform widgets
+  Future<List<Macro>> getMacros() => getAllMacros();
 
   Future<List<Macro>> getMacrosByCategory(String category) async {
     await init();

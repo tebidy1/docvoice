@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../models/macro.dart';
 import '../services/macro_service.dart';
+import '../../core/medical_departments.dart';
+import '../../services/department_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MacroExplorerDialog extends StatefulWidget {
   const MacroExplorerDialog({super.key});
@@ -34,8 +37,18 @@ class _MacroExplorerDialogState extends State<MacroExplorerDialog> {
       macros = await _macroService.getMacrosByCategory(_selectedCategory);
     }
     
+    final prefs = await SharedPreferences.getInstance();
+    final deptId = DepartmentService().value ?? prefs.getString('specialty');
+    final allowedCategories = deptId != null 
+        ? MedicalDepartments.getRelevantCategories(deptId)
+        : ['General'];
+
+    final filteredMacros = macros.where((m) => 
+        allowedCategories.contains(m.category) || 
+        allowedCategories.contains('General')).toList();
+
     setState(() {
-      _macros = macros;
+      _macros = filteredMacros;
       _isLoading = false;
     });
   }

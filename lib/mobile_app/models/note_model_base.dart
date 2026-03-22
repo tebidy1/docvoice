@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:isar/isar.dart';
+import 'generated_output.dart';
 
 enum NoteStatus {
   draft, // Initial recording or raw text
@@ -33,6 +35,10 @@ class NoteModelBase {
   String originalText = ''; // Raw text from API/Input
   String formattedText = ''; // Processed text from API/AI
   String? summary; // Brief summary of the note
+  
+  // Smart Tabs Outputs
+  @ignore
+  List<GeneratedOutput> generatedOutputs = [];
 
   // Aliases for Desktop compatibility
   String get rawText => originalText;
@@ -83,6 +89,23 @@ class NoteModelBase {
         ? json['suggested_macro_id']
         : int.tryParse(json['suggested_macro_id']?.toString() ?? '');
 
+    if (json['generated_outputs'] != null) {
+      if (json['generated_outputs'] is List) {
+        note.generatedOutputs = (json['generated_outputs'] as List)
+            .map((e) => GeneratedOutput.fromJson(Map<String, dynamic>.from(e)))
+            .toList();
+      }
+    }
+
+    // Also check for 'outputs' field (alternative naming from backend)
+    if (json['outputs'] != null && note.generatedOutputs.isEmpty) {
+      if (json['outputs'] is List) {
+        note.generatedOutputs = (json['outputs'] as List)
+            .map((e) => GeneratedOutput.fromJson(Map<String, dynamic>.from(e)))
+            .toList();
+      }
+    }
+
     return note;
   }
 
@@ -104,6 +127,7 @@ class NoteModelBase {
       if (appliedMacroId != null) 'applied_macro_id': appliedMacroId,
       if (suggestedMacroId != null) 'suggested_macro_id': suggestedMacroId,
       if (summary != null) 'summary': summary,
+      'generated_outputs': generatedOutputs.map((e) => e.toJson()).toList(),
     };
   }
 
