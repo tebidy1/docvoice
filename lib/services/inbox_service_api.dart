@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import '../mobile_app/models/note_model.dart';
+import 'package:soutnote/core/models/note_model_web.dart';
 import 'inbox_note_api_service.dart';
 import 'sync_manager.dart';
 import 'cache_manager.dart';

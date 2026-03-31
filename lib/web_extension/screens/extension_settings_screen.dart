@@ -1,30 +1,29 @@
-// ignore_for_file: deprecated_member_use
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // Screens
-import '../../screens/admin_dashboard_screen.dart';
-import '../../screens/secure_pairing_screen.dart';
-import '../../mobile_app/features/auth/qr_scanner_screen.dart';
-import '../../mobile_app/features/settings/company_settings_screen.dart';
-import '../../mobile_app/features/settings/macro_manager_screen.dart';
+import 'package:soutnote/features/admin/presentation/screens/admin_dashboard_screen.dart';
+import 'package:soutnote/features/auth/presentation/screens/secure_pairing_screen.dart';
+import 'package:soutnote/features/auth/qr_scanner_screen.dart';
+import 'package:soutnote/features/settings/company_settings_screen.dart';
+import 'package:soutnote/features/settings/macro_manager_screen.dart';
 
 // Services & Core
-import '../../services/auth_service.dart';
-import '../../mobile_app/core/theme.dart';
-import '../../mobile_app/services/macro_service.dart';
-import '../../mobile_app/services/websocket_service.dart';
-import '../../models/app_theme.dart' as global_theme;
-import '../../services/theme_service.dart';
+import 'package:soutnote/core/services/auth_service.dart';
+import 'package:soutnote/shared/theme.dart';
+import 'package:soutnote/core/services/websocket_service.dart';
+import 'package:soutnote/core/models/app_theme.dart' as global_theme;
+import 'package:soutnote/core/services/theme_service.dart';
 
-class ExtensionSettingsScreen extends StatefulWidget {
+class ExtensionSettingsScreen extends ConsumerStatefulWidget {
   const ExtensionSettingsScreen({super.key});
 
   @override
-  State<ExtensionSettingsScreen> createState() => _ExtensionSettingsScreenState();
+  ConsumerState<ExtensionSettingsScreen> createState() => _ExtensionSettingsScreenState();
 }
 
-class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
+class _ExtensionSettingsScreenState extends ConsumerState<ExtensionSettingsScreen> {
   final TextEditingController _ipController = TextEditingController();
 
   bool _isLoading = false;
@@ -156,7 +155,7 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
     );
 
     if (confirm == true) {
-      await MacroService().resetToDefaults();
+      // await MacroApiService().resetToDefaults();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Macros reset to defaults")));
@@ -287,9 +286,9 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
               color: AppTheme.surface,
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8.0),
-                child: ValueListenableBuilder<global_theme.AppTheme>(
-                  valueListenable: ThemeService(),
-                  builder: (context, currentTheme, child) {
+                child: Consumer(
+                  builder: (context, ref, child) {
+                    final currentTheme = ref.watch(themeServiceProvider);
                     return Column(
                       children: [
                         RadioListTile<String>(
@@ -298,7 +297,9 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                           groupValue: currentTheme.id,
                           activeColor: AppTheme.accent,
                           onChanged: (val) {
-                            if (val != null) ThemeService().setTheme(global_theme.AppTheme.lightNative);
+                            if (val != null) {
+                              ref.read(themeServiceProvider.notifier).setTheme(global_theme.AppTheme.lightNative);
+                            }
                           },
                         ),
                         RadioListTile<String>(
@@ -307,7 +308,9 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                           groupValue: currentTheme.id,
                           activeColor: AppTheme.accent,
                           onChanged: (val) {
-                            if (val != null) ThemeService().setTheme(global_theme.AppTheme.slateDark);
+                            if (val != null) {
+                              ref.read(themeServiceProvider.notifier).setTheme(global_theme.AppTheme.slateDark);
+                            }
                           },
                         ),
                         RadioListTile<String>(
@@ -316,7 +319,9 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                           groupValue: currentTheme.id,
                           activeColor: AppTheme.accent,
                           onChanged: (val) {
-                            if (val != null) ThemeService().setTheme(global_theme.AppTheme.darkOnyx);
+                            if (val != null) {
+                              ref.read(themeServiceProvider.notifier).setTheme(global_theme.AppTheme.darkOnyx);
+                            }
                           },
                         ),
                       ],

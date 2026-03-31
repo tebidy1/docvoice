@@ -11,7 +11,7 @@ import '../auth/token_manager.dart';
 import '../config/api_config.dart';
 import '../error/api_error_handler.dart';
 import '../error/api_exceptions.dart';
-import '../models/api_models.dart';
+import 'package:soutnote/core/models/api_models.dart';
 
 /// Enhanced API client for Laravel backend communication
 class ApiClient {

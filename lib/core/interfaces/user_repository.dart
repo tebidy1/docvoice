@@ -1,5 +1,5 @@
 import 'base_repository.dart';
-import '../../models/user.dart';
+import 'package:soutnote/core/models/user.dart';
 
 /// Repository interface for User entities
 abstract class UserRepository extends BaseRepository<User> {

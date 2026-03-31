@@ -1,19 +1,15 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:provider/provider.dart';
-
-import 'mobile_app/features/auth/login_screen.dart' as unified_login;
-import 'web_extension/screens/extension_home_screen.dart'; // New Entry Point
-import 'mobile_app/services/websocket_service.dart' as unified_ws;
-import 'models/app_theme.dart';
-import 'services/auth_service.dart';
-import 'services/theme_service.dart';
-import 'widgets/auth_guard.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:soutnote/features/auth/presentation/screens/login_screen.dart' as unified_login;
+import 'package:soutnote/web_extension/screens/extension_home_screen.dart'; // New Entry Point
+import 'package:soutnote/core/services/auth_service.dart';
+import 'package:soutnote/core/services/theme_service.dart';
+import 'package:soutnote/shared/widgets/auth_guard.dart';
 
 void main() {
   // 1. Run App Immediately (Don't await anything here to ensure UI shows up)
-  runApp(const SafeExtensionLauncher());
+  runApp(const ProviderScope(child: SafeExtensionLauncher()));
 }
 
 class SafeExtensionLauncher extends StatefulWidget {
@@ -37,14 +33,6 @@ class _SafeExtensionLauncherState extends State<SafeExtensionLauncher> {
     try {
       print("SafeLauncher: Initializing...");
       WidgetsFlutterBinding.ensureInitialized();
-
-      // Try loading .env, but don't crash if it fails
-      try {
-        await dotenv.load(fileName: ".env");
-        print("SafeLauncher: DotEnv loaded.");
-      } catch (e) {
-        print("SafeLauncher: DotEnv warning (non-fatal): $e");
-      }
 
       if (mounted) {
         setState(() {
@@ -119,162 +107,154 @@ class _SafeExtensionLauncherState extends State<SafeExtensionLauncher> {
     }
 
     // Success! Launch the Real App
-    return MultiProvider(
-      providers: [
-        Provider<unified_ws.WebSocketService>(
-            create: (_) => unified_ws.WebSocketService()),
-      ],
-      child: const ScribeFlowExtensionApp(),
-    );
+    return const ScribeFlowExtensionApp();
   }
 }
 
-final GlobalKey<NavigatorState> extensionNavigatorKey = GlobalKey<NavigatorState>();
+final GlobalKey<NavigatorState> extensionNavigatorKey =
+    GlobalKey<NavigatorState>();
 
-class ScribeFlowExtensionApp extends StatefulWidget {
+class ScribeFlowExtensionApp extends ConsumerStatefulWidget {
   const ScribeFlowExtensionApp({super.key});
 
   @override
-  State<ScribeFlowExtensionApp> createState() => _ScribeFlowExtensionAppState();
+  ConsumerState<ScribeFlowExtensionApp> createState() =>
+      _ScribeFlowExtensionAppState();
 }
 
-class _ScribeFlowExtensionAppState extends State<ScribeFlowExtensionApp> {
+class _ScribeFlowExtensionAppState
+    extends ConsumerState<ScribeFlowExtensionApp> {
   final AuthService _authService = AuthService();
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<AppTheme>(
-      valueListenable: ThemeService(),
-      builder: (context, currentTheme, child) {
-        return MaterialApp(
-          navigatorKey: extensionNavigatorKey,
-          title: 'ScribeFlow Extension',
-          debugShowCheckedModeBanner: false,
-          builder: (context, child) {
-            return GlobalExtensionWrapper(child: child!);
-          },
-          theme: ThemeData(
-            brightness:
-                currentTheme.isDark ? Brightness.dark : Brightness.light,
-            scaffoldBackgroundColor: currentTheme.backgroundColor,
-            // Force system fonts only - block any web font attempts
-            fontFamily: 'sans-serif',
-            fontFamilyFallback: const ['Arial', 'Helvetica', 'sans-serif'],
-            colorScheme: ColorScheme(
-              brightness:
-                  currentTheme.isDark ? Brightness.dark : Brightness.light,
-              // Primary — used for active icons, header text accents
-              primary: currentTheme.micIdleIcon,
-              onPrimary: Colors.white,
-              primaryContainer: currentTheme.micIdleBackground,
-              onPrimaryContainer: currentTheme.iconColor,
-              // Secondary
-              secondary: currentTheme.micIdleIcon,
-              onSecondary: Colors.white,
-              secondaryContainer: currentTheme.hoverColor,
-              onSecondaryContainer: currentTheme.iconColor,
-              // Surface — used for Cards, BottomAppBar, FAB
-              surface: currentTheme.micIdleBackground,
-              onSurface: currentTheme.iconColor,
-              // Error
-              error: currentTheme.micRecordingBackground,
-              onError: Colors.white,
-              // Outline — used for card borders, text field borders, FAB border
-              outline: currentTheme.borderColor,
-              outlineVariant: currentTheme.dividerColor,
-            ),
-            elevatedButtonTheme: ElevatedButtonThemeData(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: currentTheme.micIdleIcon,
-                foregroundColor: Colors.white,
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                textStyle: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 16,
-                    fontFamily: 'sans-serif'),
-              ),
-            ),
-            cardTheme: CardThemeData(
-              color: currentTheme.micIdleBackground,
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(
-                    color: currentTheme.borderColor.withValues(alpha: 0.4)),
-              ),
-            ),
-            iconTheme: IconThemeData(
-              color: currentTheme.iconColor,
-            ),
-            dividerTheme: DividerThemeData(
-              color: currentTheme.dividerColor,
-            ),
-            inputDecorationTheme: InputDecorationTheme(
-              filled: true,
-              fillColor: currentTheme.isDark
-                  ? currentTheme.micIdleBackground
-                  : Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-              contentPadding: const EdgeInsets.all(16),
-              hintStyle: TextStyle(
-                  color: currentTheme.iconColor.withValues(alpha: 0.5)),
-            ),
-            useMaterial3: true,
-            textTheme: const TextTheme(
-              bodyLarge: TextStyle(fontFamily: 'sans-serif'),
-              bodyMedium: TextStyle(fontFamily: 'sans-serif'),
-              titleLarge: TextStyle(fontFamily: 'sans-serif'),
-            ),
+    final currentTheme = ref.watch(themeServiceProvider);
+
+    return MaterialApp(
+      navigatorKey: extensionNavigatorKey,
+      title: 'ScribeFlow Extension',
+      debugShowCheckedModeBanner: false,
+      builder: (context, child) {
+        return GlobalExtensionWrapper(child: child!);
+      },
+      theme: ThemeData(
+        brightness: currentTheme.isDark ? Brightness.dark : Brightness.light,
+        scaffoldBackgroundColor: currentTheme.backgroundColor,
+        // Force system fonts only - block any web font attempts
+        fontFamily: 'sans-serif',
+        fontFamilyFallback: const ['Arial', 'Helvetica', 'sans-serif'],
+        colorScheme: ColorScheme(
+          brightness: currentTheme.isDark ? Brightness.dark : Brightness.light,
+          // Primary — used for active icons, header text accents
+          primary: currentTheme.micIdleIcon,
+          onPrimary: Colors.white,
+          primaryContainer: currentTheme.micIdleBackground,
+          onPrimaryContainer: currentTheme.iconColor,
+          // Secondary
+          secondary: currentTheme.micIdleIcon,
+          onSecondary: Colors.white,
+          secondaryContainer: currentTheme.hoverColor,
+          onSecondaryContainer: currentTheme.iconColor,
+          // Surface — used for Cards, BottomAppBar, FAB
+          surface: currentTheme.micIdleBackground,
+          onSurface: currentTheme.iconColor,
+          // Error
+          error: currentTheme.micRecordingBackground,
+          onError: Colors.white,
+          // Outline — used for card borders, text field borders, FAB border
+          outline: currentTheme.borderColor,
+          outlineVariant: currentTheme.dividerColor,
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: currentTheme.micIdleIcon,
+            foregroundColor: Colors.white,
+            elevation: 2,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            textStyle: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 16,
+                fontFamily: 'sans-serif'),
           ),
-          onGenerateRoute: (settings) {
-            return MaterialPageRoute(
-              builder: (context) => FutureBuilder<bool>(
-                future: _authService.isAuthenticated().timeout(
-                  const Duration(seconds: 5),
-                  onTimeout: () {
-                    print("Auth Check Timeout!");
-                    return false; // Default to login on timeout
-                  },
-                ),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Scaffold(
-                        body: Center(child: CircularProgressIndicator()));
-                  }
+        ),
+        cardTheme: CardThemeData(
+          color: currentTheme.micIdleBackground,
+          elevation: 2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(
+                color: currentTheme.borderColor.withValues(alpha: 0.4)),
+          ),
+        ),
+        iconTheme: IconThemeData(
+          color: currentTheme.iconColor,
+        ),
+        dividerTheme: DividerThemeData(
+          color: currentTheme.dividerColor,
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: currentTheme.isDark
+              ? currentTheme.micIdleBackground
+              : Colors.white,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          contentPadding: const EdgeInsets.all(16),
+          hintStyle:
+              TextStyle(color: currentTheme.iconColor.withValues(alpha: 0.5)),
+        ),
+        useMaterial3: true,
+        textTheme: const TextTheme(
+          bodyLarge: TextStyle(fontFamily: 'sans-serif'),
+          bodyMedium: TextStyle(fontFamily: 'sans-serif'),
+          titleLarge: TextStyle(fontFamily: 'sans-serif'),
+        ),
+      ),
+      onGenerateRoute: (settings) {
+        return MaterialPageRoute(
+          builder: (context) => FutureBuilder<bool>(
+            future: _authService.isAuthenticated().timeout(
+              const Duration(seconds: 5),
+              onTimeout: () {
+                print("Auth Check Timeout!");
+                return false; // Default to login on timeout
+              },
+            ),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Scaffold(
+                    body: Center(child: CircularProgressIndicator()));
+              }
 
-                  if (snapshot.hasError) {
-                    return Scaffold(
-                        body: Center(
-                            child: Text("Auth Error: ${snapshot.error}",
-                                style: const TextStyle(
-                                    fontFamily: 'sans-serif'))));
-                  }
+              if (snapshot.hasError) {
+                return Scaffold(
+                    body: Center(
+                        child: Text("Auth Error: ${snapshot.error}",
+                            style: const TextStyle(fontFamily: 'sans-serif'))));
+              }
 
-                  final isAuth = snapshot.data ?? false;
+              final isAuth = snapshot.data ?? false;
 
-                  if (isAuth) {
-                    return const AuthGuard(child: ExtensionHomeScreen());
-                  } else {
-                    return const unified_login.LoginScreen();
-                  }
-                },
-              ),
-            );
-          },
-          initialRoute: '/',
+              if (isAuth) {
+                return const AuthGuard(child: ExtensionHomeScreen());
+              } else {
+                return const unified_login.LoginScreen();
+              }
+            },
+          ),
         );
       },
+      initialRoute: '/',
     );
   }
 }
 
-final RouteObserver<ModalRoute<void>> extensionRouteObserver = RouteObserver<ModalRoute<void>>();
+final RouteObserver<ModalRoute<void>> extensionRouteObserver =
+    RouteObserver<ModalRoute<void>>();
 
 class GlobalExtensionWrapper extends StatefulWidget {
   final Widget child;
@@ -284,25 +264,25 @@ class GlobalExtensionWrapper extends StatefulWidget {
   State<GlobalExtensionWrapper> createState() => _GlobalExtensionWrapperState();
 }
 
-class _GlobalExtensionWrapperState extends State<GlobalExtensionWrapper> with RouteAware {
-
+class _GlobalExtensionWrapperState extends State<GlobalExtensionWrapper>
+    with RouteAware {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // In a global wrapper above MaterialApp, we cannot easily use RouteObserver 
+    // In a global wrapper above MaterialApp, we cannot easily use RouteObserver
     // because the context here is ABOVE the Navigator.
     // Instead of using RouteObserver here, we will just use a builder inside
-    // the Stack that periodically checks, or we rely on the fact that we can 
+    // the Stack that periodically checks, or we rely on the fact that we can
     // inject a listener into the MaterialApp.
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     // To properly react to navigation changes when wrapped ABOVE the navigator,
-    // we use a stream or a valuelistenable. 
-    // A simpler approach for the back button in Flutter is to just rebuild 
+    // we use a stream or a valuelistenable.
+    // A simpler approach for the back button in Flutter is to just rebuild
     // when navigation happens, but Flutter doesn't notify generic wrappers.
     // We will build the button inside a specific widget that subscribes to the observer.
     return Scaffold(
@@ -333,7 +313,7 @@ class _GlobalBackButtonState extends State<GlobalBackButton> {
   @override
   void initState() {
     super.initState();
-    // A simple, robust way to check navigation state from completely outside 
+    // A simple, robust way to check navigation state from completely outside
     // without complex RouteObserver setups in the extension wrapper:
     _timer = Timer.periodic(const Duration(milliseconds: 300), (timer) {
       final canPopNow = widget.navigatorKey.currentState?.canPop() ?? false;
@@ -372,8 +352,10 @@ class _GlobalBackButtonState extends State<GlobalBackButton> {
             height: 50,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Colors.white.withValues(alpha: 0.1), // Glassy neutral effect
-              border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1.5),
+              color:
+                  Colors.white.withValues(alpha: 0.1), // Glassy neutral effect
+              border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.2), width: 1.5),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.2),
@@ -384,7 +366,8 @@ class _GlobalBackButtonState extends State<GlobalBackButton> {
             ),
             child: const Padding(
               padding: EdgeInsets.only(right: 4.0), // center slightly optical
-              child: Icon(Icons.arrow_back_ios_new, color: Colors.white70, size: 20),
+              child: Icon(Icons.arrow_back_ios_new,
+                  color: Colors.white70, size: 20),
             ),
           ),
         ),
@@ -392,4 +375,3 @@ class _GlobalBackButtonState extends State<GlobalBackButton> {
     );
   }
 }
-

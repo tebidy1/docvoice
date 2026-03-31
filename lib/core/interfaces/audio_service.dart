@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'base_service.dart';
-import '../models/audio_models.dart';
+import 'package:soutnote/core/models/audio_models.dart';
 
 /// Audio service interface for handling audio upload and transcription
 abstract class AudioService extends BaseService {

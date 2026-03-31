@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
-import '../models/macro.dart';
-import '../services/macro_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:soutnote/core/models/macro.dart';
+import '../core/providers/common_providers.dart';
 
-class MacroExplorerDialog extends StatefulWidget {
+class MacroExplorerDialog extends ConsumerStatefulWidget {
   const MacroExplorerDialog({super.key});
 
   @override
-  State<MacroExplorerDialog> createState() => _MacroExplorerDialogState();
+  ConsumerState<MacroExplorerDialog> createState() => _MacroExplorerDialogState();
 }
 
-class _MacroExplorerDialogState extends State<MacroExplorerDialog> {
-  final _macroService = MacroService();
+class _MacroExplorerDialogState extends ConsumerState<MacroExplorerDialog> {
   String _selectedCategory = 'Favorites';
   Macro? _previewMacro;
   List<Macro> _macros = [];
@@ -25,13 +25,14 @@ class _MacroExplorerDialogState extends State<MacroExplorerDialog> {
   Future<void> _loadMacros() async {
     setState(() => _isLoading = true);
     
+    final repository = ref.read(macroRepositoryProvider);
     List<Macro> macros;
     if (_selectedCategory == 'Favorites') {
-      macros = await _macroService.getFavorites();
+      macros = await repository.getFavorites();
     } else if (_selectedCategory == 'Most Used') {
-      macros = await _macroService.getMostUsed(limit: 20);
+      macros = await repository.getMostUsed(limit: 20);
     } else {
-      macros = await _macroService.getMacrosByCategory(_selectedCategory);
+      macros = await repository.getByCategory(_selectedCategory);
     }
     
     setState(() {

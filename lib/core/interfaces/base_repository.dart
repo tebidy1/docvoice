@@ -1,6 +1,9 @@
 /// Base repository interface providing standard CRUD operations
 /// This interface abstracts data access from business logic
 abstract class BaseRepository<T> {
+  /// Initialize repository (setup database, API, etc.)
+  Future<void> initialize();
+
   /// Get all entities
   Future<List<T>> getAll();
   

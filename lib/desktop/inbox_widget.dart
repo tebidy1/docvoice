@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import '../models/inbox_note.dart';
-import '../models/macro.dart';
-import '../services/inbox_service.dart';
-import '../services/macro_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:soutnote/core/models/inbox_note.dart';
+import 'package:soutnote/core/models/macro.dart';
+import '../core/providers/common_providers.dart';
 import 'inbox_card.dart';
 
-class InboxWidget extends StatefulWidget {
+class InboxWidget extends ConsumerStatefulWidget {
   final bool isExpanded;
   final VoidCallback onToggle;
 
@@ -13,12 +13,10 @@ class InboxWidget extends StatefulWidget {
       {super.key, required this.isExpanded, required this.onToggle});
 
   @override
-  State<InboxWidget> createState() => _InboxWidgetState();
+  ConsumerState<InboxWidget> createState() => _InboxWidgetState();
 }
 
-class _InboxWidgetState extends State<InboxWidget> {
-  final _inboxService = InboxService();
-  final _macroService = MacroService();
+class _InboxWidgetState extends ConsumerState<InboxWidget> {
   int _selectedTab = 0; // 0: Notes, 1: Archive (Force Update)
   List<Macro> _allMacros = [];
 
@@ -29,17 +27,16 @@ class _InboxWidgetState extends State<InboxWidget> {
   }
 
   Future<void> _loadMacros() async {
-    await _macroService.init();
-    final macros = await _macroService.getAllMacros();
+    final macros = await ref.read(macroRepositoryProvider).getAll();
     if (mounted) setState(() => _allMacros = macros);
   }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<NoteModel>>(
-      stream: _selectedTab == 0
-          ? _inboxService.watchPendingNotes()
-          : _inboxService.watchArchivedNotes(),
+    return FutureBuilder<List<NoteModel>>(
+      future: _selectedTab == 0
+          ? ref.watch(inboxNoteRepositoryProvider).getPending()
+          : ref.watch(inboxNoteRepositoryProvider).getArchived(),
       builder: (context, snapshot) {
         final notes = snapshot.data ?? [];
         final count = notes.length;

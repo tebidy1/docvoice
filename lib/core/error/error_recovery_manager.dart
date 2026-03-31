@@ -332,9 +332,10 @@ class CircuitBreaker {
           name: 'CircuitBreaker',
         );
       } else {
-        throw ApiException(
+        throw CircuitBreakerException(
           'Circuit breaker is open for ${operationName ?? 'operation'}. Try again later.',
         );
+
       }
     }
     

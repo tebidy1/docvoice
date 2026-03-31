@@ -1,5 +1,5 @@
 import '../interfaces/dto_mapper.dart';
-import '../../models/user.dart';
+import 'package:soutnote/core/models/user.dart';
 import 'enhanced_dto_mapper.dart';
 import 'mapping_utils.dart';
 

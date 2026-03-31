@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'dart:js_interop';
-import 'dart:js_interop_unsafe';
 import '../../core/ai/text_processing_service.dart';
+
+// Conditional imports for text injection
+import 'extension_injection_stub.dart'
+    if (dart.library.js_interop) 'extension_injection_web.dart';
 
 enum InjectionStatus {
   success,
@@ -46,26 +48,12 @@ class ExtensionInjectionService {
       debugPrint("Clipboard copy failed: $e");
     }
 
-    // 3. Try Smart Inject (Web Extension Only)
+    // 3. Try Smart Inject (Uses conditional implementation)
     bool injected = false;
-    if (kIsWeb) {
-      try {
-        // Access the global window.scribeflow object defined in extension_interop.js
-        final scribeflow = globalContext['scribeflow'];
-        if (scribeflow != null) {
-          final jsObj = scribeflow as JSObject;
-          // Call injectTextToActiveTab(cleanText)
-          final promise =
-              jsObj.callMethod('injectTextToActiveTab'.toJS, cleanText.toJS)
-                  as JSPromise;
-          final result = await promise.toDart;
-          injected = (result as JSBoolean).toDart;
-        } else {
-             debugPrint("Injection failed: window.scribeflow is null. Ensure extension_interop.js is loaded.");
-        }
-      } catch (e) {
-        debugPrint("Injection failed: $e");
-      }
+    try {
+      injected = await injectTextToWebTab(cleanText);
+    } catch (e) {
+      debugPrint("Injection failed: $e");
     }
 
     // 4. Determine final result
@@ -79,12 +67,12 @@ class ExtensionInjectionService {
            return InjectionResult(
             status: InjectionStatus.copiedOnly,
             message: "✅ Clean Text Copied (Injection failed)",
-          );
+           );
        } else {
            return InjectionResult(
             status: InjectionStatus.copiedOnly,
             message: "✅ Clean Text Copied",
-          );
+           );
        }
     }
   }

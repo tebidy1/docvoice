@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../services/auth_service.dart';
-import '../../mobile_app/core/theme.dart';
-import '../../screens/secure_pairing_screen.dart';
+import 'package:soutnote/core/services/auth_service.dart';
+import 'package:soutnote/shared/theme.dart';
+import 'package:soutnote/features/auth/presentation/screens/secure_pairing_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});

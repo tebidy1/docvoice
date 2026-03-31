@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:window_manager/window_manager.dart';
-import '../models/inbox_note.dart';
-import '../models/macro.dart';
-import '../services/windows_injector.dart'; // Desktop Injector
-import '../services/inbox_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:soutnote/core/models/inbox_note.dart';
+import 'package:soutnote/core/models/macro.dart';
+import 'package:soutnote/core/services/windows_injector.dart';
+import '../core/providers/common_providers.dart';
+import 'package:soutnote/core/services/theme_service.dart';
 import 'inbox_note_detail_view.dart';
-import '../mobile_app/core/theme.dart'; // Import AppTheme
 import '../core/ai/text_processing_service.dart';
 
-class InboxCard extends StatelessWidget {
+class InboxCard extends ConsumerWidget {
   final NoteModel note;
   final VoidCallback onArchived;
   final List<Macro> quickMacros;
@@ -24,8 +24,9 @@ class InboxCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final appTheme = ref.watch(themeServiceProvider);
     final bool isDraft = note.formattedText.isEmpty;
     
     // Find applied template name
@@ -65,7 +66,7 @@ class InboxCard extends StatelessWidget {
 
     switch (note.status) {
       case NoteStatus.ready:
-        statusColor = AppTheme.success;
+        statusColor = appTheme.successColor;
         statusIcon = Icons.check_circle;
         statusText = "Ready";
         break;
@@ -77,7 +78,7 @@ class InboxCard extends StatelessWidget {
       case NoteStatus.processed:
       case NoteStatus.draft:
       default:
-        statusColor = isDraft ? Colors.orange : AppTheme.draft;
+        statusColor = isDraft ? Colors.orange : appTheme.draftColor;
         statusIcon = Icons.edit_note;
         statusText = "Draft";
         break;
@@ -138,7 +139,7 @@ class InboxCard extends StatelessWidget {
                               size: 20,
                             ),
                             tooltip: isDraft ? 'Select a template first' : 'Smart Copy & Inject',
-                            onPressed: isDraft ? null : () => _injectNote(context),
+                             onPressed: isDraft ? null : () => _injectNote(context, ref),
                           )
                         ],
                       ),
@@ -198,7 +199,7 @@ class InboxCard extends StatelessWidget {
   String _getNoteTitle() {
     return 'NO-$noteNumber';
   }
-  Future<void> _injectNote(BuildContext context) async {
+  Future<void> _injectNote(BuildContext context, WidgetRef ref) async {
     final availableText = note.formattedText.isNotEmpty ? note.formattedText : note.rawText;
     final textToInject = TextProcessingService.applySmartCopy(availableText);
     
@@ -227,7 +228,7 @@ class InboxCard extends StatelessWidget {
     
     // Mark as Copied
     try {
-      await InboxService().updateStatus(note.id, NoteStatus.copied);
+      await ref.read(inboxNoteRepositoryProvider).updateStatus(note.id.toString(), NoteStatus.copied);
     } catch (e) {
       print("Error updating status to copied: $e");
     }

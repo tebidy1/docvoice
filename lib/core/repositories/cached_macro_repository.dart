@@ -1,7 +1,7 @@
 import 'dart:async';
 import '../interfaces/macro_repository.dart';
 import '../interfaces/cache_strategy.dart';
-import '../../models/macro.dart';
+import 'package:soutnote/core/models/macro.dart';
 import 'api_macro_repository.dart';
 import 'local_macro_repository.dart';
 
@@ -28,6 +28,12 @@ class CachedMacroRepository implements MacroRepository {
        _syncInterval = syncInterval {
     _startPeriodicSync();
     _setupWatching();
+  }
+  
+  @override
+  Future<void> initialize() async {
+    await _localRepository.initialize();
+    await _apiRepository.initialize();
   }
   
   // Connectivity management

@@ -1,10 +1,16 @@
 import 'base_repository.dart';
-import '../../models/inbox_note.dart';
+import 'package:soutnote/core/models/inbox_note.dart';
 
 /// Repository interface for InboxNote entities
 abstract class InboxNoteRepository extends BaseRepository<InboxNote> {
   /// Get notes by status
   Future<List<InboxNote>> getByStatus(NoteStatus status);
+
+  /// Get pending notes
+  Future<List<InboxNote>> getPending();
+
+  /// Get archived notes
+  Future<List<InboxNote>> getArchived();
   
   /// Get recent notes
   Future<List<InboxNote>> getRecent({int limit = 20});
@@ -14,6 +20,12 @@ abstract class InboxNoteRepository extends BaseRepository<InboxNote> {
   
   /// Archive note
   Future<void> archive(String id);
+
+  /// Watch pending notes
+  Stream<List<InboxNote>> watchPending();
+
+  /// Watch archived notes
+  Stream<List<InboxNote>> watchArchived();
   
   /// Get notes by date range
   Future<List<InboxNote>> getByDateRange(DateTime start, DateTime end);

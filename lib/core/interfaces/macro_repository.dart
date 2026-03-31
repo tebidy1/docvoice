@@ -1,5 +1,5 @@
 import 'base_repository.dart';
-import '../../models/macro.dart';
+import 'package:soutnote/core/models/macro.dart';
 
 /// Repository interface for Macro entities
 abstract class MacroRepository extends BaseRepository<Macro> {

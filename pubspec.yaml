@@ -11,8 +11,7 @@ dependencies:
     sdk: flutter
   
   # State Management
-  provider: ^6.1.1
-  get_it: ^9.2.0
+  flutter_riverpod: ^2.5.1
 
   # Desktop Window Control
   window_manager: ^0.5.1
@@ -43,7 +42,6 @@ dependencies:
   # Utils
   uuid: ^4.3.3
   permission_handler: ^12.0.1
-  flutter_dotenv: ^6.0.0
   vibration: ^3.1.0
   universal_io: ^2.3.1
   flutter_secure_storage: ^9.2.2
@@ -67,9 +65,8 @@ dependencies:
   gap: ^3.0.1
   
   # Web compatibility
-  web: ^1.0.0
+  web: 1.0.0
   url_strategy: ^0.3.0
-  flutter_riverpod: ^2.6.1
   sherpa_onnx: ^1.12.25
   pointycastle: ^3.9.1
   crypto: ^3.0.3
@@ -110,4 +107,4 @@ flutter:
     - assets/images/landing/
     - assets/models/
     - assets/hotwords/
-    - .env
+    # - .env

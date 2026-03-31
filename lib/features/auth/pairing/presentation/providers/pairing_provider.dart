@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -10,8 +9,7 @@ import '../../domain/repositories/pairing_repository.dart';
 
 // Dio Provider
 final dioProvider = Provider<Dio>((ref) {
-  final baseUrl =
-      dotenv.env['API_BASE_URL'] ?? 'https://docapi.sootnote.com/api';
+  final baseUrl = 'https://docapi.sootnote.com/api';
   final dio = Dio(BaseOptions(
     baseUrl: baseUrl.endsWith('/') ? baseUrl : '$baseUrl/',
     headers: {

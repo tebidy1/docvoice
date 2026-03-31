@@ -1,6 +1,3 @@
-/// Core module exports
-/// This file provides a single import point for all core functionality
-
 // Interfaces
 export 'interfaces/base_repository.dart';
 export 'interfaces/abstract_repository.dart';
@@ -51,16 +48,9 @@ export 'dto/mapping_error_reporter.dart';
 // Configuration
 export 'config/api_config.dart';
 
-// Dependency Injection
-export 'di/service_locator.dart';
-
 // Error Handling
 export 'error/app_error.dart';
 export 'error/error_handler.dart';
 export 'error/api_exceptions.dart';
 export 'error/api_error_handler.dart';
 export 'error/error_recovery_manager.dart';
-
-// Testing (only export in test environment)
-export 'testing/property_test.dart';
-export 'testing/generators.dart';

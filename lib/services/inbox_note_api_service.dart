@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
-import '../mobile_app/models/note_model.dart';
-import 'base_api_service.dart';
+import 'package:soutnote/core/models/note_model_web.dart';
+import 'package:soutnote/core/services/base_api_service.dart';
+
 
 /// API Service for Inbox Notes
 ///

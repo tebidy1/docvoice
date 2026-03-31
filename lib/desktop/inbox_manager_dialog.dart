@@ -1,22 +1,23 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../models/inbox_note.dart';
-import '../models/macro.dart';
-import '../services/inbox_service.dart';
-import '../services/macro_service.dart';
-import '../services/audio_recorder_service.dart';
-import '../utils/window_manager_helper.dart';
-import '../screens/settings_dialog.dart';
-import 'inbox_card.dart';
-import 'macro_manager_dialog.dart';
+import 'package:soutnote/core/models/inbox_note.dart';
+import 'package:soutnote/core/models/macro.dart';
+import 'package:soutnote/core/utils/window_manager_helper.dart';
+import 'package:soutnote/features/inbox/archive_screen.dart';
+import 'package:soutnote/features/settings/presentation/widgets/settings_dialog.dart';
+import 'package:soutnote/core/providers/common_providers.dart';
+import 'package:soutnote/core/services/audio_recorder_service.dart';
+
+import 'package:soutnote/desktop/inbox_card.dart';
+import 'package:soutnote/desktop/macro_manager_dialog.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../mobile_app/features/inbox/archive_screen.dart';
-import '../../widgets/animated_record_button.dart';
-import '../../widgets/listening_mode_view.dart';
+import 'package:soutnote/shared/widgets/animated_record_button.dart';
+import 'package:soutnote/shared/widgets/listening_mode_view.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class InboxManagerDialog extends StatefulWidget {
+class InboxManagerDialog extends ConsumerStatefulWidget {
   final Future<void> Function()? onRecordTap;
   final bool isRecording;
   final bool isProcessing;
@@ -31,13 +32,11 @@ class InboxManagerDialog extends StatefulWidget {
   });
 
   @override
-  State<InboxManagerDialog> createState() => _InboxManagerDialogState();
+  ConsumerState<InboxManagerDialog> createState() => _InboxManagerDialogState();
 }
 
-class _InboxManagerDialogState extends State<InboxManagerDialog>
+class _InboxManagerDialogState extends ConsumerState<InboxManagerDialog>
     with TickerProviderStateMixin {
-  final _inboxService = InboxService();
-  final _macroService = MacroService();
   List<Macro> _quickMacros = [];
 
   // ── Local recording state (drives UI updates) ──
@@ -63,13 +62,12 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
   }
 
   Future<void> _initServices() async {
-    await _inboxService.init();
+    // Initialization handled by repositoryInitializerProvider
     await _loadMacros();
   }
 
   Future<void> _loadMacros() async {
-    await _macroService.init();
-    final all = await _macroService.getAllMacros();
+    final all = await ref.read(macroRepositoryProvider).getAll();
     if (mounted) setState(() => _quickMacros = all);
   }
 
@@ -114,8 +112,8 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
                   ),
                   child: _localIsRecording
                       ? _buildListeningView(key: const ValueKey('listening'))
-                      : _buildNotesList(
-                          colorScheme, key: const ValueKey('list')),
+                      : _buildNotesList(colorScheme,
+                          key: const ValueKey('list')),
                 ),
               ),
 
@@ -129,16 +127,12 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
   }
 
   void _openArchive() async {
-    final archivedNotes = await _inboxService.getArchivedNotes();
     if (!mounted) return;
     await WindowManagerHelper.centerDialog();
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ArchiveScreen(
-          archivedNotes: archivedNotes,
-          onClearAll: () {},
-        ),
+        builder: (_) => const ArchiveScreen(),
       ),
     );
     if (!mounted) return;
@@ -162,73 +156,74 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
             child: Directionality(
               textDirection: TextDirection.ltr,
               child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: colorScheme.onSurface.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: SvgPicture.asset(
-                    'assets/images/logo_icon.svg',
-                    height: 28,
-                    width: 28,
-                    fit: BoxFit.contain,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    RichText(
-                      text: TextSpan(
-                        children: [
-                          TextSpan(
-                            text: 'Sout',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                              color: colorScheme.onSurface,
-                            ),
-                          ),
-                          TextSpan(
-                            text: 'Note',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                              color: colorScheme.primary,
-                            ),
-                          ),
-                        ],
-                      ),
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: colorScheme.onSurface.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    RichText(
-                      text: TextSpan(
-                        style: GoogleFonts.tajawal(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                          color: colorScheme.onSurface.withValues(alpha: 0.9),
-                          height: 1.0,
+                    child: SvgPicture.asset(
+                      'assets/images/logo_icon.svg',
+                      height: 28,
+                      width: 28,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      RichText(
+                        text: TextSpan(
+                          children: [
+                            TextSpan(
+                              text: 'Sout',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: colorScheme.onSurface,
+                              ),
+                            ),
+                            TextSpan(
+                              text: 'Note',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: colorScheme.primary,
+                              ),
+                            ),
+                          ],
                         ),
-                        children: [
-                          const TextSpan(text: 'صوت '),
-                          TextSpan(
-                            text: 'ن',
-                            style: TextStyle(color: colorScheme.primary),
-                          ),
-                          const TextSpan(text: 'وت'),
-                        ],
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                      RichText(
+                        text: TextSpan(
+                          style: GoogleFonts.tajawal(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                            color: colorScheme.onSurface.withValues(alpha: 0.9),
+                            height: 1.0,
+                          ),
+                          children: [
+                            const TextSpan(text: 'صوت '),
+                            TextSpan(
+                              text: 'ن',
+                              style: TextStyle(color: colorScheme.primary),
+                            ),
+                            const TextSpan(text: 'وت'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
-          ),
           IconButton(
-            icon: Icon(Icons.inventory_2_outlined, color: colorScheme.onSurface.withValues(alpha: 0.7)),
+            icon: Icon(Icons.inventory_2_outlined,
+                color: colorScheme.onSurface.withValues(alpha: 0.7)),
             tooltip: 'View Archive',
             onPressed: _openArchive,
           ),
@@ -267,7 +262,7 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
   Widget _buildNotesList(ColorScheme colorScheme, {Key? key}) {
     return StreamBuilder<List<NoteModel>>(
       key: key,
-      stream: _inboxService.watchPendingNotes(),
+      stream: ref.watch(inboxNoteRepositoryProvider).watch(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return Center(
@@ -308,24 +303,20 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
         for (var note in notes) {
           final date = note.createdAt;
           final now = DateTime.now();
-          String key;
+          String dateKey;
           if (date.year == now.year &&
               date.month == now.month &&
               date.day == now.day) {
-            key = 'Today';
+            dateKey = 'Today';
           } else if (date.year == now.year &&
               date.month == now.month &&
               date.day == now.day - 1) {
-            key = 'Yesterday';
+            dateKey = 'Yesterday';
           } else {
-            key = DateFormat('MMMM d, y').format(date);
+            dateKey = DateFormat('MMMM d, y').format(date);
           }
-          groupedNotes.putIfAbsent(key, () => []).add(note);
+          groupedNotes.putIfAbsent(dateKey, () => []).add(note);
         }
-
-        // Compute total for reversed numbering (oldest = NO-1)
-        final totalNotes = notes.length;
-        int runningOffset = 0;
 
         return ListView.builder(
           padding: const EdgeInsets.symmetric(vertical: 10),
@@ -333,20 +324,19 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
           itemBuilder: (context, index) {
             final dateKey = groupedNotes.keys.elementAt(index);
             final groupNotes = groupedNotes[dateKey]!;
-            
+
             // Calculate the starting offset for this group
             // Groups are newest-first, so we need to count notes AFTER this group
             int notesAfterThisGroup = 0;
             for (int i = index + 1; i < groupedNotes.length; i++) {
               notesAfterThisGroup += groupedNotes.values.elementAt(i).length;
             }
-            
+
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Padding(
-                  padding:
-                      const EdgeInsets.only(left: 20, bottom: 8, top: 16),
+                  padding: const EdgeInsets.only(left: 20, bottom: 8, top: 16),
                   child: Text(
                     dateKey.toUpperCase(),
                     style: TextStyle(
@@ -360,7 +350,8 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
                 ...groupNotes.asMap().entries.map((entry) {
                   // Within each group, newest note is first (index 0)
                   // noteNumber = notesAfterThisGroup + (groupSize - entryIndex)
-                  final noteNumber = notesAfterThisGroup + (groupNotes.length - entry.key);
+                  final noteNumber =
+                      notesAfterThisGroup + (groupNotes.length - entry.key);
                   return InboxCard(
                     note: entry.value,
                     noteNumber: noteNumber,
@@ -384,10 +375,11 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
       height: 72,
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
-        borderRadius:
-            const BorderRadius.vertical(bottom: Radius.circular(16)),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
         border: Border(
-          top: BorderSide(color: theme.colorScheme.onSurface.withValues(alpha: 0.1), width: 0.5),
+          top: BorderSide(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.1),
+              width: 0.5),
         ),
       ),
       child: Stack(
@@ -433,23 +425,23 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
             ],
           ),
 
-              // Center Record FAB (elevated)
-              Positioned(
-                top: -20,
-                child: AnimatedRecordButton(
-                  onStartRecording: widget.onRecordTap,
-                  onStopRecording: widget.onRecordTap,
-                  initialIsRecording: widget.isRecording,
-                  initialIsProcessing: widget.isProcessing,
-                  onRecordingStateChanged: (isRecording) {
-                    if (mounted) {
-                      setState(() {
-                        _localIsRecording = isRecording;
-                      });
-                    }
-                  },
-                ),
-              ),
+          // Center Record FAB (elevated)
+          Positioned(
+            top: -20,
+            child: AnimatedRecordButton(
+              onStartRecording: widget.onRecordTap,
+              onStopRecording: widget.onRecordTap,
+              initialIsRecording: widget.isRecording,
+              initialIsProcessing: widget.isProcessing,
+              onRecordingStateChanged: (isRecording) {
+                if (mounted) {
+                  setState(() {
+                    _localIsRecording = isRecording;
+                  });
+                }
+              },
+            ),
+          ),
         ],
       ),
     );
@@ -469,7 +461,9 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: theme.colorScheme.onSurface.withValues(alpha: 0.7), size: 22),
+            Icon(icon,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                size: 22),
             const SizedBox(height: 4),
             Text(
               label,
@@ -484,5 +478,4 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
       ),
     );
   }
-
 }

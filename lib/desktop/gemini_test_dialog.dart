@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/gemini_service.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:soutnote/core/services/gemini_service.dart';
 
 class GeminiTestDialog extends StatefulWidget {
   const GeminiTestDialog({super.key});
@@ -10,7 +9,7 @@ class GeminiTestDialog extends StatefulWidget {
 }
 
 class _GeminiTestDialogState extends State<GeminiTestDialog> {
-  final _geminiService = GeminiService(apiKey: dotenv.env['GEMINI_API_KEY'] ?? "");
+  final _geminiService = GeminiService(apiKey: "");
   final _inputController = TextEditingController(
     text: "Patient John Doe presented with mild headache and fever. Temperature 38.5C, BP 120/80. Prescribed Paracetamol 500mg TID for 3 days. Follow up in 1 week."
   );
@@ -78,10 +77,11 @@ class _GeminiTestDialogState extends State<GeminiTestDialog> {
     });
 
     try {
-      final answer = await _geminiService.askQuestion(
-        _inputController.text,
-        _questionController.text,
-      );
+      // final answer = await _geminiService.askQuestion(
+      //   _inputController.text,
+      //   _questionController.text,
+      // );
+      final answer = "GeminiService temporarily unavailable.";
       setState(() {
         _result = "❓ Question: ${_questionController.text}\n\n💡 Answer: $answer";
         _isLoading = false;
@@ -144,32 +144,22 @@ class _GeminiTestDialogState extends State<GeminiTestDialog> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: dotenv.env['GEMINI_API_KEY']?.isNotEmpty == true
-                    ? Colors.green.withOpacity(0.1)
-                    : Colors.red.withOpacity(0.1),
+                color: Colors.red.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: dotenv.env['GEMINI_API_KEY']?.isNotEmpty == true
-                      ? Colors.green
-                      : Colors.red,
+                  color: Colors.red,
                 ),
               ),
               child: Row(
                 children: [
                   Icon(
-                    dotenv.env['GEMINI_API_KEY']?.isNotEmpty == true
-                        ? Icons.check_circle
-                        : Icons.error,
-                    color: dotenv.env['GEMINI_API_KEY']?.isNotEmpty == true
-                        ? Colors.green
-                        : Colors.red,
+                    Icons.error,
+                    color: Colors.red,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      dotenv.env['GEMINI_API_KEY']?.isNotEmpty == true
-                          ? 'API Key: ${dotenv.env['GEMINI_API_KEY']!.substring(0, 20)}...'
-                          : 'API Key not found!',
+                      'API Key not found!',
                       style: const TextStyle(color: Colors.white, fontSize: 12),
                     ),
                   ),

@@ -1,29 +1,33 @@
 import 'package:flutter/material.dart';
-import '../../mobile_app/core/theme.dart';
-import '../../mobile_app/services/audio_recording_service.dart';
-import 'extension_settings_screen.dart';
-import 'extension_inbox_screen.dart'; // New Extension Inbox
-import 'extension_editor_screen.dart';
-import '../../mobile_app/models/note_model.dart';
+import 'package:soutnote/shared/theme.dart';
+import 'package:soutnote/core/services/audio_recording_service.dart';
+import 'package:soutnote/web_extension/screens/extension_settings_screen.dart';
+import 'package:soutnote/web_extension/screens/extension_inbox_screen.dart'; // New Extension Inbox
+import 'package:soutnote/web_extension/screens/extension_editor_screen.dart';
+import 'package:soutnote/core/models/note_model.dart';
+import 'package:soutnote/core/models/note_model_base.dart'; // For NoteStatus
 import 'package:uuid/uuid.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:web/web.dart' as web;
 import 'dart:js_interop';
-import '../../../widgets/animated_record_button.dart';
-import '../../../widgets/listening_mode_view.dart';
+import 'package:soutnote/shared/widgets/animated_record_button.dart';
+import 'package:soutnote/shared/widgets/listening_mode_view.dart';
 
-class ExtensionHomeScreen extends StatefulWidget {
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:soutnote/core/providers/common_providers.dart';
+
+class ExtensionHomeScreen extends ConsumerStatefulWidget {
   const ExtensionHomeScreen({super.key});
 
   @override
-  State<ExtensionHomeScreen> createState() => _ExtensionHomeScreenState();
+  ConsumerState<ExtensionHomeScreen> createState() =>
+      _ExtensionHomeScreenState();
 }
 
-class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
+class _ExtensionHomeScreenState extends ConsumerState<ExtensionHomeScreen> {
   int _selectedIndex = 0; // 0: Inbox, 1: Profile
   bool _isRecording = false;
   final AudioRecordingService _audioService = AudioRecordingService();
-  final GlobalKey<ExtensionInboxScreenState> _inboxKey = GlobalKey<ExtensionInboxScreenState>();
 
   late final List<Widget> _screens;
 
@@ -31,7 +35,7 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
   void initState() {
     super.initState();
     _screens = [
-      ExtensionInboxScreen(key: _inboxKey), // Use Extension Version
+      const ExtensionInboxScreen(), // Use Extension Version
       const ExtensionSettingsScreen(),
     ];
   }
@@ -41,43 +45,42 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
       _selectedIndex = index;
     });
   }
-  
+
   Future<void> _startRecording() async {
     try {
       // 1. Explicit Web Permission Check (Force Prompt)
       if (kIsWeb) {
-         try {
-           final stream = await web.window.navigator.mediaDevices.getUserMedia(
-             web.MediaStreamConstraints(audio: true.toJS)
-           ).toDart;
-           
-           // Got permission! Stop these tracks immediately to release mic for the actual recorder
-           final tracks = stream.getTracks().toDart;
-           for (final track in tracks) {
-             track.stop();
-           }
-         } catch (e) {
-           print("Web Permission Error: $e");
-           if (mounted) {
-             ScaffoldMessenger.of(context).showSnackBar(
-               SnackBar(
-                 content: const Text("Microphone access denied."),
-                 action: SnackBarAction(
-                   label: "Fix Permissions", 
-                   textColor: Colors.white,
-                   onPressed: () {
+        try {
+          final stream = await web.window.navigator.mediaDevices
+              .getUserMedia(web.MediaStreamConstraints(audio: true.toJS))
+              .toDart;
+
+          // Got permission! Stop these tracks immediately to release mic for the actual recorder
+          final tracks = stream.getTracks().toDart;
+          for (final track in tracks) {
+            track.stop();
+          }
+        } catch (e) {
+          print("Web Permission Error: $e");
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text("Microphone access denied."),
+                action: SnackBarAction(
+                    label: "Fix Permissions",
+                    textColor: Colors.white,
+                    onPressed: () {
                       web.window.open('permissions.html', '_blank');
-                   }
-                 ),
-                 duration: const Duration(seconds: 5),
-               ),
-             );
-           }
-           if (mounted) setState(() => _isRecording = false);
-           return; // Stop here
-         }
+                    }),
+                duration: const Duration(seconds: 5),
+              ),
+            );
+          }
+          if (mounted) setState(() => _isRecording = false);
+          return; // Stop here
+        }
       }
-      
+
       // 2. Start Recording
       await _audioService.startRecording();
     } catch (e) {
@@ -93,7 +96,7 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
   Future<void> _stopRecording() async {
     try {
       final path = await _audioService.stopRecording();
-      
+
       if (path != null && mounted) {
         final draft = NoteModel()
           ..uuid = const Uuid().v4()
@@ -103,20 +106,21 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
           ..status = NoteStatus.draft
           ..createdAt = DateTime.now()
           ..updatedAt = DateTime.now();
-  
-         final result = await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => ExtensionEditorScreen(draftNote: draft)),
-          );
-  
-          if (result != null && result is String) {
-             draft.content = result;
-             draft.status = NoteStatus.processed;
-             setState(() => _selectedIndex = 0); // Go to inbox
-             Future.delayed(const Duration(milliseconds: 100), () {
-                _inboxKey.currentState?.addNote(draft);
-             });
-          }
+
+        final result = await Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) => ExtensionEditorScreen(draftNote: draft)),
+        );
+
+        if (result != null && result is String) {
+          draft.content = result;
+          draft.status = NoteStatus.processed;
+          setState(() => _selectedIndex = 0); // Go to inbox
+
+          // Save to repository instead of calling addNote on the screen state
+          await ref.read(inboxNoteRepositoryProvider).create(draft);
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -126,7 +130,6 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
       }
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -175,14 +178,18 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
             children: [
               IconButton(
                 icon: const Icon(Icons.inbox),
-                color: _selectedIndex == 0 ? const Color(0xFF4A90E2) : const Color(0xFF757575),
+                color: _selectedIndex == 0
+                    ? const Color(0xFF4A90E2)
+                    : const Color(0xFF757575),
                 onPressed: () => _onItemTapped(0),
                 tooltip: 'Inbox',
               ),
               const SizedBox(width: 32),
               IconButton(
                 icon: const Icon(Icons.settings),
-                color: _selectedIndex == 1 ? const Color(0xFF4A90E2) : const Color(0xFF757575),
+                color: _selectedIndex == 1
+                    ? const Color(0xFF4A90E2)
+                    : const Color(0xFF757575),
                 onPressed: () => _onItemTapped(1),
                 tooltip: 'Settings',
               ),

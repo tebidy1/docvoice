@@ -1,28 +1,26 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import '../../services/api_service.dart';
-import '../../mobile_app/services/websocket_service.dart' as unified_ws;
-import 'package:provider/provider.dart';
+import 'package:soutnote/core/providers/common_providers.dart';
 import 'dart:convert';
 import 'extension_home_screen.dart';
 
 /// Extension-specific login screen that displays a QR code for the mobile app to scan.
 /// This is similar to WhatsApp Web login flow.
-class ExtensionLoginScreen extends StatefulWidget {
+class ExtensionLoginScreen extends ConsumerStatefulWidget {
   const ExtensionLoginScreen({super.key});
 
   @override
-  State<ExtensionLoginScreen> createState() => _ExtensionLoginScreenState();
+  ConsumerState<ExtensionLoginScreen> createState() => _ExtensionLoginScreenState();
 }
 
-class _ExtensionLoginScreenState extends State<ExtensionLoginScreen> {
+class _ExtensionLoginScreenState extends ConsumerState<ExtensionLoginScreen> {
   String? _pairingId;
   String? _pairingCode;
   bool _isLoading = true;
   String? _errorMessage;
-  final ApiService _apiService = ApiService();
   StreamSubscription? _wsSubscription;
   Timer? _refreshTimer;
 
@@ -47,7 +45,8 @@ class _ExtensionLoginScreenState extends State<ExtensionLoginScreen> {
     });
 
     try {
-      final response = await _apiService.get('/pairing/initiate');
+      final apiService = ref.read(apiServiceProvider);
+      final response = await apiService.get('/pairing/initiate');
       if (response['success'] == true) {
         setState(() {
           _pairingId = response['pairing_id'];
@@ -78,7 +77,7 @@ class _ExtensionLoginScreenState extends State<ExtensionLoginScreen> {
     _refreshTimer = Timer.periodic(const Duration(minutes: 2), (_) {
       _initPairing();
     });
-    
+
     // Poll for pairing status every 3 seconds (fallback if WebSocket not connected)
     _startPolling();
   }
@@ -87,16 +86,17 @@ class _ExtensionLoginScreenState extends State<ExtensionLoginScreen> {
     _pollTimer?.cancel();
     _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
       if (_pairingId == null) return;
-      
+
       try {
-        final response = await _apiService.get('/pairing/status/$_pairingId');
+        final apiService = ref.read(apiServiceProvider);
+        final response = await apiService.get('/pairing/status/$_pairingId');
         
         if (response['status'] == 'authorized' && response['token'] != null) {
           _pollTimer?.cancel();
           
           final token = response['token'];
-          await _apiService.setToken(token);
-          
+          await apiService.setToken(token);
+
           if (mounted) {
             Navigator.of(context).pushAndRemoveUntil(
               MaterialPageRoute(builder: (_) => const ExtensionHomeScreen()),
@@ -113,20 +113,23 @@ class _ExtensionLoginScreenState extends State<ExtensionLoginScreen> {
 
   void _listenForPairing() {
     try {
-      final ws = context.read<unified_ws.WebSocketService>();
-      
+      final ws = ref.read(webSocketServiceProvider);
+
       _wsSubscription = ws.messages.listen((message) async {
         try {
           final data = jsonDecode(message.toString());
-          if (data['event'] == 'pairing.success' && data['pairingId'] == _pairingId) {
+          if (data['event'] == 'pairing.success' &&
+              data['pairingId'] == _pairingId) {
             final token = data['token'];
-            
+
             if (token != null) {
-              await _apiService.setToken(token);
-              
+              final apiService = ref.read(apiServiceProvider);
+              await apiService.setToken(token);
+
               if (mounted) {
                 Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const ExtensionHomeScreen()),
+                  MaterialPageRoute(
+                      builder: (_) => const ExtensionHomeScreen()),
                   (route) => false,
                 );
               }
@@ -177,11 +180,13 @@ class _ExtensionLoginScreenState extends State<ExtensionLoginScreen> {
                   decoration: BoxDecoration(
                     color: Colors.blue.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+                    border:
+                        Border.all(color: Colors.blue.withValues(alpha: 0.3)),
                   ),
                   child: Column(
                     children: [
-                      const Icon(Icons.phone_android, color: Colors.blue, size: 32),
+                      const Icon(Icons.phone_android,
+                          color: Colors.blue, size: 32),
                       const SizedBox(height: 8),
                       Text(
                         "Scan with your phone",
@@ -265,11 +270,13 @@ class _ExtensionLoginScreenState extends State<ExtensionLoginScreen> {
                 if (!_isLoading && _pairingCode != null) ...[
                   Text(
                     "Or enter this code on your phone:",
-                    style: GoogleFonts.inter(color: Colors.white60, fontSize: 12),
+                    style:
+                        GoogleFonts.inter(color: Colors.white60, fontSize: 12),
                   ),
                   const SizedBox(height: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 10),
                     decoration: BoxDecoration(
                       color: Colors.white10,
                       borderRadius: BorderRadius.circular(12),
@@ -293,7 +300,8 @@ class _ExtensionLoginScreenState extends State<ExtensionLoginScreen> {
                 if (!_isLoading && _pairingId != null)
                   Text(
                     "Session: ${_pairingId!.substring(0, 8)}...",
-                    style: GoogleFonts.robotoMono(color: Colors.white24, fontSize: 10),
+                    style: GoogleFonts.robotoMono(
+                        color: Colors.white24, fontSize: 10),
                   ),
 
                 const SizedBox(height: 24),
@@ -301,10 +309,12 @@ class _ExtensionLoginScreenState extends State<ExtensionLoginScreen> {
                 // Refresh Button
                 TextButton.icon(
                   onPressed: _initPairing,
-                  icon: const Icon(Icons.refresh, size: 16, color: Colors.white54),
+                  icon: const Icon(Icons.refresh,
+                      size: 16, color: Colors.white54),
                   label: Text(
                     "Generate New Code",
-                    style: GoogleFonts.inter(color: Colors.white54, fontSize: 12),
+                    style:
+                        GoogleFonts.inter(color: Colors.white54, fontSize: 12),
                   ),
                 ),
               ],

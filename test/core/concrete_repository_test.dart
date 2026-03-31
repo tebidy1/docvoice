@@ -1,15 +1,15 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scribeflow/core/repositories/repositories.dart';
-import 'package:scribeflow/core/interfaces/cache_strategy.dart';
-import 'package:scribeflow/core/interfaces/macro_repository.dart';
-import 'package:scribeflow/services/api_service.dart';
-import 'package:scribeflow/models/macro.dart';
+import 'package:soutnote/core/repositories/repositories.dart';
+import 'package:soutnote/core/interfaces/cache_strategy.dart';
+import 'package:soutnote/core/interfaces/macro_repository.dart';
+import 'package:soutnote/core/services/api_service.dart';
+import 'package:soutnote/core/models/macro.dart';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scribeflow/core/repositories/repositories.dart';
-import 'package:scribeflow/core/interfaces/cache_strategy.dart';
-import 'package:scribeflow/core/interfaces/macro_repository.dart';
-import 'package:scribeflow/models/macro.dart';
+import 'package:soutnote/core/repositories/repositories.dart';
+import 'package:soutnote/core/interfaces/cache_strategy.dart';
+import 'package:soutnote/core/interfaces/macro_repository.dart';
+import 'package:soutnote/core/models/macro.dart';
 
 void main() {
   group('Concrete Repository Tests', () {

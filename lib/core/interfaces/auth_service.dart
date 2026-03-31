@@ -3,7 +3,7 @@
 /// This file defines the contract for authentication services,
 /// including login, registration, logout, and profile management.
 
-import '../models/api_models.dart';
+import 'package:soutnote/core/models/api_models.dart';
 
 /// Authentication state enumeration
 enum AuthState {

@@ -1,5 +1,5 @@
 import 'base_repository.dart';
-import '../models/audio_models.dart';
+import 'package:soutnote/core/models/audio_models.dart';
 
 /// Repository interface for AudioUploadResult entities
 abstract class AudioUploadRepository extends BaseRepository<AudioUploadResult> {

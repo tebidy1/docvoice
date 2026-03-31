@@ -4,16 +4,35 @@
 /// including network errors, authentication errors, and validation errors.
 
 /// Base API exception class
-abstract class ApiException implements Exception {
+class ApiException implements Exception {
   final String message;
   final int? statusCode;
   final Map<String, dynamic>? details;
   
   const ApiException(this.message, {this.statusCode, this.details});
   
+  /// Alias for details to support legacy code
+  Map<String, dynamic>? get errors => details;
+
+  bool get isUnauthorized => statusCode == 401;
+  bool get isValidationError => statusCode == 422;
+  bool get isServerError => statusCode != null && statusCode! >= 500;
+  bool get isNotFound => statusCode == 404;
+
   @override
   String toString() => 'ApiException: $message';
 }
+
+
+/// Circuit breaker specific exception
+class CircuitBreakerException extends ApiException {
+  const CircuitBreakerException(String message, {int? statusCode, Map<String, dynamic>? details})
+      : super(message, statusCode: statusCode, details: details);
+  
+  @override
+  String toString() => 'CircuitBreakerException: $message';
+}
+
 
 /// Network-related exceptions
 class NetworkException extends ApiException {
@@ -92,12 +111,15 @@ class RequestCancelledException extends ApiException {
 
 /// Timeout exception
 class TimeoutException extends ApiException {
-  const TimeoutException(String message, {int? statusCode, Map<String, dynamic>? details})
+  final Duration? duration;
+  
+  const TimeoutException(String message, {this.duration, int? statusCode, Map<String, dynamic>? details})
       : super(message, statusCode: statusCode, details: details);
   
   @override
-  String toString() => 'TimeoutException: $message';
+  String toString() => 'TimeoutException: $message${duration != null ? ' (duration: $duration)' : ''}';
 }
+
 
 /// Rate limiting exception
 class RateLimitException extends ApiException {
