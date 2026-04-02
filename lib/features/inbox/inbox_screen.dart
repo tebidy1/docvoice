@@ -20,10 +20,13 @@ class InboxScreen extends ConsumerStatefulWidget {
 class InboxScreenState extends ConsumerState<InboxScreen> {
   final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
   List<Macro> _allMacros = [];
+  late final Stream<List<NoteModel>> _pendingNotesStream;
 
   @override
   void initState() {
     super.initState();
+    // Create stream ONCE to avoid recreation on every rebuild
+    _pendingNotesStream = ref.read(inboxNoteRepositoryProvider).watchPending();
     _loadMacros();
   }
 
@@ -156,13 +159,14 @@ class InboxScreenState extends ConsumerState<InboxScreen> {
           const SizedBox(height: 16),
           Expanded(
             child: StreamBuilder<List<NoteModel>>(
-              stream: ref.watch(inboxNoteRepositoryProvider).watchPending(),
+              stream: _pendingNotesStream,
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
+                // Show loading only before first data arrives
+                if (!snapshot.hasData && !snapshot.hasError) {
                    return const Center(child: CircularProgressIndicator()); 
                 }
                 
-                if (snapshot.hasError) {
+                if (snapshot.hasError && !snapshot.hasData) {
                   return Center(child: Text("Error fetching notes: ${snapshot.error}", style: const TextStyle(color: Colors.red)));
                 }
 

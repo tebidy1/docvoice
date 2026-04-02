@@ -428,26 +428,30 @@ class ApiInboxNoteRepository extends AbstractApiRepository<InboxNote>
   }
 
   @override
-  Stream<List<InboxNote>> watch() {
+  Stream<List<InboxNote>> watch() async* {
+    // Initial fetch to ensure immediate data population
+    yield await getAll();
     // For API repository, implement polling-based watching
-    return Stream.periodic(
+    yield* Stream.periodic(
       const Duration(seconds: 30), // Poll every 30 seconds
       (_) => getAll(),
     ).asyncMap((future) => future);
   }
 
   @override
-  Stream<List<InboxNote>> watchPending() {
-    return Stream.periodic(
-      const Duration(seconds: 10), // Poll every 10 seconds for pending
+  Stream<List<InboxNote>> watchPending() async* {
+    yield await getPending();
+    yield* Stream.periodic(
+      const Duration(minutes: 5), // Poll every 5 minutes for pending
       (_) => getPending(),
     ).asyncMap((future) => future);
   }
 
   @override
-  Stream<List<InboxNote>> watchArchived() {
-    return Stream.periodic(
-      const Duration(seconds: 60), // Poll every 60 seconds for archived
+  Stream<List<InboxNote>> watchArchived() async* {
+    yield await getArchived();
+    yield* Stream.periodic(
+      const Duration(minutes: 15), // Poll every 15 minutes for archived
       (_) => getArchived(),
     ).asyncMap((future) => future);
   }

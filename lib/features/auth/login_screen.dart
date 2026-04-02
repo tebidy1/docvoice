@@ -2,7 +2,6 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'package:soutnote/core/brand/brand_colors.dart';
 import 'package:soutnote/core/services/auth_service.dart';
 import 'package:soutnote/features/auth/presentation/screens/qr_login_screen.dart';
 import 'package:soutnote/features/home/home_screen.dart';
@@ -32,7 +31,7 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void initState() {
     super.initState();
-    _checkAuth();
+    // _checkAuth();
 
     _entranceCtrl = AnimationController(
       vsync: this,
@@ -58,15 +57,6 @@ class _LoginScreenState extends State<LoginScreen>
     );
 
     _entranceCtrl.forward();
-  }
-
-  Future<void> _checkAuth() async {
-    if (await AuthService().isAuthenticated() && mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
-    }
   }
 
   Future<void> _login() async {
@@ -115,18 +105,19 @@ class _LoginScreenState extends State<LoginScreen>
   // ─────────────────────────────────────────────────────────
   //  Logo icon (static custom paint, matches splash icon)
   // ─────────────────────────────────────────────────────────
-  Widget _buildLogo() {
+  Widget _buildLogo(ThemeData theme) {
     return SizedBox(
       width: 110,
       height: 100,
-      child: CustomPaint(painter: _LoginLogoPainter()),
+      child: CustomPaint(painter: _LoginLogoPainter(theme: theme)),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: BrandColors.white,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: AnimatedBuilder(
           animation: _entranceCtrl,
@@ -144,7 +135,7 @@ class _LoginScreenState extends State<LoginScreen>
                       scale: _logoScale,
                       child: Column(
                         children: [
-                          _buildLogo(),
+                          _buildLogo(theme),
                           const SizedBox(height: 14),
                           RichText(
                             text: TextSpan(children: [
@@ -153,7 +144,7 @@ class _LoginScreenState extends State<LoginScreen>
                                 style: GoogleFonts.outfit(
                                   fontSize: 26,
                                   fontWeight: FontWeight.w700,
-                                  color: BrandColors.darkNavy,
+                                  color: theme.colorScheme.onSurface,
                                 ),
                               ),
                               TextSpan(
@@ -161,7 +152,7 @@ class _LoginScreenState extends State<LoginScreen>
                                 style: GoogleFonts.outfit(
                                   fontSize: 26,
                                   fontWeight: FontWeight.w700,
-                                  color: BrandColors.primaryBlue,
+                                  color: theme.colorScheme.primary,
                                 ),
                               ),
                             ]),
@@ -172,7 +163,7 @@ class _LoginScreenState extends State<LoginScreen>
                             style: GoogleFonts.cairo(
                               fontSize: 20,
                               fontWeight: FontWeight.w600,
-                              color: BrandColors.darkNavy,
+                              color: theme.colorScheme.onSurface,
                             ),
                           ),
                         ],
@@ -196,18 +187,18 @@ class _LoginScreenState extends State<LoginScreen>
                               padding: const EdgeInsets.all(12),
                               margin: const EdgeInsets.only(bottom: 18),
                               decoration: BoxDecoration(
-                                color:
-                                    BrandColors.error.withValues(alpha: 0.08),
+                                color: theme.colorScheme.error
+                                    .withValues(alpha: 0.08),
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
-                                  color:
-                                      BrandColors.error.withValues(alpha: 0.25),
+                                  color: theme.colorScheme.error
+                                      .withValues(alpha: 0.25),
                                 ),
                               ),
                               child: Text(
                                 _error!,
                                 style: GoogleFonts.cairo(
-                                  color: BrandColors.error,
+                                  color: theme.colorScheme.error,
                                   fontSize: 13,
                                 ),
                                 textAlign: TextAlign.center,
@@ -235,7 +226,8 @@ class _LoginScreenState extends State<LoginScreen>
                                 _obscure
                                     ? Icons.visibility_off_outlined
                                     : Icons.visibility_outlined,
-                                color: BrandColors.textMuted,
+                                color: theme.colorScheme.onSurface
+                                    .withValues(alpha: 0.5),
                                 size: 20,
                               ),
                               onPressed: () =>
@@ -246,14 +238,14 @@ class _LoginScreenState extends State<LoginScreen>
 
                           // Login button
                           SizedBox(
-                            height: 52,
                             child: ElevatedButton(
                               onPressed: _isLoading ? null : _login,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: BrandColors.primaryBlue,
-                                disabledBackgroundColor: BrandColors.primaryBlue
+                                backgroundColor: theme.colorScheme.primary,
+                                disabledBackgroundColor: theme
+                                    .colorScheme.primary
                                     .withValues(alpha: 0.5),
-                                foregroundColor: Colors.white,
+                                foregroundColor: theme.colorScheme.onPrimary,
                                 elevation: 0,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(14),
@@ -286,18 +278,18 @@ class _LoginScreenState extends State<LoginScreen>
                               MaterialPageRoute(
                                   builder: (_) => const QrLoginScreen()),
                             ),
-                            icon: const Icon(Icons.qr_code,
-                                color: BrandColors.primaryBlue, size: 20),
+                            icon: Icon(Icons.qr_code,
+                                color: theme.colorScheme.primary, size: 20),
                             label: Text(
                               'تسجيل عبر QR / Show QR to Login',
                               style: GoogleFonts.cairo(
-                                color: BrandColors.primaryBlue,
+                                color: theme.colorScheme.primary,
                                 fontSize: 14,
                               ),
                             ),
                             style: OutlinedButton.styleFrom(
                               side: BorderSide(
-                                  color: BrandColors.primaryBlue
+                                  color: theme.colorScheme.primary
                                       .withValues(alpha: 0.3)),
                               padding: const EdgeInsets.symmetric(vertical: 13),
                               shape: RoundedRectangleBorder(
@@ -310,12 +302,12 @@ class _LoginScreenState extends State<LoginScreen>
                           // Sync
                           TextButton.icon(
                             onPressed: _showSyncDialog,
-                            icon: const Icon(Icons.sync,
-                                color: BrandColors.accentCyan, size: 20),
+                            icon: Icon(Icons.sync,
+                                color: theme.colorScheme.primary, size: 20),
                             label: Text(
                               'مزامنة مع جهاز / Sync',
                               style: GoogleFonts.cairo(
-                                color: BrandColors.accentCyan,
+                                color: theme.colorScheme.primary,
                                 fontSize: 13,
                               ),
                             ),
@@ -334,7 +326,8 @@ class _LoginScreenState extends State<LoginScreen>
                               child: Text(
                                 'تحتاج مساعدة؟ / Need help?',
                                 style: GoogleFonts.cairo(
-                                  color: BrandColors.textMuted,
+                                  color: theme.colorScheme.onSurface
+                                      .withValues(alpha: 0.5),
                                   fontSize: 13,
                                 ),
                               ),
@@ -361,36 +354,41 @@ class _LoginScreenState extends State<LoginScreen>
     bool obscure = false,
     Widget? suffixIcon,
   }) {
+    final theme = Theme.of(context);
     return TextField(
       controller: controller,
       keyboardType: keyboard,
       obscureText: obscure,
       style: GoogleFonts.inter(
         fontSize: 15,
-        color: BrandColors.textPrimary,
+        color: theme.colorScheme.onSurface,
       ),
       decoration: InputDecoration(
         labelText: label,
         labelStyle: GoogleFonts.cairo(
-          color: BrandColors.textMuted,
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
           fontSize: 13,
         ),
         filled: true,
-        fillColor: BrandColors.inputFill,
+        fillColor:
+            theme.inputDecorationTheme.fillColor ?? theme.colorScheme.surface,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: BrandColors.inputBorder),
+          borderSide: BorderSide(
+              color: theme.colorScheme.outline.withValues(alpha: 0.5)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: BrandColors.inputBorder),
+          borderSide: BorderSide(
+              color: theme.colorScheme.outline.withValues(alpha: 0.5)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide:
-              const BorderSide(color: BrandColors.primaryBlue, width: 1.5),
+          borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.5),
         ),
-        prefixIcon: Icon(icon, color: BrandColors.textMuted, size: 20),
+        prefixIcon: Icon(icon,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+            size: 20),
         suffixIcon: suffixIcon,
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -400,20 +398,22 @@ class _LoginScreenState extends State<LoginScreen>
 
   void _showSyncDialog() {
     final controller = TextEditingController();
+    final theme = Theme.of(context);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: BrandColors.white,
+        backgroundColor: theme.scaffoldBackgroundColor,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('أدخل رمز المزامنة',
-            style: GoogleFonts.cairo(color: BrandColors.navy)),
+            style: GoogleFonts.cairo(color: theme.colorScheme.onSurface)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               'احصل على الرمز من الإعدادات > ربط جهاز جديد',
-              style:
-                  GoogleFonts.cairo(color: BrandColors.textMuted, fontSize: 12),
+              style: GoogleFonts.cairo(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                  fontSize: 12),
               textDirection: TextDirection.rtl,
             ),
             const SizedBox(height: 16),
@@ -423,14 +423,16 @@ class _LoginScreenState extends State<LoginScreen>
               maxLength: 6,
               autofocus: true,
               style: GoogleFonts.inter(
-                color: BrandColors.navy,
+                color: theme.colorScheme.onSurface,
                 fontSize: 24,
                 letterSpacing: 8,
               ),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: '123456',
-                hintStyle: TextStyle(color: BrandColors.textHint),
-                counterStyle: TextStyle(color: BrandColors.textMuted),
+                hintStyle: TextStyle(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.3)),
+                counterStyle: TextStyle(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
               ),
             ),
           ],
@@ -439,7 +441,8 @@ class _LoginScreenState extends State<LoginScreen>
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text('إلغاء',
-                style: GoogleFonts.cairo(color: BrandColors.textSecondary)),
+                style: GoogleFonts.cairo(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.7))),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -467,8 +470,8 @@ class _LoginScreenState extends State<LoginScreen>
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: BrandColors.primaryBlue,
-              foregroundColor: Colors.white,
+              backgroundColor: theme.colorScheme.primary,
+              foregroundColor: theme.colorScheme.onPrimary,
             ),
             child: Text('مزامنة', style: GoogleFonts.cairo()),
           ),
@@ -483,16 +486,20 @@ class _LoginScreenState extends State<LoginScreen>
 // ═══════════════════════════════════════════════════════════════
 
 class _LoginLogoPainter extends CustomPainter {
+  final ThemeData theme;
+
+  _LoginLogoPainter({required this.theme});
+
   @override
   void paint(Canvas canvas, Size size) {
     final s = size.width / 100;
 
     final stroke = Paint()
-      ..color = BrandColors.navy
+      ..color = theme.colorScheme.onSurface
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3.2 * s
       ..strokeCap = StrokeCap.round;
-    final fill = Paint()..color = BrandColors.navy;
+    final fill = Paint()..color = theme.colorScheme.onSurface;
 
     // Clipboard body
     canvas.drawRRect(
@@ -521,7 +528,7 @@ class _LoginLogoPainter extends CustomPainter {
           Radius.circular(1.5 * s),
         ),
         Paint()
-          ..color = BrandColors.navy
+          ..color = theme.colorScheme.onSurface
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2 * s,
       );
@@ -529,7 +536,7 @@ class _LoginLogoPainter extends CustomPainter {
         Offset(20 * s, y),
         Offset((i == 2 ? 35 : 42) * s, y),
         Paint()
-          ..color = BrandColors.navy
+          ..color = theme.colorScheme.onSurface
           ..strokeWidth = 2.5 * s
           ..strokeCap = StrokeCap.round,
       );
@@ -551,7 +558,7 @@ class _LoginLogoPainter extends CustomPainter {
       Offset(bCx, bCy),
       15 * s,
       Paint()
-        ..color = BrandColors.accentCyan
+        ..color = theme.colorScheme.primary
         ..style = PaintingStyle.stroke
         ..strokeWidth = 3 * s,
     );
@@ -562,7 +569,7 @@ class _LoginLogoPainter extends CustomPainter {
             center: Offset(bCx, bCy - 3 * s), width: 6 * s, height: 11 * s),
         Radius.circular(3 * s),
       ),
-      Paint()..color = BrandColors.darkNavy,
+      Paint()..color = theme.colorScheme.onSurface,
     );
     canvas.drawArc(
       Rect.fromCenter(
@@ -571,7 +578,7 @@ class _LoginLogoPainter extends CustomPainter {
       pi,
       false,
       Paint()
-        ..color = BrandColors.darkNavy
+        ..color = theme.colorScheme.onSurface
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2 * s
         ..strokeCap = StrokeCap.round,
@@ -580,7 +587,7 @@ class _LoginLogoPainter extends CustomPainter {
         Offset(bCx, bCy + 6 * s),
         Offset(bCx, bCy + 10 * s),
         Paint()
-          ..color = BrandColors.darkNavy
+          ..color = theme.colorScheme.onSurface
           ..strokeWidth = 2 * s
           ..strokeCap = StrokeCap.round);
   }

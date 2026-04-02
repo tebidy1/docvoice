@@ -6,16 +6,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 
-import 'package:soutnote/core/brand/brand_colors.dart';
 import 'package:soutnote/core/services/auth_service.dart';
 import 'package:soutnote/desktop/desktop_app.dart'
     if (dart.library.html) 'package:soutnote/desktop/desktop_app_stub.dart';
 import 'package:soutnote/features/landing_page/landing_page.dart';
-import 'package:soutnote/core/models/app_theme.dart' as global_theme;
+
 import 'package:soutnote/features/landing_page/theme/app_theme.dart';
 import 'package:soutnote/shared/widgets/auth_guard.dart';
 import 'package:soutnote/features/onboarding/onboarding_screen.dart';
-import 'package:soutnote/features/auth/presentation/screens/login_screen.dart';
+import 'package:soutnote/features/auth/login_screen.dart';
 import 'package:soutnote/features/home/home_screen.dart';
 
 /// Full-screen splash with a 2.2 s "Record → Structure" animation.
@@ -54,6 +53,7 @@ class _SplashScreenState extends State<SplashScreen>
     _start();
   }
 
+
   Future<void> _start() async {
     // We want the splash to run for AT LEAST 2.2 seconds (the animation length).
     // If the auth request takes longer, we will timeout after 2.5s maximum to avoid blocking the user.
@@ -62,7 +62,8 @@ class _SplashScreenState extends State<SplashScreen>
     final prefsFuture = SharedPreferences.getInstance();
     final authFuture = AuthService().isAuthenticated().timeout(
           const Duration(milliseconds: 2500),
-          onTimeout: () => false, // fallback to login screen if network is too slow
+          onTimeout: () =>
+              false, // fallback to login screen if network is too slow
         );
 
     // Wait for the animation to finish OR a reasonable timeout if it hangs
@@ -84,11 +85,11 @@ class _SplashScreenState extends State<SplashScreen>
 
     if (!mounted) return;
 
-    final isDesktopPlatform = !kIsWeb &&
-        (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
+    final isDesktopPlatform =
+        !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
 
     Widget destination;
-    
+
     if (firstRun) {
       destination = const OnboardingScreen();
     } else if (isAuth) {
@@ -143,8 +144,9 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: BrandColors.white,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: AnimatedBuilder(
         animation: _ctrl,
         builder: (context, _) {
@@ -180,6 +182,7 @@ class _SplashScreenState extends State<SplashScreen>
                   height: 140,
                   child: CustomPaint(
                     painter: _SplashIconPainter(
+                      theme: theme,
                       clipboardOpacity: clipOp,
                       clipboardScale: clipSc,
                       badgeOpacity: badgeOp,
@@ -208,7 +211,7 @@ class _SplashScreenState extends State<SplashScreen>
                               style: GoogleFonts.outfit(
                                 fontSize: 28,
                                 fontWeight: FontWeight.w700,
-                                color: BrandColors.darkNavy,
+                                color: theme.colorScheme.onSurface,
                               ),
                             ),
                             TextSpan(
@@ -216,7 +219,7 @@ class _SplashScreenState extends State<SplashScreen>
                               style: GoogleFonts.outfit(
                                 fontSize: 28,
                                 fontWeight: FontWeight.w700,
-                                color: BrandColors.primaryBlue,
+                                color: theme.colorScheme.primary,
                               ),
                             ),
                           ]),
@@ -227,7 +230,7 @@ class _SplashScreenState extends State<SplashScreen>
                           style: GoogleFonts.cairo(
                             fontSize: 22,
                             fontWeight: FontWeight.w700,
-                            color: BrandColors.darkNavy,
+                            color: theme.colorScheme.onSurface,
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -236,7 +239,8 @@ class _SplashScreenState extends State<SplashScreen>
                           style: GoogleFonts.cairo(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
-                            color: BrandColors.textSecondary,
+                            color: theme.colorScheme.onSurface
+                                .withValues(alpha: 0.7),
                             letterSpacing: 0.5,
                           ),
                           textAlign: TextAlign.center,
@@ -265,7 +269,7 @@ class _SplashScreenState extends State<SplashScreen>
                   style: GoogleFonts.cairo(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
-                    color: BrandColors.textMuted,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                   ),
                   textAlign: TextAlign.center,
                   textDirection: TextDirection.rtl,
@@ -284,6 +288,7 @@ class _SplashScreenState extends State<SplashScreen>
 // ═══════════════════════════════════════════════════════════════
 
 class _SplashIconPainter extends CustomPainter {
+  final ThemeData theme;
   final double clipboardOpacity;
   final double clipboardScale;
   final double badgeOpacity;
@@ -294,6 +299,7 @@ class _SplashIconPainter extends CustomPainter {
   final double finalizeProgress;
 
   _SplashIconPainter({
+    required this.theme,
     required this.clipboardOpacity,
     required this.clipboardScale,
     required this.badgeOpacity,
@@ -321,13 +327,15 @@ class _SplashIconPainter extends CustomPainter {
       canvas.translate(-cx, -cy);
 
       final stroke = Paint()
-        ..color = BrandColors.navy.withValues(alpha: clipboardOpacity)
+        ..color =
+            theme.colorScheme.onSurface.withValues(alpha: clipboardOpacity)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 3.5 * s
         ..strokeCap = StrokeCap.round;
 
       final fill = Paint()
-        ..color = BrandColors.navy.withValues(alpha: clipboardOpacity)
+        ..color =
+            theme.colorScheme.onSurface.withValues(alpha: clipboardOpacity)
         ..style = PaintingStyle.fill;
 
       // Body
@@ -362,13 +370,13 @@ class _SplashIconPainter extends CustomPainter {
 
           // Checkbox square
           final sqPaint = Paint()
-            ..color = BrandColors.navy.withValues(alpha: lineOp * clipboardOpacity)
+            ..color = theme.colorScheme.onSurface
+                .withValues(alpha: lineOp * clipboardOpacity)
             ..style = PaintingStyle.stroke
             ..strokeWidth = 2 * s;
           canvas.drawRRect(
             RRect.fromRectAndRadius(
-              Rect.fromLTWH(
-                  (8 + slideX / s) * s, (y - 3.5 * s), 7 * s, 7 * s),
+              Rect.fromLTWH((8 + slideX / s) * s, (y - 3.5 * s), 7 * s, 7 * s),
               Radius.circular(1.5 * s),
             ),
             sqPaint,
@@ -376,7 +384,8 @@ class _SplashIconPainter extends CustomPainter {
 
           // Text line
           final linePaint = Paint()
-            ..color = BrandColors.navy.withValues(alpha: lineOp * clipboardOpacity)
+            ..color = theme.colorScheme.onSurface
+                .withValues(alpha: lineOp * clipboardOpacity)
             ..style = PaintingStyle.stroke
             ..strokeWidth = 3 * s
             ..strokeCap = StrokeCap.round;
@@ -405,7 +414,7 @@ class _SplashIconPainter extends CustomPainter {
           Offset(ringCx, ringCy),
           radius,
           Paint()
-            ..color = BrandColors.accentCyan.withValues(alpha: opacity)
+            ..color = theme.colorScheme.primary.withValues(alpha: opacity)
             ..style = PaintingStyle.stroke
             ..strokeWidth = 2 * s,
         );
@@ -441,14 +450,14 @@ class _SplashIconPainter extends CustomPainter {
         Offset(bCx, bCy),
         18 * s,
         Paint()
-          ..color = BrandColors.accentCyan.withValues(alpha: badgeOpacity)
+          ..color = theme.colorScheme.primary.withValues(alpha: badgeOpacity)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 3.5 * s,
       );
 
       // Mic body (capsule)
       final micFill = Paint()
-        ..color = BrandColors.darkNavy.withValues(alpha: badgeOpacity)
+        ..color = theme.colorScheme.onSurface.withValues(alpha: badgeOpacity)
         ..style = PaintingStyle.fill;
       canvas.drawRRect(
         RRect.fromRectAndRadius(
@@ -460,15 +469,13 @@ class _SplashIconPainter extends CustomPainter {
 
       // Mic cup arc
       final micStroke = Paint()
-        ..color = BrandColors.darkNavy.withValues(alpha: badgeOpacity)
+        ..color = theme.colorScheme.onSurface.withValues(alpha: badgeOpacity)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.2 * s
         ..strokeCap = StrokeCap.round;
       canvas.drawArc(
         Rect.fromCenter(
-            center: Offset(68 * s, 21 * s),
-            width: 14 * s,
-            height: 10 * s),
+            center: Offset(68 * s, 21 * s), width: 14 * s, height: 10 * s),
         0,
         pi,
         false,
@@ -491,7 +498,7 @@ class _SplashIconPainter extends CustomPainter {
       if (waveProgress > 0 && morphProgress < 1) {
         final waveOp = (1.0 - morphProgress) * badgeOpacity;
         final wavePaint = Paint()
-          ..color = BrandColors.accentCyan.withValues(alpha: waveOp * 0.8)
+          ..color = theme.colorScheme.primary.withValues(alpha: waveOp * 0.8)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2 * s
           ..strokeCap = StrokeCap.round;

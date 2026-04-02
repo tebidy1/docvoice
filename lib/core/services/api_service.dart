@@ -9,7 +9,7 @@ class ApiService {
 
   String? _baseUrl;
   String? _token;
-  final int _timeout = 30000;
+  final int _timeout = 2;
 
   bool get hasToken => _token != null && _token!.isNotEmpty;
 
@@ -57,7 +57,7 @@ class ApiService {
 
       final response = await http
           .get(uri, headers: _headers)
-          .timeout(Duration(milliseconds: _timeout));
+          .timeout(Duration(seconds: _timeout));
 
       return _handleResponse(response);
     } catch (e) {

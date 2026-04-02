@@ -3,22 +3,25 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:soutnote/features/auth/login_screen.dart';
 import 'package:url_strategy/url_strategy.dart';
 
 import 'package:soutnote/desktop/desktop_app.dart'
     if (dart.library.html) 'package:soutnote/desktop/desktop_app_stub.dart';
 
-import 'package:soutnote/features/auth/presentation/screens/login_screen.dart' as unified_login;
+import 'package:soutnote/features/auth/login_screen.dart' as unified_login;
 import 'package:soutnote/features/home/home_screen.dart' as unified_mobile;
 import 'package:soutnote/features/splash/splash_screen.dart' as unified_splash;
 import 'package:soutnote/features/admin/presentation/screens/admin_dashboard_screen.dart'
-    if (dart.library.html) 'package:soutnote/desktop/desktop_app_stub.dart' as desktop_admin;
+    if (dart.library.html) 'package:soutnote/desktop/desktop_app_stub.dart'
+    as desktop_admin;
 import 'package:soutnote/features/auth/presentation/screens/login_screen.dart'
     if (dart.library.html) 'package:soutnote/features/auth/presentation/screens/login_screen.dart'
     as desktop_login;
 import 'package:soutnote/features/auth/presentation/screens/qr_login_screen.dart';
 import 'package:soutnote/features/auth/presentation/screens/register_screen.dart'
-    if (dart.library.html) 'package:soutnote/desktop/desktop_app_stub.dart' as desktop_register;
+    if (dart.library.html) 'package:soutnote/desktop/desktop_app_stub.dart'
+    as desktop_register;
 import 'package:soutnote/core/services/theme_service.dart';
 import 'package:soutnote/utils/window_manager_proxy.dart';
 import 'package:soutnote/shared/widgets/admin_guard.dart';
@@ -203,10 +206,8 @@ class ScribeFlowApp extends ConsumerWidget {
           builder: (context) => FutureBuilder<bool>(
             future: authService.isAuthenticated(),
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Scaffold(
-                    body: Center(child: CircularProgressIndicator()));
-              }
+              // return LoginScreen();
+
               final isAuth = snapshot.data ?? false;
               if (isAuth) {
                 return AuthGuard(
