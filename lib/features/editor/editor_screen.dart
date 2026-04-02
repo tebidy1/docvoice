@@ -25,30 +25,10 @@ import 'package:soutnote/web_extension/services/extension_injection_service.dart
 import 'package:soutnote/core/services/model_download_service.dart';
 import 'package:soutnote/core/services/whisper_local_stub.dart'
     if (dart.library.io) 'package:soutnote/core/services/whisper_local_service.dart';
-import '../../../../web_extension/services/extension_injection_service.dart';
 
-// If NoteModel is not available from the imported model file, provide a minimal local definition:
-class NoteModel {
-  final int id;
-  final String uuid;
-  final String? audioPath;
-  final String? originalText;
-  final String? content;
-  final String? formattedText;
-  final int? appliedMacroId;
-
-  const NoteModel({
-    this.id = 0,
-    this.uuid = '',
-    this.audioPath,
-    this.originalText,
-    this.content,
-    this.formattedText,
-    this.appliedMacroId,
-  });
-}
-
-class EditorScreen extends StatefulWidget {
+class EditorScreen extends ConsumerStatefulWidget {
+  final NoteModel? draftNote;
+  final Future<String>? oracleTranscriptFuture;
   final int noteNumber;
 
   const EditorScreen(
