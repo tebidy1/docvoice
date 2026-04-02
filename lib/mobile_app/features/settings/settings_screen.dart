@@ -6,6 +6,7 @@ import '../../../screens/secure_pairing_screen.dart';
 import '../../../services/auth_service.dart';
 import '../../core/theme.dart';
 import '../../services/macro_service.dart';
+import '../../services/model_download_service.dart';
 import '../../services/websocket_service.dart';
 import '../../../models/app_theme.dart' as global_theme;
 import '../../../services/theme_service.dart';
@@ -32,18 +33,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _sttEnginePref = 'gemini_oneshot';
 
   // A/B Testing: Oracle Medical (default) vs Whisper Generic
-  bool _useOracleWhisperModel = false; // false = Oracle Medical, true = Whisper Generic
+  bool _useOracleWhisperModel = false;
 
   Map<String, dynamic>? _currentUser;
   bool _isFetchingProfile = true;
+
+  // --- Offline Model Download State ---
+  final _downloadService = ModelDownloadService();
+  bool _modelReady = false;
+  bool _isDownloading = false;
+  double _downloadProgress = 0.0;
+  String _downloadFileName = '';
+  String? _downloadError;
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
     _loadUserProfile();
-    
-    // Listen for department changes
+    _checkModelStatus();
     DepartmentService().addListener(_onDepartmentChanged);
   }
 
@@ -165,6 +173,82 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _statusColor = Colors.red;
           _isLoading = false;
         });
+      }
+    }
+  }
+
+  Future<void> _checkModelStatus() async {
+    final ready = await _downloadService.isModelReady();
+    if (mounted) setState(() => _modelReady = ready);
+  }
+
+  Future<void> _startDownload() async {
+    if (_isDownloading) return;
+    setState(() {
+      _isDownloading = true;
+      _downloadProgress = 0.0;
+      _downloadError = null;
+    });
+    try {
+      await _downloadService.downloadModel(
+        onProgress: (downloaded, total, fileName) {
+          if (mounted) {
+            setState(() {
+              _downloadProgress = total > 0 ? downloaded / total : 0.0;
+              _downloadFileName = fileName;
+            });
+          }
+        },
+      );
+      if (mounted) {
+        setState(() {
+          _isDownloading = false;
+          _modelReady = true;
+          _downloadProgress = 1.0;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Model downloaded successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isDownloading = false;
+          _downloadError = 'Download failed: $e';
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteModel() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Local Model?'),
+        content: const Text(
+            'The offline model (~358 MB) will be deleted from your device. You can re-download it later.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      await _downloadService.deleteModel();
+      await _checkModelStatus();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('🗑️ Model deleted.')),
+        );
       }
     }
   }
@@ -494,8 +578,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                     ),
                     RadioListTile<String>(
-                      title: const Text("Offline Draft Mode (Built-in)"),
-                      subtitle: const Text("Basic transcription using downloaded local AI model."),
+                      title: const Text('Offline Draft Mode (Built-in)'),
+                      subtitle: const Text(
+                          'Transcription using a downloaded local AI model. Works offline.'),
                       value: 'whisper_local',
                       groupValue: _sttEnginePref,
                       activeColor: AppTheme.accent,
@@ -507,6 +592,117 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         }
                       },
                     ),
+                    // Model download panel — visible only when whisper_local is selected
+                    if (_sttEnginePref == 'whisper_local') ...[
+                      const Divider(height: 1),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  _modelReady
+                                      ? Icons.check_circle
+                                      : Icons.cloud_download_outlined,
+                                  size: 16,
+                                  color: _modelReady
+                                      ? Colors.green
+                                      : Colors.blueAccent,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  _modelReady
+                                      ? 'Model Status: Ready ✅'
+                                      : 'Model Status: Not Downloaded',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: _modelReady
+                                        ? Colors.green
+                                        : Colors.blueAccent,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (_isDownloading) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                'Downloading: $_downloadFileName',
+                                style: const TextStyle(
+                                    fontSize: 11, color: Colors.grey),
+                              ),
+                              const SizedBox(height: 4),
+                              LinearProgressIndicator(
+                                value: _downloadProgress,
+                                backgroundColor: Colors.grey.withOpacity(0.2),
+                                valueColor: const AlwaysStoppedAnimation<Color>(
+                                    Colors.blueAccent),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${(_downloadProgress * 100).toStringAsFixed(1)}%',
+                                style: const TextStyle(
+                                    fontSize: 11, color: Colors.grey),
+                              ),
+                            ] else if (_downloadError != null) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                _downloadError!,
+                                style: const TextStyle(
+                                    fontSize: 11, color: Colors.red),
+                              ),
+                            ],
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                if (!_modelReady && !_isDownloading)
+                                  ElevatedButton.icon(
+                                    onPressed: _startDownload,
+                                    icon: const Icon(Icons.download, size: 16),
+                                    label: const Text('Download Model (~358 MB)'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.blueAccent,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 8),
+                                      textStyle: const TextStyle(fontSize: 12),
+                                    ),
+                                  ),
+                                if (_isDownloading)
+                                  const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.blueAccent),
+                                  ),
+                                if (_modelReady) ...[
+                                  const Icon(Icons.storage,
+                                      size: 14, color: Colors.grey),
+                                  const SizedBox(width: 4),
+                                  const Text('~358 MB on device',
+                                      style: TextStyle(
+                                          fontSize: 11, color: Colors.grey)),
+                                  const Spacer(),
+                                  TextButton.icon(
+                                    onPressed: _deleteModel,
+                                    icon: const Icon(Icons.delete_outline,
+                                        size: 14, color: Colors.redAccent),
+                                    label: const Text('Delete',
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.redAccent)),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     RadioListTile<String>(
                       title: const Text("Specialized Medical Dictation"),
                       subtitle: const Text("Cloud-based engine trained on complex medical terminology."),

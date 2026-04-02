@@ -1,9 +1,9 @@
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
-import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
+import 'model_download_service.dart';
 
 /// Offline STT engine using sherpa_onnx + Whisper-Small.en (ONNX INT8).
 /// English-only, with DSP pre-processing, Silero VAD, and Medical Hotwords.
@@ -27,39 +27,25 @@ class SherpaLocalService {
   // Segment merging: merge VAD segments closer than this gap (seconds)
   static const double _mergeGapSeconds = 1.0;
 
-  /// Check if all three Whisper ONNX files have been extracted from assets.
+  /// Check if all three Whisper ONNX files exist in the local documents directory.
+  /// Files are downloaded via [ModelDownloadService], not bundled with assets.
   Future<bool> isModelReady() async {
-    final appDir = await getApplicationDocumentsDirectory();
-    final modelDir = '${appDir.path}/whisper-small-en';
-    final encoder = File('$modelDir/small.en-encoder.int8.onnx');
-    final decoder = File('$modelDir/small.en-decoder.int8.onnx');
-    final tokens = File('$modelDir/small.en-tokens.txt');
-    return await encoder.exists() && await decoder.exists() && await tokens.exists();
+    return await ModelDownloadService().isModelReady();
   }
 
   /// Initialize the Whisper-Small.en ONNX recognizer.
-  /// Model files are extracted from local assets on the first run.
+  /// Model files must be downloaded first via [ModelDownloadService].
   Future<void> initialize() async {
     if (_isInitialized) return;
 
     try {
-      // --- Resolve paths ---
-      final appDir = await getApplicationDocumentsDirectory();
-      _modelDir = '${appDir.path}/whisper-small-en';
-      
-      final modelDirFile = Directory(_modelDir!);
-      if (!await modelDirFile.exists()) {
-        await modelDirFile.create(recursive: true);
-      }
+      // --- Resolve paths from ModelDownloadService ---
+      _modelDir = await ModelDownloadService().modelDir;
 
-      // Copy Sherpa ONNX models from assets to the local documents directory
-      await _copyAssetIfNeeded('assets/models/sherpa/small.en-encoder.int8.onnx', '$_modelDir/small.en-encoder.int8.onnx');
-      await _copyAssetIfNeeded('assets/models/sherpa/small.en-decoder.int8.onnx', '$_modelDir/small.en-decoder.int8.onnx');
-      await _copyAssetIfNeeded('assets/models/sherpa/small.en-tokens.txt', '$_modelDir/small.en-tokens.txt');
-
-      // Check model exists
+      // Verify models are present before loading
       if (!await isModelReady()) {
-        print("❌ Model files not found. Extraction from assets failed.");
+        _lastError = 'Model not downloaded. Please download the offline model in Settings.';
+        print('❌ $_lastError');
         return;
       }
 
@@ -139,19 +125,6 @@ class SherpaLocalService {
     }
   }
 
-  /// Copy an asset file to the filesystem if it doesn't already exist.
-  Future<void> _copyAssetIfNeeded(String assetPath, String destPath) async {
-    final file = File(destPath);
-    if (await file.exists()) return;
-
-    print("📦 Copying: $assetPath → $destPath");
-    final byteData = await rootBundle.load(assetPath);
-    final buffer = byteData.buffer;
-    await file.writeAsBytes(
-      buffer.asUint8List(byteData.offsetInBytes, byteData.lengthInBytes),
-      flush: true,
-    );
-  }
 
   /// Transcribes a WAV audio file and returns the raw text.
   /// The file must be 16kHz Mono WAV format.
