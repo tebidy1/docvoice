@@ -9,7 +9,7 @@ class ApiService {
 
   String? _baseUrl;
   String? _token;
-  final int _timeout = 2;
+  final int _timeout = 30;
 
   bool get hasToken => _token != null && _token!.isNotEmpty;
 
@@ -79,7 +79,7 @@ class ApiService {
             headers: _headers,
             body: body != null ? jsonEncode(body) : null,
           )
-          .timeout(Duration(milliseconds: _timeout));
+          .timeout(Duration(seconds: _timeout));
 
       return _handleResponse(response);
     } catch (e) {
@@ -99,7 +99,7 @@ class ApiService {
             headers: _headers,
             body: body != null ? jsonEncode(body) : null,
           )
-          .timeout(Duration(milliseconds: _timeout));
+          .timeout(Duration(seconds: _timeout));
 
       return _handleResponse(response);
     } catch (e) {
@@ -119,7 +119,7 @@ class ApiService {
             headers: _headers,
             body: body != null ? jsonEncode(body) : null,
           )
-          .timeout(Duration(milliseconds: _timeout));
+          .timeout(Duration(seconds: _timeout));
 
       return _handleResponse(response);
     } catch (e) {
@@ -134,7 +134,7 @@ class ApiService {
 
       final response = await http
           .delete(uri, headers: _headers)
-          .timeout(Duration(milliseconds: _timeout));
+          .timeout(Duration(seconds: _timeout));
 
       return _handleResponse(response);
     } catch (e) {
@@ -178,7 +178,7 @@ class ApiService {
       ));
 
       final streamedResponse =
-          await request.send().timeout(Duration(milliseconds: _timeout));
+          await request.send().timeout(Duration(seconds: _timeout));
       final response = await http.Response.fromStream(streamedResponse);
 
       return _handleResponse(response);
