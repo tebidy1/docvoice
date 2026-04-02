@@ -65,6 +65,7 @@ ios/build/
 
 # Models
 assets/models/*.bin
+assets/models/sherpa/*.onnx
 
 # Node modules
 node_modules/
