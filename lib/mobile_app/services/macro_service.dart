@@ -142,16 +142,18 @@ class MacroService {
         }
         // --- END AUTO-MIGRATION LOGIC ---
         
-        // Auto-add Free Note to cloud if missing for existing users
-        if (!macros.any((m) => m.trigger == '✨ Free Note')) {
-           debugPrint("MacroService: '✨ Free Note' missing in Cloud. Auto-adding...");
-           try {
-             final freeNote = _defaultMacros().firstWhere((m) => m.trigger == '✨ Free Note');
-             await addMacro(freeNote);
-             macros.add(freeNote);
-           } catch (e) {
-             debugPrint("Failed to add Free Note to Cloud: $e");
-           }
+        // Auto-add all missing defaults to cloud for existing users
+        final defaults = _defaultMacros();
+        for (final def in defaults) {
+          if (!macros.any((m) => m.trigger.trim().toUpperCase() == def.trigger.trim().toUpperCase())) {
+             debugPrint("MacroService: '${def.trigger}' missing in Cloud. Auto-adding...");
+             try {
+               await addMacro(def);
+               macros.add(def);
+             } catch (e) {
+               debugPrint("Failed to add ${def.trigger} to Cloud: $e");
+             }
+          }
         }
         // Cache for offline use
         await _cacheLocally(macros);
@@ -342,14 +344,15 @@ class MacroService {
         return defaults;
       }
 
-      // Auto-upgrade: make sure the Free Note exists for users who already have the new defaults
-      if (!macros.any((m) => m.trigger == '✨ Free Note')) {
-        debugPrint("MacroService: '✨ Free Note' missing in cache. Auto-upgrading...");
-        final defaults = _defaultMacros();
-        final freeNoteMacro = defaults.firstWhere((m) => m.trigger == '✨ Free Note');
-        macros.add(freeNoteMacro);
-        await _cacheLocally(macros);
+      // Auto-upgrade: make sure all defaults exist for users who already have the new defaults
+      final defaults = _defaultMacros();
+      for (final def in defaults) {
+        if (!macros.any((m) => m.trigger.trim().toUpperCase() == def.trigger.trim().toUpperCase())) {
+          debugPrint("MacroService: '${def.trigger}' missing in cache. Auto-upgrading...");
+          macros.add(def);
+        }
       }
+      await _cacheLocally(macros);
       
       return macros;
     } catch (e) {
@@ -420,6 +423,14 @@ class MacroService {
         category: 'General',
         isFavorite: false,
         content: AIPromptConstants.templateFreeNote,
+        isAiMacro: true,
+      ),
+      MacroModel(
+        id: '7',
+        trigger: 'INSURANCE',
+        category: 'Admin',
+        isFavorite: false,
+        content: 'Rewrite the note to emphasize medical necessity, making it suitable for insurance approval. Ensure justification for any tests, procedures, and medications is clearly documented and aligned with the reported symptoms and diagnosis.',
         isAiMacro: true,
       ),
     ];

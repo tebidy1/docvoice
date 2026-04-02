@@ -4,7 +4,6 @@ import 'dart:typed_data';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
-import 'model_download_service.dart';
 
 /// Offline STT engine using sherpa_onnx + Whisper-Small.en (ONNX INT8).
 /// English-only, with DSP pre-processing, Silero VAD, and Medical Hotwords.
@@ -28,27 +27,43 @@ class SherpaLocalService {
   // Segment merging: merge VAD segments closer than this gap (seconds)
   static const double _mergeGapSeconds = 1.0;
 
-  /// Check if the Whisper model has been downloaded.
-  Future<bool> isModelReady() => ModelDownloadService().isModelReady();
+  /// Check if all three Whisper ONNX files have been extracted from assets.
+  Future<bool> isModelReady() async {
+    final appDir = await getApplicationDocumentsDirectory();
+    final modelDir = '${appDir.path}/whisper-small-en';
+    final encoder = File('$modelDir/small.en-encoder.int8.onnx');
+    final decoder = File('$modelDir/small.en-decoder.int8.onnx');
+    final tokens = File('$modelDir/small.en-tokens.txt');
+    return await encoder.exists() && await decoder.exists() && await tokens.exists();
+  }
 
   /// Initialize the Whisper-Small.en ONNX recognizer.
-  /// Model files must have been downloaded by ModelDownloadService first.
+  /// Model files are extracted from local assets on the first run.
   Future<void> initialize() async {
     if (_isInitialized) return;
 
     try {
       // --- Resolve paths ---
-      final downloadService = ModelDownloadService();
-      _modelDir = await downloadService.modelDir;
+      final appDir = await getApplicationDocumentsDirectory();
+      _modelDir = '${appDir.path}/whisper-small-en';
+      
+      final modelDirFile = Directory(_modelDir!);
+      if (!await modelDirFile.exists()) {
+        await modelDirFile.create(recursive: true);
+      }
+
+      // Copy Sherpa ONNX models from assets to the local documents directory
+      await _copyAssetIfNeeded('assets/models/sherpa/small.en-encoder.int8.onnx', '$_modelDir/small.en-encoder.int8.onnx');
+      await _copyAssetIfNeeded('assets/models/sherpa/small.en-decoder.int8.onnx', '$_modelDir/small.en-decoder.int8.onnx');
+      await _copyAssetIfNeeded('assets/models/sherpa/small.en-tokens.txt', '$_modelDir/small.en-tokens.txt');
 
       // Check model exists
-      if (!await downloadService.isModelReady()) {
-        print("❌ Model files not found. Please download first.");
+      if (!await isModelReady()) {
+        print("❌ Model files not found. Extraction from assets failed.");
         return;
       }
 
       // VAD model (bundled in assets, copy to filesystem)
-      final appDir = await getApplicationDocumentsDirectory();
       _vadModelPath = '${appDir.path}/silero_vad.onnx';
       await _copyAssetIfNeeded(
         'assets/models/silero_vad.onnx',

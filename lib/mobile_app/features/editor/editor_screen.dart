@@ -17,7 +17,7 @@ import '../../services/inbox_service.dart';
 import '../../services/macro_service.dart';
 import '../../services/whisper_local_stub.dart'
     if (dart.library.io) '../../services/whisper_local_service.dart';
-import '../../services/model_download_service.dart';
+
 import '../../../services/api_service.dart';
 import '../../services/groq_service.dart'; // Direct Groq for faster Web transcription
 import '../../../core/ai/ai_regex_patterns.dart';
@@ -588,23 +588,10 @@ class _EditorScreenState extends State<EditorScreen> {
                     // --- Whisper Local On-Device Transcription ---
                     debugPrint("🎙️ Using Whisper Local STT");
                     
-                    // Check if model is downloaded
-                    final downloadService = ModelDownloadService();
-                    if (!await downloadService.isModelReady()) {
-                      // Show download dialog
-                      if (!mounted) return;
-                      final shouldDownload = await showDialog<bool>(
-                        context: context,
-                        barrierDismissible: false,
-                        builder: (ctx) => _ModelDownloadDialog(),
-                      );
-                      if (shouldDownload != true) {
-                        setState(() { _isProcessing = false; });
-                        return;
-                      }
-                    }
-                    
+                    // Check if model is extracted and ready
                     final whisperService = WhisperLocalService();
+                    // WhisperLocalService redirects to SherpaLocalService
+                    // which extracts the models on initialize()
                     transcript = await whisperService.transcribeAudioUrl(path);
                     
                     if (transcript.startsWith('Error')) {
@@ -906,6 +893,91 @@ class _EditorScreenState extends State<EditorScreen> {
                 );
               },
             ),
+          )
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+
+  Future<void> _applyInsuranceTemplate() async {
+    final insuranceMacro = _macros.firstWhere(
+      (m) => m.trigger.toUpperCase() == 'INSURANCE',
+      orElse: () {
+        return MacroModel(
+          id: '7',
+          trigger: 'INSURANCE',
+          category: 'Admin',
+          content: 'Rewrite the note to emphasize medical necessity, making it suitable for insurance approval. Ensure justification for any tests, procedures, and medications is clearly documented and aligned with the reported symptoms and diagnosis.',
+          isAiMacro: true,
+        );
+      }
+    );
+
+    setState(() {
+      _selectedMacro = insuranceMacro;
+      _isProcessing = true;
+      _isTemplateCardExpanded = false;
+    });
+
+    try {
+      final aiService = AIProcessingService();
+      final mode = await AIProcessingService.getEffectiveMode();
+      
+      final result = await aiService.processNote(
+        transcript: _finalController.text, // pass current formatted text
+        macroContent: insuranceMacro.content,
+        mode: mode,
+      );
+
+      if (result.success) {
+        if (mounted) {
+          setState(() {
+            _generatedOutputs.add(GeneratedOutput(
+              macroId: insuranceMacro.id,
+              title: insuranceMacro.trigger, 
+              content: result.formattedNote
+            ));
+            _activeTabIndex = _generatedOutputs.length;
+            _finalController.text = result.formattedNote;
+            _suggestions = result.missingSuggestions;
+          });
+
+          try {
+            final inboxService = InboxService();
+            if (_currentNoteId != null) {
+              await inboxService.updateNote(
+                _currentNoteId!,
+                rawText: _sourceController.text,
+                formattedText: _generatedOutputs.isNotEmpty ? _generatedOutputs.last.content : '',
+                generatedOutputs: _generatedOutputs.map((e) => e.toJson()).toList(),
+                suggestedMacroId: int.tryParse(insuranceMacro.id.toString()) ?? 0,
+                summary: insuranceMacro.trigger,
+                patientName: insuranceMacro.trigger,
+              );
+              
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("✅ Insurance Note saved"), backgroundColor: Colors.green),
+                );
+              }
+            }
+          } catch (e) {
+            debugPrint('❌ AUTO-SAVE FAILED: $e');
+          }
+        }
+      } else {
+        throw result.errorMessage ?? 'Processing failed';
+      }
+    } catch (e) {
+      debugPrint('❌ FULL AI ERROR: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to generate Insurance note: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
           )
         );
       }
@@ -1441,18 +1513,43 @@ class _EditorScreenState extends State<EditorScreen> {
             color: colorScheme.surface,
             border: Border(top: BorderSide(color: colorScheme.outline.withValues(alpha: 0.4), width: 1)),
         ),
-        child: ElevatedButton.icon(
-            onPressed: () {
-                 _copyCleanText();
-            },
-            icon: const Icon(Icons.content_copy_rounded, size: 18),
-            label: const Text("SMART COPY / INJECT"),
-            style: ElevatedButton.styleFrom(
-                backgroundColor: colorScheme.primary,
-                foregroundColor: Colors.white,
-                minimumSize: const Size(double.infinity, 48),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (_activeTabIndex > 0) ...[
+              Align(
+                alignment: Alignment.center,
+                child: ActionChip(
+                  label: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.shield, size: 16, color: Colors.white),
+                      SizedBox(width: 6),
+                      Text("INSURANCE k", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                    ],
+                  ),
+                  backgroundColor: Colors.amber[700],
+                  onPressed: _finalController.text.isEmpty || _isProcessing ? null : _applyInsuranceTemplate,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Colors.transparent)),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            ElevatedButton.icon(
+                onPressed: () {
+                     _copyCleanText();
+                },
+                icon: const Icon(Icons.content_copy_rounded, size: 18),
+                label: const Text("SMART COPY / INJECT"),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: colorScheme.primary,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(double.infinity, 48),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
             ),
+          ],
         ),
     );
   }
@@ -1597,91 +1694,6 @@ class _EditorScreenState extends State<EditorScreen> {
           );
         }).toList(),
       ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-// Model Download Dialog (shown when Whisper model is not installed)
-// ─────────────────────────────────────────────────────────────
-class _ModelDownloadDialog extends StatefulWidget {
-  @override
-  _ModelDownloadDialogState createState() => _ModelDownloadDialogState();
-}
-
-class _ModelDownloadDialogState extends State<_ModelDownloadDialog> {
-  bool _downloading = false;
-  double _progress = 0.0;
-  String _currentFile = '';
-  String? _error;
-
-  Future<void> _startDownload() async {
-    setState(() {
-      _downloading = true;
-      _error = null;
-    });
-
-    try {
-      await ModelDownloadService().downloadModel(
-        onProgress: (downloaded, total, fileName) {
-          if (mounted) {
-            setState(() {
-              _progress = total > 0 ? downloaded / total : 0.0;
-              _currentFile = fileName;
-            });
-          }
-        },
-      );
-
-      if (mounted) Navigator.of(context).pop(true);
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _downloading = false;
-          _error = 'Download failed: $e';
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Speech Model Required'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (!_downloading && _error == null)
-            const Text(
-              'The offline speech recognition model (~245 MB) needs to be downloaded. This is a one-time download.',
-            ),
-          if (_downloading) ...[
-            const SizedBox(height: 16),
-            LinearProgressIndicator(value: _progress),
-            const SizedBox(height: 8),
-            Text(
-              '${(_progress * 100).toStringAsFixed(1)}% — $_currentFile',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
-          if (_error != null) ...[
-            const SizedBox(height: 12),
-            Text(_error!, style: const TextStyle(color: Colors.red)),
-          ],
-        ],
-      ),
-      actions: [
-        if (!_downloading)
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-        if (!_downloading)
-          ElevatedButton(
-            onPressed: _startDownload,
-            child: Text(_error != null ? 'Retry' : 'Download'),
-          ),
-      ],
     );
   }
 }

@@ -495,8 +495,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     RadioListTile<String>(
                       title: const Text("Offline Draft Mode (Built-in)"),
-                      subtitle: const Text("Basic transcription using device's internal engine."),
-                      value: 'native',
+                      subtitle: const Text("Basic transcription using downloaded local AI model."),
+                      value: 'whisper_local',
                       groupValue: _sttEnginePref,
                       activeColor: AppTheme.accent,
                       onChanged: (val) async {

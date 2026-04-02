@@ -453,6 +453,71 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
       setState(() => _isGenerating = false);
     }
   }
+
+  Future<void> _applyInsuranceTemplate() async {
+    final allMacros = await _macroService.getAllMacros();
+    final insuranceMacro = allMacros.firstWhere(
+      (m) => m.trigger.toUpperCase() == 'INSURANCE',
+      orElse: () {
+        final m = Macro();
+        m.trigger = 'INSURANCE';
+        m.content = 'Rewrite the note to emphasize medical necessity, making it suitable for insurance approval. Ensure justification for any tests, procedures, and medications is clearly documented and aligned with the reported symptoms and diagnosis.';
+        m.isAiMacro = true;
+        return m;
+      }
+    );
+
+    if (_isGenerating || _isLoadingText) return;
+
+    setState(() {
+      _isGenerating = true;
+      _elapsedSeconds = 0;
+      _statusMessageIndex = 0;
+    });
+
+    _generationTimer?.cancel();
+    _generationTimer = Timer.periodic(const Duration(milliseconds: 1500), (timer) {
+      if (mounted) {
+        setState(() {
+          _elapsedSeconds++;
+          _statusMessageIndex = (_statusMessageIndex + 1) % _statusMessages.length;
+        });
+      }
+    });
+
+    try {
+      final aiService = AIProcessingService();
+      
+      final textToProcess = _finalNoteController.text;
+
+      final result = await aiService.processNote(
+        transcript: textToProcess,
+        macroContent: insuranceMacro.content,
+        mode: AIProcessingMode.fast,
+      );
+
+      if (result.success) {
+        setState(() {
+          _generatedOutputs.add(GeneratedOutput(
+            macroId: insuranceMacro.id,
+            title: insuranceMacro.trigger, 
+            content: result.formattedNote
+          ));
+          _activeTabIndex = _generatedOutputs.length;
+          _finalNoteController.text = result.formattedNote;
+        });
+        _autoSaveGeneratedContent(result.formattedNote, insuranceMacro);
+      } else {
+        _showError("Failed to generate Insurance note: ${result.errorMessage}");
+      }
+    } catch (e) {
+      print("DetailView: Error: $e");
+      _showError("Insurance generation failed: $e");
+    } finally {
+      _generationTimer?.cancel();
+      setState(() => _isGenerating = false);
+    }
+  }
   
   // ═══════════════════════════════════════════════════════════════════════
   // 🎙 PROACTIVE TRANSCRIPTION (2-Step Architecture Step 1)
@@ -1574,29 +1639,48 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
           BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10, offset: const Offset(0, -5))
         ]
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-            // Unified Button
-            Expanded(
-                child: ElevatedButton(
-                  onPressed: _finalNoteController.text.isEmpty ? null : _smartCopyAndInject,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: theme.colorScheme.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shadowColor: theme.colorScheme.primary.withOpacity(0.4),
-                    elevation: 4,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+            if (_activeTabIndex > 0) ...[
+              Align(
+                alignment: Alignment.center,
+                child: ActionChip(
+                  label: const Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.input, size: 20),
-                      SizedBox(width: 8),
-                      Text("SMART COPY / INJECT", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      Icon(Icons.shield, size: 16, color: Colors.white),
+                      SizedBox(width: 6),
+                      Text("INSURANCE k", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
                     ],
                   ),
+                  backgroundColor: Colors.amber[700],
+                  onPressed: _finalNoteController.text.isEmpty || _isGenerating ? null : _applyInsuranceTemplate,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Colors.transparent)),
                 ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            // Unified Button
+            ElevatedButton(
+              onPressed: _finalNoteController.text.isEmpty ? null : _smartCopyAndInject,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: theme.colorScheme.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shadowColor: theme.colorScheme.primary.withOpacity(0.4),
+                elevation: 4,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.input, size: 20),
+                  SizedBox(width: 8),
+                  Text("SMART COPY / INJECT", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                ],
+              ),
             ),
         ],
       ),
