@@ -415,20 +415,20 @@ class _ExtensionSettingsScreenState extends ConsumerState<ExtensionSettingsScree
                         }
                       },
                     ),
-                    RadioListTile<String>(
-                      title: const Text("System Native (Built-in)", style: TextStyle(color: Colors.white)),
-                      subtitle: const Text("Uses Apple/Google built-in speech engine.", style: TextStyle(color: Colors.white54)),
-                      value: 'native',
-                      groupValue: _sttEnginePref,
-                      activeColor: AppTheme.accent,
-                      onChanged: (val) async {
-                        if (val != null) {
-                          setState(() => _sttEnginePref = val);
-                          final prefs = await SharedPreferences.getInstance();
-                          await prefs.setString('stt_engine_pref', val);
-                        }
-                      },
-                    ),
+                    // RadioListTile<String>(
+                    //   title: const Text("System Native (Built-in)", style: TextStyle(color: Colors.white)),
+                    //   subtitle: const Text("Uses Apple/Google built-in speech engine.", style: TextStyle(color: Colors.white54)),
+                    //   value: 'native',
+                    //   groupValue: _sttEnginePref,
+                    //   activeColor: AppTheme.accent,
+                    //   onChanged: (val) async {
+                    //     if (val != null) {
+                    //       setState(() => _sttEnginePref = val);
+                    //       final prefs = await SharedPreferences.getInstance();
+                    //       await prefs.setString('stt_engine_pref', val);
+                    //     }
+                    //   },
+                    // ),
                     RadioListTile<String>(
                       title: const Text("Oracle OCI Live Speech (Cloud)", style: TextStyle(color: Colors.white)),
                       subtitle: const Text("Real-time streaming via Oracle AI. Recommended.", style: TextStyle(color: Colors.white54)),

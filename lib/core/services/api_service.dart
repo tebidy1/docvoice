@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -49,18 +50,26 @@ class ApiService {
     try {
       await init();
       final fullUrl = '$_baseUrl$endpoint';
-      print('ApiService GET request to: $fullUrl');
+      print('[ApiService] GET: $fullUrl');
+      print('[ApiService] Has Token: ${_token != null && _token!.isNotEmpty}');
+      
       var uri = Uri.parse(fullUrl);
       if (queryParams != null && queryParams.isNotEmpty) {
         uri = uri.replace(queryParameters: queryParams);
       }
 
+      final startTime = DateTime.now();
       final response = await http
           .get(uri, headers: _headers)
           .timeout(Duration(seconds: _timeout));
-
+      final duration = DateTime.now().difference(startTime);
+      
+      print('[ApiService] GET Response: ${response.statusCode} in ${duration.inMilliseconds}ms');
+      print('[ApiService] Response body length: ${response.body.length} bytes');
       return _handleResponse(response);
     } catch (e) {
+      print('[ApiService] GET Error: $e');
+      print('[ApiService] Error type: ${e.runtimeType}');
       throw _handleError(e);
     }
   }
@@ -190,6 +199,8 @@ class ApiService {
   Map<String, dynamic> _handleResponse(http.Response response) {
     final statusCode = response.statusCode;
     final responseBody = response.body;
+    
+    print('[ApiService] _handleResponse: status=$statusCode, bodyLength=${responseBody.length}');
 
     if (responseBody.isEmpty) {
       if (statusCode >= 200 && statusCode < 300) {
@@ -200,6 +211,7 @@ class ApiService {
           'payload': null
         };
       }
+      print('[ApiService] ❌ Empty response with status $statusCode');
       throw ApiException('Empty response', statusCode);
     }
 
@@ -209,6 +221,7 @@ class ApiService {
       // Handle List Response (Wrap it)
       if (decoded is List) {
         if (statusCode >= 200 && statusCode < 300) {
+          print('[ApiService] ✓ List response with ${(decoded as List).length} items');
           return {
             'status': true,
             'code': statusCode,
@@ -219,6 +232,13 @@ class ApiService {
       }
 
       final data = decoded as Map<String, dynamic>;
+      
+      // Check for authentication errors
+      if (statusCode == 401 || statusCode == 403) {
+        print('[ApiService] ❌ Authentication error: $statusCode');
+        final message = data['message'] ?? 'Authentication failed. Please log in again.';
+        throw ApiException(message, statusCode, errors: data['errors']);
+      }
 
       // Handle validation errors (422)
       if (statusCode == 422 && data.containsKey('errors')) {
@@ -226,14 +246,17 @@ class ApiService {
         final firstError = errors.values.first;
         final errorMessage =
             firstError is List ? firstError.first : firstError.toString();
+        print('[ApiService] ❌ Validation error: $errorMessage');
         throw ApiException(errorMessage, statusCode, errors: errors);
       }
 
       // Handle Laravel API response format (success/user/token)
       if (data.containsKey('success')) {
         if (data['success'] == true) {
+          print('[ApiService] ✓ Success response');
           return data;
         } else {
+          print('[ApiService] ❌ API returned success=false: ${data['message']}');
           throw ApiException(data['message'] ?? 'Request failed', statusCode,
               errors: data['errors']);
         }
@@ -275,18 +298,43 @@ class ApiService {
       return error;
     }
 
-    if (error.toString().contains('TimeoutException') ||
-        error.toString().contains('timeout')) {
+    final errorStr = error.toString().toLowerCase();
+    print('[ApiService] Error Details: $error');
+
+    if (errorStr.contains('timeoutexception') ||
+        errorStr.contains('timeout')) {
+      print('[ApiService] → Timeout error');
       return ApiException(
-          'Request timeout. Please check your connection.', 408);
+          'Request timeout. The API server is not responding. Please try again.', 408);
     }
 
-    if (error.toString().contains('SocketException') ||
-        error.toString().contains('Failed host lookup')) {
+    if (errorStr.contains('socketexception')) {
+      print('[ApiService] → Socket error (API server unreachable)');
       return ApiException(
-          'No internet connection. Please check your network.', 0);
+          'Cannot connect to API server. The server may be down or your network connection may be unstable.',  0);
     }
 
+    if (errorStr.contains('failed host lookup')) {
+      print('[ApiService] → DNS resolution failed');
+      return ApiException(
+          'Cannot resolve API server domain. Please check your internet connection or the server URL.', 0);
+    }
+
+    if (errorStr.contains('tlsexception') || 
+        errorStr.contains('ssl') || 
+        errorStr.contains('certificate')) {
+      print('[ApiService] → SSL/Certificate error');
+      return ApiException(
+          'SSL certificate error. There may be a network security issue.', 0);
+    }
+
+    if (errorStr.contains('connection refused')) {
+      print('[ApiService] → Connection refused');
+      return ApiException(
+          'Connection refused by API server.', 0);
+    }
+
+    print('[ApiService] → Unknown error: ${error.runtimeType}');
     return ApiException('An unexpected error occurred: $error', 500);
   }
 }

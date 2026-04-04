@@ -35,8 +35,13 @@ void main() async {
   // Initialization of core services via Riverpod
   final container = ProviderContainer();
 
-  // Initialize all repositories (Isar, API, etc.)
-  await container.read(initializeRepositoriesProvider.future);
+  // Initialize repositories in background (don't block app startup)
+  // This allows the app to show login screen even if macros fail to load
+  container.read(initializeRepositoriesProvider.future).then((_) {
+    print('✓ Repositories initialized');
+  }).catchError((e) {
+    print('⚠️ Repository initialization error (non-blocking): $e');
+  });
 
   // Only set up window manager on desktop platforms
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {

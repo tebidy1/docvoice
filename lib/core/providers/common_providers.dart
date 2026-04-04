@@ -69,7 +69,32 @@ final inboxNoteRepositoryProvider = Provider<InboxNoteRepository>((ref) {
 });
 
 /// Provider to initialize all repositories
+/// This now gracefully handles failures and doesn't block the app
 final initializeRepositoriesProvider = FutureProvider<void>((ref) async {
-  await ref.read(macroRepositoryProvider).initialize();
-  await ref.read(inboxNoteRepositoryProvider).initialize();
+  try {
+    await ref.read(macroRepositoryProvider).initialize();
+  } catch (e) {
+    print('Warning: Failed to initialize macro repository: $e');
+    // Don't rethrow - allow app to continue even if macros fail
+  }
+  
+  try {
+    await ref.read(inboxNoteRepositoryProvider).initialize();
+  } catch (e) {
+    print('Warning: Failed to initialize inbox repository: $e');
+    // Don't rethrow - allow app to continue
+  }
+});
+
+/// Provider to defer macro loading until after login
+/// Call this after successful authentication to load macros with proper credentials
+final postLoginInitializationProvider = FutureProvider<void>((ref) async {
+  try {
+    // Refresh macro repository after user is authenticated
+    await ref.read(macroRepositoryProvider).initialize();
+    print('✓ Macros loaded after login');
+  } catch (e) {
+    print('⚠ Failed to load macros after login: $e');
+    // Non-critical error - app can continue
+  }
 });

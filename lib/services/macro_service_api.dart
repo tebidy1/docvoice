@@ -122,7 +122,18 @@ class MacroService {
       print('🌐 MacroService(API): Response format issue, returning empty list. Payload: ${response['payload']}');
       return [];
     } catch (e) {
-      print('🌐 MacroService(API): Error getting all macros: $e');
+      final errorMsg = e.toString();
+      if (errorMsg.contains('SocketException')) {
+        print('🌐 MacroService(API): Socket error - API server may be unreachable. Error: $e');
+      } else if (errorMsg.contains('Failed host lookup')) {
+        print('🌐 MacroService(API): DNS resolution failed for API server. Error: $e');
+      } else if (errorMsg.contains('certificate') || errorMsg.contains('SSL')) {
+        print('🌐 MacroService(API): SSL/Certificate error. Error: $e');
+      } else if (errorMsg.contains('timeout')) {
+        print('🌐 MacroService(API): Request timeout. Error: $e');
+      } else {
+        print('🌐 MacroService(API): Error getting all macros: $e');
+      }
       return [];
     }
   }

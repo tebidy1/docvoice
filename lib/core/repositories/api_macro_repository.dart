@@ -81,7 +81,9 @@ class ApiMacroRepository extends AbstractApiRepository<Macro>
   @override
   Future<List<Macro>> fetchAll() async {
     try {
+      print('📡 ApiMacroRepository.fetchAll() called');
       final response = await _apiService.get(endpoint);
+      print('📡 ApiMacroRepository.fetchAll() response received: ${response.keys}');
 
       if (response['success'] == true || response['status'] == true) {
         final payload = response['data'] ?? response['payload'];
@@ -96,13 +98,19 @@ class ApiMacroRepository extends AbstractApiRepository<Macro>
           data = [];
         }
 
+        print('📡 ApiMacroRepository.fetchAll() parsed ${data.length} macros');
         return data.map((json) => fromJson(json)).toList();
       }
 
+      print('⚠️ ApiMacroRepository.fetchAll() non-success response: success=${response['success']}, status=${response['status']}');
       return [];
     } catch (e) {
       // Log error but don't throw - return empty list for graceful degradation
-      print('Error fetching all macros: $e');
+      print('❌ ApiMacroRepository.fetchAll() Error: $e');
+      print('❌ Error type: ${e.runtimeType}');
+      if (e is ArgumentError) {
+        print('❌ ArgumentError details: ${e.toString()}');
+      }
       return [];
     }
   }

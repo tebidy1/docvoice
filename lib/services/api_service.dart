@@ -1,8 +1,11 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:math' show min;
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 import '../core/config/api_config.dart';
 
@@ -55,6 +58,7 @@ class ApiService {
       await init();
       final fullUrl = '$_baseUrl$endpoint';
       print('ApiService GET request to: $fullUrl');
+      print('ApiService Headers: $_headers');
       var uri = Uri.parse(fullUrl);
       if (queryParams != null && queryParams.isNotEmpty) {
         uri = uri.replace(queryParameters: queryParams);
@@ -64,8 +68,12 @@ class ApiService {
           .get(uri, headers: _headers)
           .timeout(Duration(milliseconds: _timeout));
 
+      print('ApiService Response Status: ${response.statusCode}');
+      print('ApiService Response Body: ${response.body.substring(0, min(response.body.length, 500))}');
       return _handleResponse(response);
     } catch (e) {
+      print('ApiService GET Error (raw): $e');
+      print('ApiService GET Error type: ${e.runtimeType}');
       throw _handleError(e);
     }
   }
@@ -288,6 +296,17 @@ class ApiService {
     }
   }
 
+  Future<bool> _checkInternetConnectivity() async {
+    try {
+      final connectivityResult = await Connectivity().checkConnectivity();
+      return connectivityResult.isNotEmpty && 
+             !connectivityResult.contains(ConnectivityResult.none);
+    } catch (e) {
+      print('Error checking connectivity: $e');
+      return true; // Assume connected if check fails
+    }
+  }
+
   dynamic _handleError(dynamic error) {
     if (error is ApiException) {
       return error;
@@ -296,13 +315,24 @@ class ApiService {
     if (error.toString().contains('TimeoutException') ||
         error.toString().contains('timeout')) {
       return ApiException(
-          'Request timeout. Please check your connection.', 408);
+          'Request timeout. The API server is not responding. Please try again.', 408);
     }
 
-    if (error.toString().contains('SocketException') ||
-        error.toString().contains('Failed host lookup')) {
+    if (error.toString().contains('SocketException')) {
       return ApiException(
-          'No internet connection. Please check your network.', 0);
+          'Cannot reach the API server. The server may be down or your network connection may be unstable.', 0);
+    }
+
+    if (error.toString().contains('Failed host lookup')) {
+      return ApiException(
+          'Cannot resolve API server domain. Please check your internet connection or the server URL.', 0);
+    }
+
+    if (error.toString().contains('TlsException') || 
+        error.toString().contains('SSL') || 
+        error.toString().contains('Certificate')) {
+      return ApiException(
+          'SSL certificate error. There may be a network security issue.', 0);
     }
 
     return ApiException('An unexpected error occurred: $error', 500);
