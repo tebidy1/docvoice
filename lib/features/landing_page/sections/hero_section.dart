@@ -4,8 +4,6 @@ import '../theme/app_colors.dart';
 import '../components/med_button.dart';
 import '../components/highlight_line.dart';
 import 'demo_section.dart';
-import 'comparison_section.dart'; // Keep if needed elsewhere, but mainly we use DemoSection now.
-import 'demo_section.dart';
 import 'cinematic_slider_section.dart';
 
 class HeroSection extends StatefulWidget {

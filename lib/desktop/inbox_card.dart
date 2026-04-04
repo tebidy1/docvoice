@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:window_manager/window_manager.dart';
 import 'package:soutnote/core/models/inbox_note.dart';
 import 'package:soutnote/core/models/macro.dart';
-import 'package:soutnote/core/services/windows_injector.dart';
-import '../core/providers/common_providers.dart';
-import 'package:soutnote/core/services/theme_service.dart';
+import '../services/windows_injector.dart'; // Desktop Injector
+import '../services/inbox_service.dart';
 import 'inbox_note_detail_view.dart';
+import 'package:soutnote/shared/theme.dart'; // Import AppTheme
 import '../core/ai/text_processing_service.dart';
 
-class InboxCard extends ConsumerWidget {
+class InboxCard extends StatelessWidget {
   final NoteModel note;
   final VoidCallback onArchived;
   final List<Macro> quickMacros;
@@ -24,9 +24,8 @@ class InboxCard extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final appTheme = ref.watch(themeServiceProvider);
     final bool isDraft = note.formattedText.isEmpty;
     
     // Find applied template name
@@ -59,6 +58,9 @@ class InboxCard extends ConsumerWidget {
       badgeLabel = 'Draft';
     }
     
+    // Primary Blue — matches login screen & light theme
+    const Color primaryBlue = Color(0xFF00A5FE);
+
     // Determine status icon/color
     Color statusColor;
     IconData statusIcon;
@@ -66,19 +68,19 @@ class InboxCard extends ConsumerWidget {
 
     switch (note.status) {
       case NoteStatus.ready:
-        statusColor = appTheme.successColor;
+        statusColor = AppTheme.success;
         statusIcon = Icons.check_circle;
         statusText = "Ready";
         break;
       case NoteStatus.copied:
-        statusColor = Colors.blue;
-        statusIcon = Icons.copy_all; 
+        statusColor = primaryBlue;
+        statusIcon = Icons.copy_all;
         statusText = "Copied";
         break;
       case NoteStatus.processed:
       case NoteStatus.draft:
       default:
-        statusColor = isDraft ? Colors.orange : appTheme.draftColor;
+        statusColor = primaryBlue; // Blue instead of yellow/orange
         statusIcon = Icons.edit_note;
         statusText = "Draft";
         break;
@@ -139,7 +141,7 @@ class InboxCard extends ConsumerWidget {
                               size: 20,
                             ),
                             tooltip: isDraft ? 'Select a template first' : 'Smart Copy & Inject',
-                             onPressed: isDraft ? null : () => _injectNote(context, ref),
+                            onPressed: isDraft ? null : () => _injectNote(context),
                           )
                         ],
                       ),
@@ -199,7 +201,7 @@ class InboxCard extends ConsumerWidget {
   String _getNoteTitle() {
     return 'NO-$noteNumber';
   }
-  Future<void> _injectNote(BuildContext context, WidgetRef ref) async {
+  Future<void> _injectNote(BuildContext context) async {
     final availableText = note.formattedText.isNotEmpty ? note.formattedText : note.rawText;
     final textToInject = TextProcessingService.applySmartCopy(availableText);
     
@@ -228,7 +230,7 @@ class InboxCard extends ConsumerWidget {
     
     // Mark as Copied
     try {
-      await ref.read(inboxNoteRepositoryProvider).updateStatus(note.id.toString(), NoteStatus.copied);
+      await InboxService().updateStatus(note.id, NoteStatus.copied);
     } catch (e) {
       print("Error updating status to copied: $e");
     }

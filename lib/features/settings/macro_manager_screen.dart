@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:soutnote/core/providers/common_providers.dart';
 import 'package:soutnote/shared/theme.dart';
 import 'package:soutnote/core/models/macro.dart';
 import 'package:soutnote/core/services/macro_api_service.dart';
@@ -43,12 +42,6 @@ class _MacroManagerScreenState extends State<MacroManagerScreen> {
     if (result == true) {
       _loadMacros();
     }
-  }
-
-  Future<void> _toggleFavorite(Macro macro) async {
-    macro.isFavorite = !macro.isFavorite;
-    await _service.updateMacro(macro.id.toString(), macro);
-    _loadMacros();
   }
 
   Future<void> _confirmReset() async {

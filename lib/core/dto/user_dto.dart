@@ -111,21 +111,6 @@ class UserDtoMapper extends EnhancedDtoMapper<User, UserDto> with CommonFieldTra
         : ValidationResult.invalid(errors);
   }
   
-  /// Get company name from nested company object or direct field
-  String? _getCompanyName(UserDto dto) {
-    final company = dto.get<Map<String, dynamic>>('company');
-    if (company != null) {
-      return company['name'] as String?;
-    }
-    return dto.get<String>('company_name');
-  }
-  
-  /// Parse DateTime from string
-  DateTime? _parseDateTime(String? dateStr) {
-    if (dateStr == null) return null;
-    return DateTime.tryParse(dateStr);
-  }
-  
   /// Validate email format
   bool _isValidEmail(String email) {
     return RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(email);

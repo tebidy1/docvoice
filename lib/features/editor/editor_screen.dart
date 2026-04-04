@@ -46,7 +46,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
   late TextEditingController _sourceController; // Top: Raw Transcript
   late TextEditingController _finalController; // Bottom: Final Note
 
-  bool _isKeyboardVisible = false;
   List<Macro> _macros = [];
   Macro? _selectedMacro; // Track selected template
   StreamSubscription? _wsSubscription;
@@ -54,13 +53,15 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
   bool _isProcessing = false; // For AI generation
   List<Map<String, dynamic>> _suggestions = [];
   bool _isSourceExpanded = false; // Toggle source view
-  bool _useHighAccuracy = false; // Toggle for AI Mode (Standard vs Suggestions)
   bool _isTemplateCardExpanded = true; // Template card: expanded by default
   bool _isGeneratedCardExpanded =
       false; // Generated note card: collapsed by default
 
+  // Smart Tabs State
+  int _activeTabIndex = 0; // 0 = Transcript, 1+ = Generated Outputs
+  List<Map<String, String>> _generatedOutputs = [];
+
   // Native STT
-  stt.SpeechToText _speechToText = stt.SpeechToText();
   bool _speechEnabled = false;
   String _sttEnginePref = 'groq'; // 'groq' or 'native'
 
@@ -119,9 +120,19 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
         widget.draftNote!.formattedText.isNotEmpty) {
       _isTemplateCardExpanded = false;
       _isGeneratedCardExpanded = true;
+      _generatedOutputs = [
+        {
+          'title': widget.draftNote!.title.isNotEmpty
+              ? widget.draftNote!.title
+              : 'Generated Note',
+          'content': widget.draftNote!.formattedText,
+        }
+      ];
+      _activeTabIndex = 1;
     } else {
       _isTemplateCardExpanded = true;
       _isGeneratedCardExpanded = false;
+      _activeTabIndex = 0;
     }
 
     // Auto-save on manual edits
@@ -344,7 +355,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
       }
 
       // --- Processing ---
-      if (path != null && path.isNotEmpty) {
+      if (path.isNotEmpty) {
         try {
           final prefs = await SharedPreferences.getInstance();
           final sttEngine = prefs.getString('stt_engine_pref') ?? 'oracle_live';
@@ -395,7 +406,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                 if (localGroqKey.isNotEmpty) {
                   debugPrint("⚡ Web: Using Direct Groq API (fast path)");
                   final groqService = GroqService(apiKey: localGroqKey);
-                  final directResult = await groqService.transcribe(bytes!,
+                  final directResult = await groqService.transcribe(bytes,
                       filename: 'recording.webm');
 
                   if (!directResult.startsWith('Error')) {
@@ -414,7 +425,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                 final apiService = ref.read(apiServiceProvider);
                 final result = await apiService.multipartPost(
                   '/audio/transcribe',
-                  fileBytes: bytes!,
+                  fileBytes: bytes,
                   filename: kIsWeb ? 'recording.webm' : 'recording.wav',
                 );
 
@@ -539,6 +550,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
           setState(() {
             _finalController.text = result.formattedNote;
             _suggestions = result.missingSuggestions;
+
+            // Tab sync: Add generated outcome and switch to it
+            _generatedOutputs.add({
+              'title':
+                  macro.trigger.isNotEmpty ? macro.trigger : 'Generated Note',
+              'content': result.formattedNote,
+            });
+            _activeTabIndex = _generatedOutputs.length;
           });
 
           // 5. AUTO-SAVE: Update existing note or create new one
@@ -669,6 +688,108 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     }
   }
 
+  Future<void> _applyInsuranceTemplate() async {
+    if (_isProcessing || _finalController.text.trim().isEmpty) return;
+
+    final insuranceMacro = _macros.firstWhere(
+      (m) => m.trigger.trim().toUpperCase() == 'INSURANCE',
+      orElse: () {
+        final macro = Macro();
+        macro.trigger = 'INSURANCE';
+        macro.category = 'Admin';
+        macro.isAiMacro = true;
+        macro.content =
+            'Rewrite the note to emphasize medical necessity, making it suitable for insurance approval. Ensure justification for any tests, procedures, and medications is clearly documented and aligned with the reported symptoms and diagnosis.';
+        return macro;
+      },
+    );
+
+    setState(() {
+      _selectedMacro = insuranceMacro;
+      _isProcessing = true;
+      _isTemplateCardExpanded = false;
+      _isGeneratedCardExpanded = true;
+    });
+
+    try {
+      final aiService = AIProcessingService();
+      final mode = await AIProcessingService.getEffectiveMode();
+      final result = await aiService.processNote(
+        transcript: _finalController.text,
+        macroContent: insuranceMacro.content,
+        mode: mode,
+      );
+
+      if (!result.success) {
+        throw result.errorMessage ?? 'Insurance generation failed';
+      }
+
+      if (mounted) {
+        setState(() {
+          _finalController.text = result.formattedNote;
+          _suggestions = result.missingSuggestions;
+          _generatedOutputs.add({
+            'title': insuranceMacro.trigger.isNotEmpty
+                ? insuranceMacro.trigger
+                : 'Insurance Note',
+            'content': result.formattedNote,
+          });
+          _activeTabIndex = _generatedOutputs.length;
+        });
+      }
+
+      try {
+        final repository = ref.read(inboxNoteRepositoryProvider);
+        if (_currentNoteId != null) {
+          final note = await repository.getById(_currentNoteId!.toString());
+          if (note != null) {
+            note.originalText = _sourceController.text;
+            note.formattedText = _finalController.text;
+            note.appliedMacroId =
+                int.tryParse(insuranceMacro.id.toString()) ?? 0;
+            note.title = insuranceMacro.trigger;
+            await repository.update(note);
+          }
+        } else {
+          final note = NoteModel()
+            ..originalText = _sourceController.text
+            ..formattedText = _finalController.text
+            ..appliedMacroId = int.tryParse(insuranceMacro.id.toString()) ?? 0
+            ..title = insuranceMacro.trigger
+            ..status = NoteStatus.draft;
+          final savedNote = await repository.create(note);
+          if (mounted) {
+            setState(() => _currentNoteId = savedNote.id);
+          }
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Insurance Note saved'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        debugPrint('❌ Insurance auto-save failed: $e');
+      }
+    } catch (e) {
+      debugPrint('❌ Insurance AI error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to generate Insurance note: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+
   void _handleTextFieldTap() {
     final text = _finalController.text;
     final selection = _finalController.selection;
@@ -686,8 +807,181 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     }
   }
 
+  void _switchTab(int index) {
+    setState(() {
+      _activeTabIndex = index;
+      if (_activeTabIndex == 0) {
+        _finalController.text = _sourceController.text;
+      } else if (_activeTabIndex > 0 &&
+          _activeTabIndex <= _generatedOutputs.length) {
+        _finalController.text =
+            _generatedOutputs[_activeTabIndex - 1]['content'] ?? '';
+      }
+    });
+  }
+
+  void _deleteTab(int index) {
+    if (index <= 0 || index > _generatedOutputs.length) return;
+
+    setState(() {
+      _generatedOutputs.removeAt(index - 1);
+      if (_activeTabIndex > _generatedOutputs.length) {
+        _activeTabIndex =
+            _generatedOutputs.isEmpty ? 0 : _generatedOutputs.length;
+      }
+      _switchTab(_activeTabIndex);
+    });
+  }
+
+  Widget _buildSmartTabsEditorCard() {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _activeTabIndex > 0
+              ? colorScheme.primary.withValues(alpha: 0.5)
+              : colorScheme.outline.withValues(alpha: 0.3),
+          width: _activeTabIndex > 0 ? 1.5 : 1.0,
+        ),
+        boxShadow: _activeTabIndex > 0
+            ? [
+                BoxShadow(
+                  color: colorScheme.primary.withValues(alpha: 0.08),
+                  blurRadius: 12,
+                  spreadRadius: 0,
+                )
+              ]
+            : [],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Tab Bar Header ──
+          Container(
+            height: 48,
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                    color: colorScheme.outline.withValues(alpha: 0.2)),
+              ),
+              color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.2),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(12)),
+            ),
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: 1 + _generatedOutputs.length,
+              itemBuilder: (context, index) {
+                final isSelected = index == _activeTabIndex;
+                final title = index == 0
+                    ? 'Transcript'
+                    : (_generatedOutputs[index - 1]['title'] ?? 'Note $index');
+                final icon =
+                    index == 0 ? Icons.description_outlined : Icons.bolt;
+
+                return InkWell(
+                  onTap: () {
+                    if (isSelected) return;
+                    _switchTab(index);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: isSelected
+                              ? colorScheme.primary
+                              : Colors.transparent,
+                          width: 2,
+                        ),
+                      ),
+                      color: isSelected
+                          ? colorScheme.primary.withValues(alpha: 0.05)
+                          : Colors.transparent,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(icon,
+                            size: 16,
+                            color: isSelected
+                                ? colorScheme.primary
+                                : colorScheme.onSurface.withValues(alpha: 0.5)),
+                        const SizedBox(width: 8),
+                        Text(
+                          title,
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight:
+                                isSelected ? FontWeight.w600 : FontWeight.w500,
+                            color: isSelected
+                                ? colorScheme.primary
+                                : colorScheme.onSurface.withValues(alpha: 0.7),
+                          ),
+                        ),
+                        if (index > 0) ...[
+                          const SizedBox(width: 8),
+                          InkWell(
+                            onTap: () {
+                              _deleteTab(index);
+                            },
+                            child: Icon(Icons.close,
+                                size: 14,
+                                color: colorScheme.onSurface
+                                    .withValues(alpha: 0.4)),
+                          )
+                        ]
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+
+          // ── Editor Area ──
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: _isProcessing
+                ? const SizedBox(
+                    height: 100,
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                : TextField(
+                    controller: _activeTabIndex == 0
+                        ? _sourceController
+                        : _finalController,
+                    maxLines: null,
+                    minLines: 5,
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      color: colorScheme.onSurface,
+                      height: 1.6,
+                    ),
+                    decoration: InputDecoration(
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                      hintText: _activeTabIndex == 0
+                          ? 'Transcript empty...'
+                          : 'AI generated note will appear here...',
+                      hintStyle: TextStyle(
+                        color: colorScheme.onSurface.withValues(alpha: 0.25),
+                      ),
+                    ),
+                    onTap: _activeTabIndex == 0 ? null : _handleTextFieldTap,
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _copyCleanText() async {
-    final text = _finalController.text;
+    final text =
+        _activeTabIndex == 0 ? _sourceController.text : _finalController.text;
     if (text.isEmpty) return;
 
     if (kIsWeb) {
@@ -786,7 +1080,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    _isKeyboardVisible = bottomInset > 0;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -810,11 +1103,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _buildOriginalNoteCard(),
-                        const SizedBox(height: 16),
                         _buildTemplateSelectorCard(),
                         const SizedBox(height: 16),
-                        _buildGeneratedNoteCard(),
+                        _buildSmartTabsEditorCard(),
                         const SizedBox(height: 80), // Space for bottom dock
                       ],
                     ),
@@ -1207,18 +1498,54 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
             top: BorderSide(
                 color: colorScheme.outline.withValues(alpha: 0.4), width: 1)),
       ),
-      child: ElevatedButton.icon(
-        onPressed: () {
-          _copyCleanText();
-        },
-        icon: const Icon(Icons.content_copy_rounded, size: 18),
-        label: const Text("SMART COPY / INJECT"),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: colorScheme.primary,
-          foregroundColor: Colors.white,
-          minimumSize: const Size(double.infinity, 48),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_finalController.text.trim().isNotEmpty) ...[
+            Align(
+              alignment: Alignment.center,
+              child: ActionChip(
+                label: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.shield, size: 16, color: Colors.white),
+                    SizedBox(width: 6),
+                    Text(
+                      "INSURANCE",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+                backgroundColor: Colors.amber.shade700,
+                onPressed: _isProcessing ? null : _applyInsuranceTemplate,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  side: const BorderSide(color: Colors.transparent),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          ElevatedButton.icon(
+            onPressed: () {
+              _copyCleanText();
+            },
+            icon: const Icon(Icons.content_copy_rounded, size: 18),
+            label: const Text("SMART COPY / INJECT"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: colorScheme.primary,
+              foregroundColor: Colors.white,
+              minimumSize: const Size(double.infinity, 48),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+        ],
       ),
     );
   }

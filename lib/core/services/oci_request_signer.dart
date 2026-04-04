@@ -221,7 +221,6 @@ class OciRequestSigner {
     }
 
     final n = readInteger("Modulus (n)");
-    final e = readInteger("Public Exponent (e)");
     final d = readInteger("Private Exponent (d)");
     // We intentionally stop here completely ignoring p, q, dp, dq, and qi
     // because mathematically we solely need `n` and `d` to sign!

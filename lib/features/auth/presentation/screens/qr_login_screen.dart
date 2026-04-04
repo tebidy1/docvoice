@@ -17,7 +17,6 @@ class QrLoginScreen extends ConsumerStatefulWidget {
 }
 
 class _QrLoginScreenState extends ConsumerState<QrLoginScreen> {
-  final AuthService _authService = AuthService();
   Timer? _pollingTimer;
 
   @override

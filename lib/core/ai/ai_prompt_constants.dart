@@ -21,21 +21,16 @@ RAW TRANSCRIPT:
 {{RAW_TEXT_FROM_WHISPER}}
 """;
 
+  static const String goldenTranscriptionPrompt = """
+When transcribing audio, preserve exact medical terminology, correct obvious ASR mistakes, and return only the cleaned text with no additional commentary.
+""";
+
   // ==========================================
-  // 2. THE MEDICAL TEMPLATES (MACROS)
+  // 2. THE TEMPLATES
   // ==========================================
 
-  // Template 1: Classic Clinic SOAP Note (The Standard)
-  static const String templateClassicSoap = """
-FORMAT AS: CLASSIC CLINIC SOAP NOTE
-Use structured plain text formatting (no asterisks).
-
-SUBJECTIVE (S):
-- Chief Complaint (CC): 
-- History of Present Illness (HPI): 
-- Past Medical History / Allergies: (State [Not Reported] if not mentioned)
-
-OBJECTIVE (O):
+  // Template 1: Standard SOAP Note (with strict [Not Reported] for missing fields)
+  static const String templateSoap = """
 - Vital Signs: 
 - Physical Examination: 
 

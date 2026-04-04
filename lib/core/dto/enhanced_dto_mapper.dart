@@ -1,4 +1,3 @@
-import '../error/app_error.dart';
 import '../interfaces/dto_mapper.dart';
 import 'mapping_utils.dart';
 import 'mapping_error_reporter.dart';

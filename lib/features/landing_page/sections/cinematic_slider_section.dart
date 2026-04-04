@@ -259,16 +259,3 @@ class _ScannerTransitionState extends State<ScannerTransition> with SingleTicker
     );
   }
 }
-
-class _WipeClipper extends CustomClipper<Rect> {
-  final double progress;
-  _WipeClipper(this.progress);
-
-  @override
-  Rect getClip(Size size) {
-    return Rect.fromLTWH(size.width * (1 - progress), 0, size.width * progress, size.height);
-  }
-
-  @override
-  bool shouldReclip(_WipeClipper oldClipper) => oldClipper.progress != progress;
-}

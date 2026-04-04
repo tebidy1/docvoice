@@ -54,7 +54,6 @@ class ApiErrorHandler {
         );
         
       case DioExceptionType.unknown:
-      default:
         return NetworkException(
           'An unexpected error occurred: ${error.message ?? 'Unknown error'}',
         );
@@ -73,16 +72,13 @@ class ApiErrorHandler {
     
     // Extract error message and details from response
     String message = 'An error occurred';
-    List<String>? errors;
     Map<String, List<String>>? fieldErrors;
     Map<String, dynamic>? details;
     
     if (data is Map<String, dynamic>) {
       message = data['message']?.toString() ?? message;
       
-      if (data['errors'] is List) {
-        errors = List<String>.from(data['errors']);
-      } else if (data['errors'] is Map) {
+      if (data['errors'] is Map) {
         // Laravel validation errors format
         final errorMap = data['errors'] as Map<String, dynamic>;
         fieldErrors = errorMap.map(
@@ -93,9 +89,6 @@ class ApiErrorHandler {
                 : [value.toString()],
           ),
         );
-        
-        // Create a general error list from field errors
-        errors = fieldErrors.values.expand((list) => list).toList();
       }
       
       details = data;

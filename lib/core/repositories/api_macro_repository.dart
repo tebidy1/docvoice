@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
 import '../interfaces/abstract_repository.dart';
 import '../interfaces/macro_repository.dart';
 import '../dto/macro_dto.dart';

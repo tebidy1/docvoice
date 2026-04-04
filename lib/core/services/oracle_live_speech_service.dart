@@ -6,8 +6,6 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:soutnote/core/services/oci_request_signer.dart';
-import 'package:soutnote/features/settings/presentation/widgets/settings_dialog.dart';
-import 'package:soutnote/core/services/audio_recorder_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // A/B Testing model selection enum
@@ -90,8 +88,6 @@ class OracleLiveSpeechService {
 
   static const _region = 'me-riyadh-1';
   // (_httpsEndpoint removed — no longer making REST calls)
-  static const _wssEndpoint =
-      'wss://realtime.aiservice.$_region.oci.oraclecloud.com';
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Public API
@@ -312,7 +308,7 @@ class OracleLiveSpeechService {
     final headers = signer.signRequest(
       method: "POST",
       url: targetUri.toString(),
-      body: utf8.encode(body) as Uint8List,
+      body: utf8.encode(body),
     );
     // Remove pseudo header
     headers.remove('(request-target)');

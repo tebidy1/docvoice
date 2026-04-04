@@ -3,7 +3,6 @@ import 'property_test.dart';
 import 'package:soutnote/core/models/macro.dart';
 import 'package:soutnote/core/models/inbox_note.dart';
 import 'package:soutnote/core/models/user.dart';
-import 'package:soutnote/core/models/api_models.dart' hide User;
 
 /// Domain-specific generators for ScribeFlow
 class ScribeFlowGenerators {

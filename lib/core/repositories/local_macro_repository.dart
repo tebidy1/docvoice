@@ -56,7 +56,7 @@ class LocalMacroRepository extends AbstractLocalRepository<Macro> implements Mac
         print("LocalMacroRepository: Seeding default macros...");
         await isar.writeTxn(() async {
           final defaults = [
-            Macro()..trigger = "📝 Classic SOAP"..content = AIPromptConstants.templateClassicSoap..category = "General",
+            Macro()..trigger = "📝 Classic SOAP"..content = AIPromptConstants.templateSoap..category = "General",
             Macro()..trigger = "🚨 ER SOAP"..content = AIPromptConstants.templateErSoap..category = "Emergency",
             Macro()..trigger = "📞 SBAR Consult"..content = AIPromptConstants.templateSbar..category = "Referral",
             Macro()..trigger = "📄 ER Discharge"..content = AIPromptConstants.templateDischarge..category = "Emergency",

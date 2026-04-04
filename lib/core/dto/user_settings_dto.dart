@@ -116,12 +116,6 @@ class UserSettingsDtoMapper extends EnhancedDtoMapper<UserSettings, UserSettings
         : ValidationResult.invalid(errors);
   }
   
-  /// Parse DateTime from string
-  DateTime? _parseDateTime(String? dateStr) {
-    if (dateStr == null) return null;
-    return DateTime.tryParse(dateStr);
-  }
-  
   /// Validate theme value
   bool _isValidTheme(String theme) {
     const validThemes = ['light', 'dark', 'system'];

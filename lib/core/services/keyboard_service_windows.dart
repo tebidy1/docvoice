@@ -2,7 +2,6 @@ import 'dart:ffi';
 import 'package:ffi/ffi.dart';
 import 'package:win32/win32.dart';
 import 'package:flutter/services.dart';
-import 'dart:io';
 
 class KeyboardService {
   /// Types the given [text] into the currently active window.
@@ -11,37 +10,6 @@ class KeyboardService {
     print("KeyboardService: Inserting ${text.length} characters via paste...");
     await pasteText(text);
     print("KeyboardService: Insert complete.");
-  }
-
-  void _sendChunk(String chunk) {
-    final kInputs = calloc<INPUT>(chunk.length * 2);
-
-    try {
-      for (var i = 0; i < chunk.length; i++) {
-        final charCode = chunk.codeUnitAt(i);
-
-        // Key Down
-        final inputDown = kInputs[2 * i];
-        inputDown.type = INPUT_KEYBOARD;
-        inputDown.ki.wVk = 0;
-        inputDown.ki.wScan = charCode;
-        inputDown.ki.dwFlags = KEYEVENTF_UNICODE;
-
-        // Key Up
-        final inputUp = kInputs[2 * i + 1];
-        inputUp.type = INPUT_KEYBOARD;
-        inputUp.ki.wVk = 0;
-        inputUp.ki.wScan = charCode;
-        inputUp.ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
-      }
-
-      final result = SendInput(chunk.length * 2, kInputs, sizeOf<INPUT>());
-      if (result != chunk.length * 2) {
-        print("SendInput failed. Sent $result of ${chunk.length * 2} events.");
-      }
-    } finally {
-      calloc.free(kInputs);
-    }
   }
 
   /// Pastes the given [text] into the currently active window using Clipboard and Ctrl+V.
@@ -105,4 +73,6 @@ class KeyboardService {
       print("KeyboardService: Error during paste: $e");
     }
   }
-}
+  }
+
+

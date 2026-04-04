@@ -35,7 +35,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<String>? _oracleTranscriptFuture;
   bool _usingGroqFallback =
       false; // true when Oracle failed on web and fell back to Groq
-  List<int> _webAudioBuffer = []; // PCM buffer for web Groq fallback
 
   // Native STT
   final stt.SpeechToText _speechToText = stt.SpeechToText();
@@ -299,7 +298,6 @@ cQBOFhw1ZkYvxx4A6HSNxyae
       }
 
       final oracleService = _oracleService!;
-      final oracleFuture = _oracleTranscriptFuture!;
       _oracleService = null;
       _oracleTranscriptFuture = null;
 

@@ -227,24 +227,6 @@ class InboxScreenState extends ConsumerState<InboxScreen> {
     );
   }
 
-  // Modified to accept index for Copy action
-  Widget _buildAnimatedItem(BuildContext context, NoteModel note, Animation<double> animation, {int? index}) {
-    return SizeTransition(
-      sizeFactor: animation,
-      axisAlignment: 0.0, 
-      child: FadeTransition(
-        opacity: animation,
-        child: SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0, -0.2), 
-            end: Offset.zero,
-          ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutBack)),
-          child: _buildNoteCard(context, note, index: index),
-        ),
-      ),
-    );
-  }
-
   Widget _buildNoteCard(BuildContext context, NoteModel note, {int? index, int noteNumber = 0}) {
     final colorScheme = Theme.of(context).colorScheme;
     final bool isDraft = note.formattedText.isEmpty;

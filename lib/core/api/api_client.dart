@@ -21,7 +21,6 @@ class ApiClient {
   
   // Track refresh attempts to prevent infinite loops
   bool _isRefreshing = false;
-  final List<RequestOptions> _failedQueue = [];
   
   ApiClient({
     required this.baseUrl,
@@ -64,18 +63,16 @@ class ApiClient {
     ));
     
     // Logging interceptor for debugging
-    if (developer.log != null) {
-      _dio.interceptors.add(LogInterceptor(
-        requestBody: true,
-        responseBody: true,
-        requestHeader: true,
-        responseHeader: false,
-        error: true,
-        logPrint: (object) {
-          developer.log(object.toString(), name: 'ApiClient');
-        },
-      ));
-    }
+    _dio.interceptors.add(LogInterceptor(
+      requestBody: true,
+      responseBody: true,
+      requestHeader: true,
+      responseHeader: false,
+      error: true,
+      logPrint: (object) {
+        developer.log(object.toString(), name: 'ApiClient');
+      },
+    ));
   }
   
   /// Setup certificate handling for development/testing

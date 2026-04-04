@@ -154,34 +154,9 @@ class InboxNoteDtoMapper extends EnhancedDtoMapper<InboxNote, InboxNoteDto> with
         : ValidationResult.invalid(errors);
   }
   
-  /// Parse status from string
-  NoteStatus _parseStatus(String? status) {
-    if (status == null) return NoteStatus.draft;
-    
-    final statusStr = status.toLowerCase();
-    switch (statusStr) {
-      case 'draft':
-        return NoteStatus.draft;
-      case 'processed':
-        return NoteStatus.processed;
-      case 'ready':
-        return NoteStatus.ready;
-      case 'archived':
-        return NoteStatus.archived;
-      default:
-        return NoteStatus.draft;
-    }
-  }
-  
   /// Validate UUID format (basic validation)
   bool _isValidUuid(String uuid) {
     return RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$').hasMatch(uuid);
-  }
-  
-  /// Validate status value
-  bool _isValidStatus(String status) {
-    const validStatuses = ['draft', 'processed', 'ready', 'archived'];
-    return validStatuses.contains(status.toLowerCase());
   }
   
   /// Validate audio path format

@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:window_manager/window_manager.dart';
 import 'package:soutnote/core/services/admin_service.dart';
 import 'package:soutnote/core/models/company.dart';
-import 'package:soutnote/core/models/user.dart';
 import 'package:soutnote/shared/widgets/window_title_bar.dart';
 import 'users_list_screen.dart';
 

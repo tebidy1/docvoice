@@ -3,10 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../controllers/demo_controller.dart';
 import '../theme/app_colors.dart';
-import '../components/med_button.dart';
 import '../components/pulse_mic.dart';
 import '../components/typewriter_text.dart';
-import '../components/laser_beam.dart';
 
 class DemoSection extends StatefulWidget {
   const DemoSection({super.key});

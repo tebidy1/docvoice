@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:soutnote/core/models/macro.dart';
-import '../core/providers/common_providers.dart';
+import 'package:soutnote/services/macro_service.dart';
+import 'package:soutnote/core/medical_departments.dart';
+import 'package:soutnote/services/department_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-class MacroExplorerDialog extends ConsumerStatefulWidget {
+class MacroExplorerDialog extends StatefulWidget {
   const MacroExplorerDialog({super.key});
 
   @override
-  ConsumerState<MacroExplorerDialog> createState() => _MacroExplorerDialogState();
+  State<MacroExplorerDialog> createState() => _MacroExplorerDialogState();
 }
 
-class _MacroExplorerDialogState extends ConsumerState<MacroExplorerDialog> {
+class _MacroExplorerDialogState extends State<MacroExplorerDialog> {
+  final _macroService = MacroService();
   String _selectedCategory = 'Favorites';
   Macro? _previewMacro;
   List<Macro> _macros = [];
@@ -25,18 +28,27 @@ class _MacroExplorerDialogState extends ConsumerState<MacroExplorerDialog> {
   Future<void> _loadMacros() async {
     setState(() => _isLoading = true);
     
-    final repository = ref.read(macroRepositoryProvider);
     List<Macro> macros;
     if (_selectedCategory == 'Favorites') {
-      macros = await repository.getFavorites();
+      macros = await _macroService.getFavorites();
     } else if (_selectedCategory == 'Most Used') {
-      macros = await repository.getMostUsed(limit: 20);
+      macros = await _macroService.getMostUsed(limit: 20);
     } else {
-      macros = await repository.getByCategory(_selectedCategory);
+      macros = await _macroService.getMacrosByCategory(_selectedCategory);
     }
     
+    final prefs = await SharedPreferences.getInstance();
+    final deptId = DepartmentService().value ?? prefs.getString('specialty');
+    final allowedCategories = deptId != null 
+        ? MedicalDepartments.getRelevantCategories(deptId)
+        : ['General'];
+
+    final filteredMacros = macros.where((m) => 
+        allowedCategories.contains(m.category) || 
+        allowedCategories.contains('General')).toList();
+
     setState(() {
-      _macros = macros;
+      _macros = filteredMacros;
       _isLoading = false;
     });
   }

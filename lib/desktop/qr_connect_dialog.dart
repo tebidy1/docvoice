@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:soutnote/core/services/connectivity_server.dart';
+import '../services/connectivity_server.dart';
 
 class QrConnectDialog extends StatefulWidget {
   const QrConnectDialog({super.key});

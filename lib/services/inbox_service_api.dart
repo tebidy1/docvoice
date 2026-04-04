@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:soutnote/core/models/note_model_web.dart';
+import '../core/models/note_model.dart';
+import '../mobile_app/models/generated_output.dart';
 import 'inbox_note_api_service.dart';
 import 'sync_manager.dart';
 import 'cache_manager.dart';
@@ -28,12 +29,14 @@ class InboxService {
   // ============================================
 
   /// Add a new note (Legacy signature)
-  Future<int> addNote(
+  Future<NoteModel> addNote(
     String rawText, {
     String? patientName,
     String? summary,
     int? suggestedMacroId,
     String? formattedText,
+    String? audioPath,
+    List<Map<String, dynamic>>? generatedOutputs,
   }) async {
     final note = NoteModel();
     note.uuid = DateTime.now().millisecondsSinceEpoch.toString();
@@ -42,6 +45,10 @@ class InboxService {
     note.summary = summary;
     note.suggestedMacroId = suggestedMacroId;
     note.formattedText = formattedText ?? '';
+    note.audioPath = audioPath; // Added audio path map
+    if (generatedOutputs != null) {
+      note.generatedOutputs = generatedOutputs.map((e) => GeneratedOutput.fromJson(e)).toList();
+    }
     note.content = note.formattedText.isNotEmpty ? note.formattedText : note.originalText; // Fix LateInitializationError
     note.status =
         note.formattedText.isNotEmpty ? NoteStatus.processed : NoteStatus.draft;
@@ -49,7 +56,7 @@ class InboxService {
     note.updatedAt = DateTime.now();
 
     final createdNote = await addNoteModel(note);
-    return createdNote.id;
+    return createdNote;
   }
 
   /// Add a new note using NoteModel
@@ -84,15 +91,23 @@ class InboxService {
     String? patientName,
     String? summary,
     int? suggestedMacroId,
+    List<Map<String, dynamic>>? generatedOutputs,
   }) async {
+    print('🔄 [InboxService] updateNote called for ID: $noteId');
     final existing = await getNoteById(noteId);
-    if (existing == null) return null;
+    if (existing == null) {
+      print('❌ [InboxService] updateNote failed: existing note is null for ID $noteId');
+      return null;
+    }
 
     if (rawText != null) existing.originalText = rawText;
     if (formattedText != null) existing.formattedText = formattedText;
     if (patientName != null) existing.patientName = patientName;
     if (summary != null) existing.summary = summary;
     if (suggestedMacroId != null) existing.suggestedMacroId = suggestedMacroId;
+    if (generatedOutputs != null) {
+      existing.generatedOutputs = generatedOutputs.map((e) => GeneratedOutput.fromJson(e)).toList();
+    }
 
     if (formattedText != null && formattedText.isNotEmpty) {
       existing.status = NoteStatus.processed;

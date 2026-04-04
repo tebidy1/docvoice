@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
-import 'package:soutnote/core/models/note_model_web.dart';
-import 'package:soutnote/core/services/base_api_service.dart';
-
+import '../core/models/note_model.dart';
+import 'base_api_service.dart';
 
 /// API Service for Inbox Notes
 ///
@@ -72,9 +71,12 @@ class InboxNoteApiService extends BaseApiService {
 
   /// Update an existing note
   Future<NoteModel> updateNote(String id, NoteModel note) async {
+    final payload = note.toJson();
+    payload.remove('uuid'); // Prevent Laravel "uuid has already been taken" validation error
+    
     return await update<NoteModel>(
       id: id,
-      data: note.toJson(),
+      data: payload,
       fromJson: (json) => NoteModelJson.fromJson(json),
     );
   }

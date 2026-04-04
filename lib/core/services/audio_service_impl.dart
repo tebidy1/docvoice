@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
 import 'dart:typed_data';
-import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
 import 'package:crypto/crypto.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -447,25 +446,6 @@ class AudioServiceImpl extends AudioService with ServiceLifecycle {
 
   // Private helper methods
 
-  Future<String> _getBaseUrl() async {
-    // Get base URL from environment or use default
-    const baseUrl = String.fromEnvironment('API_BASE_URL',
-        defaultValue: 'https://docapi.sootnote.com/api');
-    return baseUrl.endsWith('/')
-        ? baseUrl.substring(0, baseUrl.length - 1)
-        : baseUrl;
-  }
-
-  Future<String?> _getAuthToken() async {
-    // Get token from shared preferences
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getString('auth_token');
-    } catch (e) {
-      return null;
-    }
-  }
-
   String _generateUploadId() {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final random = timestamp.toString() + DateTime.now().microsecond.toString();
@@ -519,31 +499,6 @@ class AudioServiceImpl extends AudioService with ServiceLifecycle {
       default:
         // For other formats, just check if file is not empty and has some content
         return bytes.isNotEmpty && bytes.any((byte) => byte != 0);
-    }
-  }
-
-  TranscriptionStatus _parseTranscriptionStatus(dynamic status) {
-    if (status == null) return TranscriptionStatus.queued;
-
-    final statusStr = status.toString().toLowerCase();
-    switch (statusStr) {
-      case 'queued':
-      case 'pending':
-        return TranscriptionStatus.queued;
-      case 'processing':
-      case 'in_progress':
-        return TranscriptionStatus.processing;
-      case 'completed':
-      case 'done':
-        return TranscriptionStatus.completed;
-      case 'failed':
-      case 'error':
-        return TranscriptionStatus.failed;
-      case 'cancelled':
-      case 'canceled':
-        return TranscriptionStatus.cancelled;
-      default:
-        return TranscriptionStatus.queued;
     }
   }
 

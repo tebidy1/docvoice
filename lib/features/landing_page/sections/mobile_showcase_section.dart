@@ -84,16 +84,6 @@ class _MobileShowcaseSectionState extends State<MobileShowcaseSection> with Tick
   }
 // ... (rest of build methods)
 
-
-
-
-  
-  // Re-write _buildAnimatedTemplateCard to be simpler and cleaner with Animate
-  Widget _buildSimpleTemplateCard(String title, bool isSelected) {
-     // ... (Keep old helper if needed or replace)
-     return Container(); 
-  }
-
   @override
   Widget build(BuildContext context) {
     return Container(

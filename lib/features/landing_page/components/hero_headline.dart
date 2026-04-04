@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../theme/app_colors.dart';
 
 class AnimatedHeroHeadline extends StatelessWidget {
   const AnimatedHeroHeadline({super.key});

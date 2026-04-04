@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'components/pwa_install_banner.dart';
 import 'components/sticky_navbar.dart';
 import 'components/mobile_app_button.dart';
 import 'sections/cinematic_slider_section.dart';

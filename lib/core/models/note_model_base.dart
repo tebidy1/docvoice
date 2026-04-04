@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:isar/isar.dart';
+import '../../mobile_app/models/generated_output.dart';
 
 enum NoteStatus {
   draft, // Initial recording or raw text
@@ -33,6 +34,9 @@ class NoteModelBase {
   String originalText = ''; // Raw text from API/Input
   String formattedText = ''; // Processed text from API/AI
   String? summary; // Brief summary of the note
+
+  @Ignore()
+  List<GeneratedOutput> generatedOutputs = [];
 
   // Aliases for Desktop compatibility
   String get rawText => originalText;

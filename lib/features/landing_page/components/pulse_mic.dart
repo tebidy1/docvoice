@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
-import 'dart:math' as math;
 
 class PulseMic extends StatefulWidget {
   final bool isRecording;
