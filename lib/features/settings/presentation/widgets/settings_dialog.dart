@@ -219,11 +219,11 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog> {
                               value: 'groq',
                               theme: currentTheme,
                             ),
-                            _buildSttItem(
-                              title: "System Native (Built-in)",
-                              value: 'native',
-                              theme: currentTheme,
-                            ),
+                            // _buildSttItem(
+                            //   title: "System Native (Built-in)",
+                            //   value: 'native',
+                            //   theme: currentTheme,
+                            // ),
                             _buildSttItem(
                               title: "Oracle OCI Live Speech (Cloud)",
                               value: 'oracle_live',

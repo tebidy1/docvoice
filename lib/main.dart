@@ -32,6 +32,8 @@ void main() async {
   setPathUrlStrategy();
   WidgetsFlutterBinding.ensureInitialized();
 
+  
+
   // Initialization of core services via Riverpod
   final container = ProviderContainer();
 
@@ -52,8 +54,7 @@ void main() async {
       final authService = container.read(authServiceProvider);
       final bool isAuth = await authService.isAuthenticated();
 
-      final Size initialSize =
-          isAuth ? const Size(280, 56) : const Size(400, 720);
+      final Size initialSize = const Size(400, 750);
 
       WindowOptions windowOptions = WindowOptions(
         size: initialSize,
@@ -61,12 +62,12 @@ void main() async {
         backgroundColor: Colors.transparent,
         skipTaskbar: false,
         titleBarStyle: TitleBarStyle.hidden,
-        alwaysOnTop: isAuth,
+        alwaysOnTop: false,
       );
 
       windowManager.waitUntilReadyToShow(windowOptions, () async {
         await windowManager.setBackgroundColor(Colors.transparent);
-        await windowManager.setResizable(!isAuth);
+        await windowManager.setResizable(true);
         await windowManager.show();
         await windowManager.focus();
       });

@@ -1,6 +1,6 @@
 // import 'dart:io';
 // import 'package:flutter/material.dart';
-// import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 // import 'lib/services/api_service.dart';
 // import 'lib/core/interfaces/macro_repository.dart';
 // import 'lib/core/interfaces/inbox_note_repository.dart';
@@ -12,9 +12,7 @@
 //   print('🚀 بدء اختبار الاتصال مع الباك اند...');
 
 //   try {
-//     // تحميل متغيرات البيئة
-//     await dotenv.load(fileName: ".env");
-//     print('✅ تم تحميل متغيرات البيئة');
+
 
 //     // تهيئة خدمة الـ API
 //     final apiService = ApiService();
@@ -92,7 +90,7 @@
 //     print('💥 خطأ عام في الاختبار: $e');
 //     print('🔧 تأكد من:');
 //     print('   1. تشغيل الخادم على https://docapi.sootnote.com');
-//     print('   2. صحة ملف .env');
+
 //     print('   3. الاتصال بالإنترنت');
 //   }
 

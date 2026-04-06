@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_web_socket/shelf_web_socket.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 import '../utils/wav_utils.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/models/inbox_note.dart';
@@ -42,7 +42,7 @@ class ConnectivityServer {
   }
 
   Future<void> startServer({int port = 8080}) async {
-    await dotenv.load();
+
     await _macroService.init();
 
     var handler = webSocketHandler((WebSocketChannel webSocket) {

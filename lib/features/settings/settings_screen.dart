@@ -472,21 +472,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         }
                       },
                     ),
-                    RadioListTile<String>(
-                      title: const Text("System Native (Built-in)"),
-                      subtitle: const Text(
-                          "Uses Apple/Google built-in speech engine."),
-                      value: 'native',
-                      groupValue: _sttEnginePref,
-                      activeColor: global_theme.AppTheme.darkOnyx.accentColor,
-                      onChanged: (val) async {
-                        if (val != null) {
-                          setState(() => _sttEnginePref = val);
-                          final prefs = await SharedPreferences.getInstance();
-                          await prefs.setString('stt_engine_pref', val);
-                        }
-                      },
-                    ),
+                    // RadioListTile<String>(
+                    //   title: const Text("System Native (Built-in)"),
+                    //   subtitle: const Text(
+                    //       "Uses Apple/Google built-in speech engine."),
+                    //   value: 'native',
+                    //   groupValue: _sttEnginePref,
+                    //   activeColor: global_theme.AppTheme.darkOnyx.accentColor,
+                    //   onChanged: (val) async {
+                    //     if (val != null) {
+                    //       setState(() => _sttEnginePref = val);
+                    //       final prefs = await SharedPreferences.getInstance();
+                    //       await prefs.setString('stt_engine_pref', val);
+                    //     }
+                    //   },
+                    // ),
                     RadioListTile<String>(
                       title: const Text("Oracle OCI Live Speech (Cloud)"),
                       subtitle: const Text(

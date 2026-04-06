@@ -47,7 +47,7 @@
                 "flutter.js",
                 "main.dart.js",
                 "manifest.json",
-                ".env",
+
                 "icons/*"
             ],
             "matches": [

@@ -466,7 +466,7 @@ class OracleLiveSpeechService {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// OciCredentials — credential bag (loaded from SharedPreferences / .env)
+// OciCredentials — credential bag (loaded from SharedPreferences)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class OciCredentials {

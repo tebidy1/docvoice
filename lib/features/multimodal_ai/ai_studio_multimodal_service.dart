@@ -4,7 +4,7 @@
 // Part of: lib/features/multimodal_ai/
 //
 // Provider : Google AI Studio (ai.google.dev)
-// Auth     : API Key from .env → GEMINI_API_KEY
+// Auth     : API Key from SharedPreferences → GEMINI_API_KEY
 // Model    : gemini-2.5-flash  (multimodal — audio + text)
 // SDK      : package:google_generative_ai
 //
@@ -20,7 +20,7 @@
 // ============================================================
 
 import 'dart:typed_data';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -56,7 +56,7 @@ class AIStudioMultimodalService implements MultimodalAIService {
   }) async {
     try {
       // ── 1. Resolve API Key ─────────────────────────────────────────────
-      // Priority: SharedPreferences → .env → error
+      // Priority: SharedPreferences → error
       final apiKey = await _resolveApiKey();
       if (apiKey.isEmpty) {
         return MultimodalAIResult.error(
@@ -207,7 +207,7 @@ AUDIO RECORDING:
   // ── Private Helpers ───────────────────────────────────────────────────────
 
   /// Resolves the Gemini API key from the available sources.
-  /// Priority: SharedPreferences (company settings) → .env → empty
+  /// Priority: SharedPreferences (company settings) → empty
   Future<String> _resolveApiKey() async {
     final prefs = await SharedPreferences.getInstance();
     final companyKey = prefs.getString('gemini_api_key');
@@ -215,11 +215,7 @@ AUDIO RECORDING:
       return companyKey;
     }
     
-    // Fallback to .env
-    final envKey = dotenv.env['GEMINI_API_KEY'];
-    if (envKey != null && envKey.isNotEmpty) {
-      return envKey;
-    }
+
     
     return '';
   }

@@ -9,7 +9,7 @@ We have successfully transitioned the project to a **dedicated Extension Build A
 - Created a simplified Flutter entry point.
 - Removed PWA-specific code (Service Workers, complex routing).
 - Removed Desktop-specific dependencies (WindowManager) that caused crashes in the Extension environment.
-- Added localized `.env` loading for the extension.
+- Removed localized environment loading (now using SharedPreferences/UI Settings).
 
 ### 2. Custom Extension Loader (`web_extension/index.html`)
 - Created a custom HTML loader that uses `flutter.js` directly.

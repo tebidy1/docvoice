@@ -190,17 +190,7 @@ class AuthService {
 
   Future<bool> isAuthenticated() async {
     final token = await _getToken();
-    if (token == null || token.isEmpty) {
-      return false;
-    }
-
-    // Verify token is still valid by getting current user
-    try {
-      final user = await getCurrentUser();
-      return user != null;
-    } catch (e) {
-      return false;
-    }
+    return token != null && token.isNotEmpty;
   }
 
   Future<String?> _getToken() async {

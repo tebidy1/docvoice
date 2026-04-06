@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' show min;
 
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -16,8 +15,7 @@ class ApiService {
 
   String? _baseUrl;
   String? _token;
-  final int _timeout =
-      int.tryParse(dotenv.env['API_TIMEOUT'] ?? '30000') ?? 30000;
+  final int _timeout = ApiConfig.requestTimeout;
 
   bool get hasToken => _token != null && _token!.isNotEmpty;
 

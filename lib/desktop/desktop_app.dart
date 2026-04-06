@@ -75,10 +75,10 @@ class _DesktopAppState extends State<DesktopApp> {
 
   Future<void> _setInitialWindowSize() async {
     try {
-      await windowManager.setResizable(false);
-      await windowManager.setAlwaysOnTop(true);
-      // 300px gives enough room for 7 buttons + Windows window chrome overhead
-      await windowManager.setSize(const Size(300, 56));
+      await windowManager.setResizable(true); // Allow resizing for debugging
+      await windowManager.setAlwaysOnTop(false); // Not always on top for debugging
+      // Temporarily comment out setSize to keep large window
+      await windowManager.setSize(const Size(400, 750));
     } catch (e) {
       print("Error setting initial window size: $e");
     }
@@ -780,14 +780,15 @@ cQBOFhw1ZkYvxx4A6HSNxyae
               child: Scaffold(
                 backgroundColor:
                     Colors.transparent, // Transparent for frameless mode
-                body: Stack(
-                  children: [
-                    // Top bar removed for capsule mode
-                    // Main floating bar
-                    Center(
-                      child: Padding(
-                        padding: EdgeInsets.zero, // No padding needed
-                        child: GestureDetector(
+                body: SizedBox.expand(
+                  child: Stack(
+                    children: [
+                      // Top bar removed for capsule mode
+                      // Main floating bar
+                      Center(
+                        child: Padding(
+                          padding: EdgeInsets.zero, // No padding needed
+                          child: GestureDetector(
                           onPanStart: (details) {
                             windowManager.startDragging();
                           },
@@ -1021,7 +1022,7 @@ cQBOFhw1ZkYvxx4A6HSNxyae
                 ),
               ),
             ), // MouseRegion
-          ); // Method
+          ));// Method
         }); // ValueListenableBuilder
   }
 

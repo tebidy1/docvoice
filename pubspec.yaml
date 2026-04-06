@@ -28,7 +28,7 @@ dependencies:
   
   # AI & Logic
   google_generative_ai: ^0.4.7
-  flutter_dotenv: ^6.0.0
+
 
   # Shared Logic (Moved to Backend)
   # scribe_brain:
@@ -107,4 +107,4 @@ flutter:
     - assets/images/landing/
     - assets/models/
     - assets/hotwords/
-    # - .env
+
