@@ -16,7 +16,7 @@ import 'package:soutnote/shared/widgets/pattern_highlight_controller.dart';
 import '../core/ai/ai_regex_patterns.dart';
 import '../core/ai/text_processing_service.dart';
 import '../services/ai/ai_processing_service.dart';
-import '../services/windows_injector.dart';
+import '../services/desktop_injector.dart';
 // ⚡ Multimodal AI — Windows Pilot (Phase 1)
 import '../features/multimodal_ai/multimodal_ai_service.dart';
 import '../features/multimodal_ai/ai_studio_multimodal_service.dart';
@@ -827,8 +827,8 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     }
 
     try {
-      // Use smartInject: handles alwaysOnTop toggle + blur + Ctrl+V
-      await WindowsInjector().smartInject(cleanText);
+      // Use platform injector (Windows smart inject, macOS Cmd+V fallback)
+      await DesktopInjector.instance.copyAndInject(cleanText);
       
       // SET STATUS TO COPIED
       await _inboxService.updateStatus(widget.note.id, NoteStatus.copied);

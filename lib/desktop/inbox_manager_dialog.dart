@@ -137,7 +137,10 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => const ArchiveScreen(),
+        builder: (_) => ArchiveScreen(
+          archivedNotes: archivedNotes,
+          onClearAll: () {},
+        ),
       ),
     );
     if (!mounted) return;

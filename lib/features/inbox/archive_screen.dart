@@ -7,11 +7,15 @@ import 'package:flutter/foundation.dart';
 import 'dart:io' show Platform;
 import 'package:window_manager/window_manager.dart';
 
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:soutnote/core/providers/common_providers.dart';
+class ArchiveScreen extends StatelessWidget {
+  final List<NoteModel> archivedNotes;
+  final VoidCallback onClearAll;
 
-class ArchiveScreen extends ConsumerWidget {
-  const ArchiveScreen({super.key});
+  const ArchiveScreen({
+    super.key,
+    required this.archivedNotes,
+    required this.onClearAll,
+  });
 
   void _startDragging() {
     if (!kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
@@ -20,88 +24,70 @@ class ArchiveScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final archivedNotesAsync = ref.watch(inboxNoteRepositoryProvider).watchArchived();
-
-    return StreamBuilder<List<NoteModel>>(
-      stream: archivedNotesAsync,
-      builder: (context, snapshot) {
-        final notes = snapshot.data ?? [];
-        
-        return Scaffold(
-          backgroundColor: AppTheme.background,
-          appBar: AppBar(
-            title: GestureDetector(
-              onPanStart: (details) => _startDragging(),
-              child: Container(
-                color: Colors.transparent, // Ensure hit testing
-                width: double.infinity,
-                child: const Text("Archived Messages",
-                    style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
-            ),
-            backgroundColor: AppTheme.background,
-            leading: const BackButton(color: Colors.white),
-            actions: [
-              if (notes.isNotEmpty)
-                IconButton(
-                  icon: const Icon(Icons.delete_sweep, color: Colors.white70),
-                  tooltip: 'Clear All',
-                  onPressed: () async {
-                    final confirm = await showDialog<bool>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        backgroundColor: AppTheme.surface,
-                        title: const Text("Clear Archive?",
-                            style: TextStyle(color: Colors.white)),
-                        content: const Text(
-                            "This will permanently delete ALL archived messages.\nThis action cannot be undone.",
-                            style: TextStyle(color: Colors.white70)),
-                        actions: [
-                          TextButton(
-                              onPressed: () => Navigator.pop(ctx, false),
-                              child: const Text("Cancel")),
-                          TextButton(
-                              onPressed: () => Navigator.pop(ctx, true),
-                              child: const Text("Clear All",
-                                  style: TextStyle(color: Colors.red))),
-                        ],
-                      ),
-                    );
-
-                    if (confirm == true) {
-                      await ref.read(inboxNoteRepositoryProvider).sync(); // Or another clear method if available
-                      // For now, we don't have a 'clearAllArchived' in the interface.
-                      // We could implement it or just leave it for now.
-                      Navigator.pop(context);
-                    }
-                  },
-                ),
-            ],
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppTheme.background,
+      appBar: AppBar(
+        title: GestureDetector(
+          onPanStart: (details) => _startDragging(),
+          child: Container(
+            color: Colors.transparent, // Ensure hit testing
+            width: double.infinity,
+            child: const Text("Archived Messages", style: TextStyle(fontWeight: FontWeight.bold)),
           ),
-          body: Builder(
-            builder: (context) {
-              if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (notes.isEmpty) {
-                return const Center(
-                  child: Text(
-                    "No archived messages yet.",
-                    style: TextStyle(color: Colors.white54),
+        ),
+        backgroundColor: AppTheme.background,
+        leading: const BackButton(color: Colors.white),
+        actions: [
+          if (archivedNotes.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.delete_sweep, color: Colors.white70),
+              tooltip: 'Clear All',
+              onPressed: () async {
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    backgroundColor: AppTheme.surface,
+                    title: const Text("Clear Archive?", style: TextStyle(color: Colors.white)),
+                    content: const Text(
+                      "This will permanently delete ALL archived messages.\nThis action cannot be undone.", 
+                      style: TextStyle(color: Colors.white70)
+                    ),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, true), 
+                        child: const Text("Clear All", style: TextStyle(color: Colors.red))
+                      ),
+                    ],
                   ),
                 );
-              }
-              return ListView.builder(
+
+                if (confirm == true) {
+                  onClearAll();
+                  Navigator.pop(context);
+                }
+              },
+            ),
+        ],
+      ),
+      body: archivedNotes.isEmpty
+          ? const Center(
+              child: Text(
+                "No archived messages yet.",
+                style: TextStyle(color: Colors.white54),
+              )
+            )
+          : ListView.builder(
               padding: const EdgeInsets.all(16),
-              itemCount: notes.length,
+              itemCount: archivedNotes.length,
               itemBuilder: (context, index) {
-                final note = notes[index];
+                final note = archivedNotes[index];
 
                 // Date Header Logic
                 bool showHeader = true;
                 if (index > 0) {
-                  final prev = notes[index - 1];
+                  final prev = archivedNotes[index - 1];
                   if (DateHelper.isSameDay(prev.createdAt, note.createdAt)) {
                     showHeader = false;
                   }
@@ -114,21 +100,20 @@ class ArchiveScreen extends ConsumerWidget {
                       Padding(
                         padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
                         child: Text(
-                          DateHelper.formatGroupingDate(note.createdAt)
-                              .toUpperCase(),
+                          DateHelper.formatGroupingDate(note.createdAt).toUpperCase(),
                           style: const TextStyle(
-                              color: AppTheme.accent,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                              letterSpacing: 1.2),
+                            color: AppTheme.accent,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                            letterSpacing: 1.2
+                          ),
                         ),
                       ),
                     Card(
                       margin: const EdgeInsets.only(bottom: 12),
                       color: AppTheme.surface.withOpacity(0.6),
                       child: ListTile(
-                        contentPadding:
-                            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         leading: const Icon(Icons.archive, color: Colors.white30),
                         title: Text(note.title,
                             style: const TextStyle(
@@ -145,12 +130,9 @@ class ArchiveScreen extends ConsumerWidget {
                                 style: const TextStyle(color: Colors.white30)),
                             const SizedBox(height: 4),
                             const Row(children: [
-                              Icon(Icons.check_circle_outline,
-                                  size: 12, color: Colors.white30),
+                              Icon(Icons.check_circle_outline, size: 12, color: Colors.white30),
                               SizedBox(width: 4),
-                              Text("Used & Archived",
-                                  style: TextStyle(
-                                      color: Colors.white30, fontSize: 10)),
+                              Text("Used & Archived", style: TextStyle(color: Colors.white30, fontSize: 10)),
                             ])
                           ],
                         ),
@@ -159,11 +141,7 @@ class ArchiveScreen extends ConsumerWidget {
                   ],
                 );
               },
-            );
-            },
-          ),
-        );
-      },
+            ),
     );
   }
 }

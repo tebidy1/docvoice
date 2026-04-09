@@ -1,14 +1,11 @@
 import 'dart:io' show Platform;
-
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:soutnote/features/auth/login_screen.dart';
 import 'package:url_strategy/url_strategy.dart';
-
 import 'package:soutnote/desktop/desktop_app.dart'
     if (dart.library.html) 'package:soutnote/desktop/desktop_app_stub.dart';
-
+import 'package:soutnote/core/config/desktop_ui_override.dart';
 import 'package:soutnote/features/auth/login_screen.dart' as unified_login;
 import 'package:soutnote/features/home/home_screen.dart' as unified_mobile;
 import 'package:soutnote/features/splash/splash_screen.dart' as unified_splash;
@@ -32,8 +29,6 @@ void main() async {
   setPathUrlStrategy();
   WidgetsFlutterBinding.ensureInitialized();
 
-  
-
   // Initialization of core services via Riverpod
   final container = ProviderContainer();
 
@@ -45,8 +40,10 @@ void main() async {
     print('⚠️ Repository initialization error (non-blocking): $e');
   });
 
-  // Only set up window manager on desktop platforms
-  if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+  // Only set up window manager on desktop platforms when desktop UI is enabled
+  if (!kIsWeb &&
+      (Platform.isWindows || Platform.isLinux || Platform.isMacOS) &&
+      !kUseMobileUIOnDesktop) {
     try {
       await windowManager.ensureInitialized();
 
@@ -54,7 +51,7 @@ void main() async {
       final authService = container.read(authServiceProvider);
       final bool isAuth = await authService.isAuthenticated();
 
-      final Size initialSize = const Size(400, 750);
+      final Size initialSize = const Size(400, 720);
 
       WindowOptions windowOptions = WindowOptions(
         size: initialSize,
@@ -62,12 +59,12 @@ void main() async {
         backgroundColor: Colors.transparent,
         skipTaskbar: false,
         titleBarStyle: TitleBarStyle.hidden,
-        alwaysOnTop: false,
+        alwaysOnTop: isAuth,
       );
 
       windowManager.waitUntilReadyToShow(windowOptions, () async {
         await windowManager.setBackgroundColor(Colors.transparent);
-        await windowManager.setResizable(true);
+        await windowManager.setResizable(!isAuth);
         await windowManager.show();
         await windowManager.focus();
       });
@@ -90,8 +87,9 @@ class ScribeFlowApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Desktop check (Windows/MacOS/Linux and NOT Web)
-    final bool isDesktop =
+    final bool isDesktopPlatform =
         !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
+    final bool useDesktopUI = isDesktopPlatform && !kUseMobileUIOnDesktop;
 
     final currentTheme = ref.watch(themeServiceProvider);
     final authService = ref.watch(authServiceProvider);
@@ -178,16 +176,17 @@ class ScribeFlowApp extends ConsumerWidget {
         if (settings.name == '/home') {
           return MaterialPageRoute(
             builder: (context) => AuthGuard(
-              child: isDesktop
-                  ? const DesktopApp()
-                  : const unified_mobile.HomeScreen(),
+              // Always show the mobile HomeScreen; desktop UI is disabled when overridden.
+              child: const unified_mobile.HomeScreen(),
             ),
           );
         }
 
         if (settings.name == '/register') {
           return MaterialPageRoute(
-              builder: (context) => const desktop_register.RegisterScreen());
+              builder: (context) => useDesktopUI
+                  ? const desktop_register.RegisterScreen()
+                  : const desktop_register.RegisterScreen());
         }
 
         if (settings.name == '/qr-login') {
@@ -202,7 +201,7 @@ class ScribeFlowApp extends ConsumerWidget {
 
         if (settings.name == '/login') {
           return MaterialPageRoute(
-            builder: (context) => isDesktop
+            builder: (context) => useDesktopUI
                 ? const desktop_login.LoginScreen()
                 : const unified_login.LoginScreen(),
           );
@@ -217,11 +216,10 @@ class ScribeFlowApp extends ConsumerWidget {
               final isAuth = snapshot.data ?? false;
               if (isAuth) {
                 return AuthGuard(
-                    child: isDesktop
-                        ? const DesktopApp()
-                        : const unified_mobile.HomeScreen());
+                    // Use mobile HomeScreen even on desktop when override is active.
+                    child: const unified_mobile.HomeScreen());
               }
-              return isDesktop
+              return useDesktopUI
                   ? const desktop_login.LoginScreen()
                   : const unified_login.LoginScreen();
             },

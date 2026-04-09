@@ -72,7 +72,7 @@ class ApiService {
     } catch (e) {
       print('ApiService GET Error (raw): $e');
       print('ApiService GET Error type: ${e.runtimeType}');
-      throw _handleError(e);
+      throw _handleError(e, endpoint: endpoint);
     }
   }
 
@@ -94,7 +94,7 @@ class ApiService {
 
       return _handleResponse(response);
     } catch (e) {
-      throw _handleError(e);
+      throw _handleError(e, endpoint: endpoint);
     }
   }
 
@@ -114,7 +114,7 @@ class ApiService {
 
       return _handleResponse(response);
     } catch (e) {
-      throw _handleError(e);
+      throw _handleError(e, endpoint: endpoint);
     }
   }
 
@@ -149,7 +149,7 @@ class ApiService {
 
       return _handleResponse(response);
     } catch (e) {
-      throw _handleError(e);
+      throw _handleError(e, endpoint: endpoint);
     }
   }
 
@@ -194,7 +194,7 @@ class ApiService {
 
       return _handleResponse(response);
     } catch (e) {
-      throw _handleError(e);
+      throw _handleError(e, endpoint: endpoint);
     }
   }
 
@@ -305,15 +305,16 @@ class ApiService {
     }
   }
 
-  dynamic _handleError(dynamic error) {
+  dynamic _handleError(dynamic error, {String? endpoint}) {
     if (error is ApiException) {
       return error;
     }
 
     if (error.toString().contains('TimeoutException') ||
         error.toString().contains('timeout')) {
+      print('ApiService → Timeout error at $endpoint');
       return ApiException(
-          'Request timeout. The API server is not responding. Please try again.', 408);
+          'Request timeout at $endpoint. The API server is not responding. Please try again.', 408);
     }
 
     if (error.toString().contains('SocketException')) {

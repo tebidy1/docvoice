@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,6 +14,7 @@ import 'package:soutnote/shared/widgets/animated_record_button.dart';
 import 'package:soutnote/shared/widgets/listening_mode_view.dart';
 import 'package:soutnote/core/services/oracle_live_speech_service.dart';
 import 'package:soutnote/core/services/audio_recorder_service.dart';
+import 'package:soutnote/utils/window_manager_proxy.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/common_providers.dart';
@@ -42,6 +44,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   String _nativeTranscript = '';
   double _nativeAmplitude = -160.0;
 
+  // Floating window mode (desktop only)
+  bool _isFloating = false;
+
   // Screens list
   late final List<Widget> _screens;
 
@@ -56,6 +61,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   void _initSpeech() {
+    // macOS desktop build should skip native speech_to_text to avoid
+    // TCC speech permission crashes; use Oracle/streaming paths instead.
+    if (!kIsWeb && Platform.isMacOS) {
+      _speechEnabled = false;
+      return;
+    }
+
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       _speechEnabled = await _speechToText.initialize(
         onError: (errorNotification) {
@@ -90,7 +102,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final prefs = await SharedPreferences.getInstance();
     final sttEngine = prefs.getString('stt_engine_pref') ?? 'oracle_live';
 
-    if (sttEngine == 'system_native') {
+    // On macOS desktop we skip the native Speech API entirely to avoid
+    // TCC crashes; fall back to Oracle streaming instead.
+    if (!kIsWeb && Platform.isMacOS && sttEngine == 'system_native') {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Native speech not available on desktop; using Oracle'),
+        duration: Duration(seconds: 2),
+      ));
+      await prefs.setString('stt_engine_pref', 'oracle_live');
+      return _startRecording();
+    }
+
+    // Avoid native speech engine on macOS desktop; it triggers Apple Speech
+    // permission flow that crashes when not configured for desktop use.
+    if (sttEngine == 'system_native' &&
+        !(Platform.isMacOS && !kIsWeb)) {
       if (!_speechEnabled) {
         _speechEnabled = await _speechToText.initialize();
       }
@@ -281,6 +307,31 @@ cQBOFhw1ZkYvxx4A6HSNxyae
     }
   }
 
+  // ── Floating window helpers (desktop only) ──────────────────────────────
+  bool get _isDesktop =>
+      !kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux);
+
+  Future<void> _toggleFloating() async {
+    if (!_isDesktop) return;
+    await windowManager.ensureInitialized();
+
+    if (_isFloating) {
+      // Restore normal window
+      await windowManager.setAlwaysOnTop(false);
+      await windowManager.setTitleBarStyle(TitleBarStyle.normal);
+      setState(() => _isFloating = false);
+    } else {
+      // Shrink and pin
+      await windowManager.setSize(const Size(360, 520));
+      await windowManager.setAlwaysOnTop(true);
+      await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
+      await windowManager.setVisibleOnAllWorkspaces(true);
+      await windowManager.show();
+      await windowManager.focus();
+      setState(() => _isFloating = true);
+    }
+  }
+
   Future<void> _stopRecording() async {
     final prefs = await SharedPreferences.getInstance();
     final sttEngine = prefs.getString('stt_engine_pref') ?? 'oracle_live';
@@ -416,6 +467,53 @@ cQBOFhw1ZkYvxx4A6HSNxyae
                       return amp.current;
                     }
                   },
+                ),
+              ),
+
+            // Floating controls (desktop only)
+            if (_isDesktop)
+              Positioned(
+                top: 8,
+                right: 12,
+                child: Material(
+                  color: colorScheme.surface.withOpacity(0.85),
+                  borderRadius: BorderRadius.circular(12),
+                  elevation: 4,
+                  child: Row(
+                    children: [
+                      IconButton(
+                        tooltip: _isFloating ? 'Unpin window' : 'Pin floating',
+                        icon: Icon(
+                          _isFloating ? Icons.push_pin : Icons.push_pin_outlined,
+                          color: colorScheme.onSurface,
+                        ),
+                        onPressed: _toggleFloating,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+            if (_isDesktop && _isFloating)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onPanStart: (_) => windowManager.startDragging(),
+                  child: Container(
+                    height: 24,
+                    alignment: Alignment.center,
+                    child: Container(
+                      width: 48,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: colorScheme.onSurface.withOpacity(0.25),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
                 ),
               ),
           ],

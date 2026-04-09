@@ -10,6 +10,7 @@ import 'package:soutnote/core/services/auth_service.dart';
 import 'package:soutnote/desktop/desktop_app.dart'
     if (dart.library.html) 'package:soutnote/desktop/desktop_app_stub.dart';
 import 'package:soutnote/features/landing_page/landing_page.dart';
+import 'package:soutnote/core/config/desktop_ui_override.dart';
 
 import 'package:soutnote/features/landing_page/theme/app_theme.dart';
 import 'package:soutnote/shared/widgets/auth_guard.dart';
@@ -53,7 +54,6 @@ class _SplashScreenState extends State<SplashScreen>
     _start();
   }
 
-
   Future<void> _start() async {
     // We want the splash to run for AT LEAST 2.2 seconds (the animation length).
     // If the auth request takes longer, we will timeout after 2.5s maximum to avoid blocking the user.
@@ -87,16 +87,22 @@ class _SplashScreenState extends State<SplashScreen>
 
     final isDesktopPlatform =
         !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
+    final forceMobileUIOnDesktop =
+        isDesktopPlatform && kUseMobileUIOnDesktop;
 
     Widget destination;
 
     if (firstRun) {
       destination = const OnboardingScreen();
     } else if (isAuth) {
-      destination = isDesktopPlatform ? const DesktopApp() : const HomeScreen();
+      if (forceMobileUIOnDesktop) {
+        destination = const HomeScreen();
+      } else {
+        destination = isDesktopPlatform ? const DesktopApp() : const HomeScreen();
+      }
     } else {
-      // If unauthenticated: Desktop/Web go to Landing, Mobile goes to LoginScreen
-      if (isDesktopPlatform || kIsWeb) {
+      // If unauthenticated: Desktop/Web go to Landing unless mobile UI override is on
+      if ((isDesktopPlatform && !forceMobileUIOnDesktop) || kIsWeb) {
         destination = Theme(
           data: MedTheme.darkTheme,
           child: const Directionality(

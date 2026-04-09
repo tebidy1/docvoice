@@ -53,7 +53,7 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
     // Capture context before dispose invalidates it
     final ctx = context;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await WindowManagerHelper.collapseToPill(ctx);
+      await WindowManagerHelper.expandToSidebar(ctx);
     });
     super.dispose();
   }

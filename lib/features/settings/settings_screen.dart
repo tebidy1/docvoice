@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -31,6 +32,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // A/B Testing: Oracle Medical (default) vs Whisper Generic
   bool _useOracleWhisperModel =
       false; // false = Oracle Medical, true = Whisper Generic
+  bool _macCopyOnly = false; // macOS: copy without Cmd+V injection
 
   Map<String, dynamic>? _currentUser;
   bool _isFetchingProfile = true;
@@ -126,6 +128,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       _sttEnginePref = prefs.getString('stt_engine_pref') ?? 'oracle_live';
       _useOracleWhisperModel =
           prefs.getBool('oracle_use_whisper_model') ?? true;
+      _macCopyOnly = prefs.getBool('mac_copy_only_inject') ?? false;
     });
   }
 
@@ -334,6 +337,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
             ),
             const SizedBox(height: 24),
+
+            if (Platform.isMacOS) ...[
+              _buildSectionHeader(context, "Desktop Injection"),
+              Card(
+                child: SwitchListTile(
+                  title: const Text("Copy only (no Cmd+V)"),
+                  subtitle: const Text(
+                      "If enabled, the app copies text to clipboard and you paste manually. Disable to auto press Cmd+V."),
+                  value: _macCopyOnly,
+                  onChanged: (val) async {
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setBool('mac_copy_only_inject', val);
+                    if (mounted) setState(() => _macCopyOnly = val);
+                  },
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
 
             _buildSectionHeader(context, "Appearance"),
             Card(

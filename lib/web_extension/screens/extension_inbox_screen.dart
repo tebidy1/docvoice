@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:soutnote/core/models/note_model.dart';
-import 'package:soutnote/core/models/note_model_base.dart';
 import 'package:soutnote/shared/theme.dart';
 import 'package:soutnote/web_extension/services/extension_injection_service.dart';
 import 'package:soutnote/core/providers/common_providers.dart';
@@ -74,7 +73,10 @@ class ExtensionInboxScreenState extends ConsumerState<ExtensionInboxScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => const ArchiveScreen(),
+        builder: (_) => ArchiveScreen(
+          archivedNotes: [],
+          onClearAll: () {},
+        ),
       ),
     );
   }

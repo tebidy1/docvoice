@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:window_manager/window_manager.dart';
 import 'package:soutnote/core/models/inbox_note.dart';
 import 'package:soutnote/core/models/macro.dart';
-import '../services/windows_injector.dart'; // Desktop Injector
+import '../services/desktop_injector.dart'; // Cross-platform injector
 import '../services/inbox_service.dart';
 import 'inbox_note_detail_view.dart';
 import 'package:soutnote/shared/theme.dart'; // Import AppTheme
@@ -27,37 +26,41 @@ class InboxCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final bool isDraft = note.formattedText.isEmpty;
-    
+
     // Find applied template name
     // Primary: stored in note.title / patientName during processing
     // Secondary: stored in note.summary during auto-save
     // Fallback: lookup by macroId in quickMacros
     String? templateName = note.title;
-    if (templateName.isEmpty || ['Draft Note', 'Unknown Patient', 'Untitled'].contains(templateName)) {
+    if (templateName.isEmpty ||
+        ['Draft Note', 'Unknown Patient', 'Untitled'].contains(templateName)) {
       templateName = note.summary;
     }
 
-    if ((templateName == null || templateName.isEmpty) && quickMacros.isNotEmpty) {
+    if ((templateName == null || templateName.isEmpty) &&
+        quickMacros.isNotEmpty) {
       final macroId = note.appliedMacroId ?? note.suggestedMacroId;
       if (macroId != null) {
         final macro = quickMacros.where((m) => m.id == macroId).firstOrNull;
         templateName = macro?.trigger;
       }
     }
-    
+
     // Badge label: template name if valid, else "Draft"
     final String badgeLabel;
     if (note.status == NoteStatus.ready) {
       badgeLabel = 'Ready';
     } else if (note.status == NoteStatus.copied) {
       badgeLabel = 'Copied';
-    } else if (templateName != null && templateName.isNotEmpty && !['Draft Note', 'Unknown Patient', 'Untitled'].contains(templateName)) {
+    } else if (templateName != null &&
+        templateName.isNotEmpty &&
+        !['Draft Note', 'Unknown Patient', 'Untitled'].contains(templateName)) {
       // Show template name instead of "Processed"
       badgeLabel = templateName;
     } else {
       badgeLabel = 'Draft';
     }
-    
+
     // Primary Blue — matches login screen & light theme
     const Color primaryBlue = Color(0xFF00A5FE);
 
@@ -90,7 +93,8 @@ class InboxCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12, left: 16, right: 16),
       color: theme.colorScheme.surface,
       elevation: isDraft ? 2 : 4,
-      shadowColor: theme.brightness == Brightness.dark ? Colors.black45 : Colors.black12,
+      shadowColor:
+          theme.brightness == Brightness.dark ? Colors.black45 : Colors.black12,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => _openDetailView(context),
@@ -106,28 +110,36 @@ class InboxCard extends StatelessWidget {
               // Card content
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                           CircleAvatar(
+                          CircleAvatar(
                             radius: 16,
                             backgroundColor: statusColor.withValues(alpha: 0.2),
-                            child: Icon(statusIcon, color: statusColor, size: 18),
+                            child:
+                                Icon(statusIcon, color: statusColor, size: 18),
                           ),
                           const SizedBox(width: 12),
+
+                          const SizedBox(),
                           Expanded(
                             child: Text(
                               _getNoteTitle(),
                               style: TextStyle(
-                                fontWeight: isDraft ? FontWeight.w500 : FontWeight.w600,
+                                fontWeight:
+                                    isDraft ? FontWeight.w500 : FontWeight.w600,
                                 color: isDraft
-                                    ? theme.colorScheme.onSurface.withValues(alpha: 0.5)
+                                    ? theme.colorScheme.onSurface
+                                        .withValues(alpha: 0.5)
                                     : theme.colorScheme.onSurface,
                                 fontSize: 16,
-                                fontStyle: isDraft ? FontStyle.italic : FontStyle.normal,
+                                fontStyle: isDraft
+                                    ? FontStyle.italic
+                                    : FontStyle.normal,
                               ),
                             ),
                           ),
@@ -136,53 +148,77 @@ class InboxCard extends StatelessWidget {
                             icon: Icon(
                               Icons.subdirectory_arrow_left,
                               color: isDraft
-                                  ? theme.colorScheme.onSurface.withValues(alpha: 0.2)
-                                  : theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                                  ? theme.colorScheme.onSurface
+                                      .withValues(alpha: 0.2)
+                                  : theme.colorScheme.onSurface
+                                      .withValues(alpha: 0.7),
                               size: 20,
                             ),
-                            tooltip: isDraft ? 'Select a template first' : 'Smart Copy & Inject',
-                            onPressed: isDraft ? null : () => _injectNote(context),
+                            tooltip: isDraft
+                                ? 'Select a template first'
+                                : 'Smart Copy & Inject',
+                            onPressed:
+                                isDraft ? null : () => _injectNote(context),
                           )
                         ],
                       ),
                       const SizedBox(height: 8),
                       Text(
                         (note.patientName.isNotEmpty &&
-                                !['Unknown Patient', 'Untitled', 'Draft Note'].contains(note.patientName))
+                                !['Unknown Patient', 'Untitled', 'Draft Note']
+                                    .contains(note.patientName))
                             ? (note.formattedText.isNotEmpty
-                                ? note.formattedText.replaceAll('\n', ' ').trim()
-                                : (note.summary ?? note.content.replaceAll('\n', ' ').trim()))
+                                ? note.formattedText
+                                    .replaceAll('\n', ' ')
+                                    .trim()
+                                : (note.summary ??
+                                    note.content.replaceAll('\n', ' ').trim()))
                             : (note.formattedText.isNotEmpty
-                                ? note.formattedText.replaceAll('\n', ' ').trim()
+                                ? note.formattedText
+                                    .replaceAll('\n', ' ')
+                                    .trim()
                                 : note.content.replaceAll('\n', ' ').trim()),
-                        maxLines: 2, overflow: TextOverflow.ellipsis,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: isDraft
-                              ? theme.colorScheme.onSurface.withValues(alpha: 0.4)
-                              : theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                              ? theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.4)
+                              : theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.7),
                           height: 1.4,
                         ),
                       ),
                       const SizedBox(height: 12),
                       Row(
                         children: [
-                          Icon(Icons.access_time, size: 12, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+                          Icon(Icons.access_time,
+                              size: 12,
+                              color: theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.5)),
                           const SizedBox(width: 4),
                           Text(
                             _formatTime(note.createdAt),
-                            style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.5), fontSize: 12),
+                            style: TextStyle(
+                                color: theme.colorScheme.onSurface
+                                    .withValues(alpha: 0.5),
+                                fontSize: 12),
                           ),
                           const Spacer(),
                           // Status badge pill
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
                               color: statusColor.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Text(
                               badgeLabel,
-                              style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                  color: statusColor,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold),
                             ),
                           ),
                         ],
@@ -201,10 +237,12 @@ class InboxCard extends StatelessWidget {
   String _getNoteTitle() {
     return 'NO-$noteNumber';
   }
+
   Future<void> _injectNote(BuildContext context) async {
-    final availableText = note.formattedText.isNotEmpty ? note.formattedText : note.rawText;
+    final availableText =
+        note.formattedText.isNotEmpty ? note.formattedText : note.rawText;
     final textToInject = TextProcessingService.applySmartCopy(availableText);
-    
+
     if (textToInject.isEmpty) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -215,19 +253,19 @@ class InboxCard extends StatelessWidget {
       }
       return;
     }
-    
-    // Use smartInject: handles alwaysOnTop toggle + blur + Ctrl+V
-    await WindowsInjector().smartInject(textToInject);
-    
+
+    // Use smartInject (Windows) or macOS copy+Cmd+V fallback
+    await DesktopInjector.instance.copyAndInject(textToInject);
+
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text("✅ Injected into EMR",
-            style: TextStyle(color: Colors.white)),
+        content:
+            Text("✅ Injected into EMR", style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.green,
         duration: Duration(seconds: 2),
       ));
     }
-    
+
     // Mark as Copied
     try {
       await InboxService().updateStatus(note.id, NoteStatus.copied);

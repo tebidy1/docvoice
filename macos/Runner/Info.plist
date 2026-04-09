@@ -28,5 +28,12 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<!-- Privacy usage descriptions required for voice features on macOS -->
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>This app transcribes your microphone speech into secure notes.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Microphone access is needed to capture your voice for transcription.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Camera access is needed for QR login and scanning codes.</string>
 </dict>
 </plist>

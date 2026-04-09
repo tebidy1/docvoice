@@ -242,11 +242,13 @@ class InboxService {
 
   // Real-time Streams (Reactive + Polling)
   final _pendingNotesController = StreamController<List<NoteModel>>.broadcast();
-  Timer? _pollingTimer;
+  bool _isPolling = false;
+  bool _isRefreshing = false;
+  int _consecutiveErrors = 0;
 
   Stream<List<NoteModel>> watchPendingNotes() {
     // Start polling if not already started
-    if (_pollingTimer == null || !_pollingTimer!.isActive) {
+    if (!_isPolling) {
       _startPolling();
     }
     // Return the stream
@@ -254,6 +256,9 @@ class InboxService {
   }
 
   void _startPolling() async {
+    if (_isPolling) return;
+    _isPolling = true;
+
     // 1. Initial Instant Load from Cache
     try {
       final cachedNotes = await getPendingNotes(forceRefresh: false);
@@ -264,21 +269,40 @@ class InboxService {
       debugPrint('Cache load failed: $e');
     }
 
-    // 2. Fetch Fresh Data
-    _refreshPendingNotes();
-    
-    // 3. Start Polling
-    _pollingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      _refreshPendingNotes();
-    });
+    // 2. Start Sequential Polling Loop
+    _runPollingLoop();
+  }
+
+  Future<void> _runPollingLoop() async {
+    while (_isPolling) {
+      await _refreshPendingNotes();
+      
+      // Calculate delay with exponential backoff if errors occurred
+      // Base delay: 5s, max delay: 60s
+      int delaySeconds = 5;
+      if (_consecutiveErrors > 0) {
+        // 5s, 10s, 20s, 40s, 60s, 60s...
+        delaySeconds = (5 * (1 << (_consecutiveErrors - 1))).clamp(5, 60);
+        debugPrint('⚠️ Polling delayed by ${delaySeconds}s due to $_consecutiveErrors consecutive errors');
+      }
+      
+      await Future.delayed(Duration(seconds: delaySeconds));
+    }
   }
 
   Future<void> _refreshPendingNotes() async {
+     if (_isRefreshing) return;
+     _isRefreshing = true;
+     
      try {
        final notes = await getPendingNotes(forceRefresh: true);
        _pendingNotesController.add(notes);
+       _consecutiveErrors = 0; // Reset error count on success
      } catch (e) {
-       debugPrint('Error refreshing pending notes: $e');
+       _consecutiveErrors++;
+       debugPrint('Error refreshing pending notes (Attempt $_consecutiveErrors): $e');
+     } finally {
+       _isRefreshing = false;
      }
   }
 
