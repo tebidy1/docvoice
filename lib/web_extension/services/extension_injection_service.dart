@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'dart:js_interop';
-import 'dart:js_interop_unsafe';
 import '../../core/ai/text_processing_service.dart';
+import 'extension_injection_service_stub.dart'
+    if (dart.library.js_interop) 'extension_injection_service_web.dart';
 
 enum InjectionStatus {
   success,
@@ -31,7 +31,7 @@ class ExtensionInjectionService {
         message: "No clean text to copy. All lines appear to be placeholders.",
       );
     }
-    
+
     if (cleanText.isEmpty) {
       return InjectionResult(
         status: InjectionStatus.failed,
@@ -47,26 +47,7 @@ class ExtensionInjectionService {
     }
 
     // 3. Try Smart Inject (Web Extension Only)
-    bool injected = false;
-    if (kIsWeb) {
-      try {
-        // Access the global window.scribeflow object defined in extension_interop.js
-        final scribeflow = globalContext['scribeflow'];
-        if (scribeflow != null) {
-          final jsObj = scribeflow as JSObject;
-          // Call injectTextToActiveTab(cleanText)
-          final promise =
-              jsObj.callMethod('injectTextToActiveTab'.toJS, cleanText.toJS)
-                  as JSPromise;
-          final result = await promise.toDart;
-          injected = (result as JSBoolean).toDart;
-        } else {
-             debugPrint("Injection failed: window.scribeflow is null. Ensure extension_interop.js is loaded.");
-        }
-      } catch (e) {
-        debugPrint("Injection failed: $e");
-      }
-    }
+    final injected = await tryInject(cleanText);
 
     // 4. Determine final result
     if (injected) {
@@ -75,17 +56,17 @@ class ExtensionInjectionService {
         message: "✅ Injected & Clean Copied",
       );
     } else {
-       if (kIsWeb) {
-           return InjectionResult(
-            status: InjectionStatus.copiedOnly,
-            message: "✅ Clean Text Copied (Injection failed)",
-          );
-       } else {
-           return InjectionResult(
-            status: InjectionStatus.copiedOnly,
-            message: "✅ Clean Text Copied",
-          );
-       }
+      if (kIsWeb) {
+        return InjectionResult(
+          status: InjectionStatus.copiedOnly,
+          message: "✅ Clean Text Copied (Injection failed)",
+        );
+      } else {
+        return InjectionResult(
+          status: InjectionStatus.copiedOnly,
+          message: "✅ Clean Text Copied",
+        );
+      }
     }
   }
 }
