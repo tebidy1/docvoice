@@ -110,4 +110,3 @@ flutter:
     - assets/images/landing/
     - assets/models/
     - assets/hotwords/
-    - .env

@@ -1,9 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import '../../../lib/core/dto/enhanced_dto_mapper.dart';
 import '../../../lib/core/dto/mapping_utils.dart';
-import '../../../lib/core/dto/mapping_error_reporter.dart';
 import '../../../lib/core/interfaces/dto_mapper.dart';
-import '../../../lib/core/error/app_error.dart';
 
 void main() {
   group('Enhanced DTO Mapper Tests', () {

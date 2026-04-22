@@ -3,7 +3,7 @@
 /// Tests secure token storage, retrieval, validation, and management functionality.
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scribeflow/core/core.dart';
+import 'package:soutnote/core/core.dart';
 
 void main() {
   group('TokenManager', () {

@@ -6,7 +6,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:mockito/annotations.dart';
-import 'package:scribeflow/core/core.dart';
+import 'package:soutnote/core/core.dart';
 
 // Generate mocks
 @GenerateMocks([TokenManager])

@@ -1,8 +1,6 @@
-import 'dart:math';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scribeflow/core/core.dart';
-import 'package:scribeflow/models/macro.dart';
-import 'package:scribeflow/models/user.dart';
+import 'package:soutnote/core/core.dart';
+import 'package:soutnote/models/macro.dart';
 
 /// Mock implementation of AbstractRepository for testing
 class MockMacroRepository extends AbstractRepository<Macro> {
@@ -125,11 +123,9 @@ class MockCacheManager<T> implements CacheManager<T> {
 void main() {
   group('Repository Pattern Tests', () {
     late MockMacroRepository repository;
-    late MockCacheManager<Macro> cacheManager;
     
     setUp(() {
       repository = MockMacroRepository();
-      cacheManager = MockCacheManager<Macro>();
     });
     
     test('BaseRepository CRUD operations work correctly', () async {
