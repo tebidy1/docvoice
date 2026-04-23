@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/auth_service.dart';
+import '../data/repositories/auth_service.dart';
 
 
 class AuthGuard extends StatefulWidget {
@@ -53,4 +53,6 @@ class _AuthGuardState extends State<AuthGuard> {
     );
   }
 }
+
+
 

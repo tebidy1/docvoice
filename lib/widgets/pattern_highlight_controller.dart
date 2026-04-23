@@ -68,3 +68,5 @@ class PatternHighlightController extends TextEditingController {
     return TextSpan(style: parentStyle, children: children);
   }
 }
+
+

@@ -239,3 +239,4 @@ class ConstantGenerator<T> extends Generator<T> {
     return value;
   }
 }
+

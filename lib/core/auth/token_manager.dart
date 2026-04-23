@@ -6,7 +6,7 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import '../models/api_models.dart';
+import '../core/entities/api_models.dart';
 import '../error/api_exceptions.dart';
 
 /// Token storage keys
@@ -294,3 +294,4 @@ class TokenManager {
     }
   }
 }
+

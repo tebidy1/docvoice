@@ -401,3 +401,5 @@ class _PrecisionRingsPainter extends CustomPainter {
   @override
   bool shouldRepaint(_PrecisionRingsPainter oldDelegate) => true;
 }
+
+

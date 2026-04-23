@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../services/auth_service.dart';
+import '../data/repositories/auth_service.dart';
 
 class AdminGuard extends StatefulWidget {
   final Widget child;
@@ -65,3 +65,5 @@ class _AdminGuardState extends State<AdminGuard> {
     );
   }
 }
+
+

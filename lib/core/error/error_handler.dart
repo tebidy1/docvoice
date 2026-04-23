@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 import 'app_error.dart';
-import '../../services/api_service.dart';
+import '../../data/repositories/api_service.dart';
 
 /// Error handling strategy
 enum ErrorStrategy {
@@ -211,3 +211,4 @@ extension ErrorHandlerExtension<T> on Future<T> {
     );
   }
 }
+

@@ -1,10 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'lib/services/api_service.dart';
+import 'lib/data/repositories/api_service.dart';
 import 'lib/core/di/service_locator.dart';
-import 'lib/core/interfaces/macro_repository.dart';
-import 'lib/core/interfaces/inbox_note_repository.dart';
+import 'lib/core/repositories/macro_repository.dart';
+import 'lib/core/repositories/inbox_note_repository.dart';
 
 /// اختبار بسيط للتحقق من الاتصال مع الباك اند
 void main() async {

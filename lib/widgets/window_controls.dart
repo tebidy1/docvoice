@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../utils/window_manager_proxy.dart';
+import '../platform/utils/window_manager_proxy.dart';
 
 class WindowControls extends StatefulWidget {
   final Color? backgroundColor;
@@ -136,4 +136,6 @@ class _WindowControlsState extends State<WindowControls> {
     );
   }
 }
+
+
 

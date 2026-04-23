@@ -7,3 +7,5 @@ abstract class PairingRepository {
   Future<Map<String, dynamic>> claimPairing(String pairingId,
       {String? deviceName});
 }
+
+

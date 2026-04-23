@@ -2,21 +2,21 @@
 /// This file provides a single import point for all core functionality
 
 // Interfaces
-export 'interfaces/base_repository.dart';
-export 'interfaces/abstract_repository.dart';
-export 'interfaces/base_service.dart';
-export 'interfaces/dto_mapper.dart';
-export 'interfaces/cache_strategy.dart';
-export 'interfaces/macro_repository.dart';
-export 'interfaces/inbox_note_repository.dart';
-export 'interfaces/user_repository.dart';
-export 'interfaces/audio_repository.dart';
-export 'interfaces/settings_repository.dart';
-export 'interfaces/audio_service.dart';
-export 'interfaces/realtime_service.dart';
-export 'interfaces/settings_service.dart';
-export 'interfaces/offline_service.dart';
-export 'interfaces/auth_service.dart';
+export '../data/interfaces/base_repository.dart';
+export '../data/interfaces/abstract_repository.dart';
+export '../data/interfaces/base_service.dart';
+export '../data/interfaces/dto_mapper.dart';
+export '../data/interfaces/cache_strategy.dart';
+export '../data/interfaces/macro_repository.dart';
+export '../data/interfaces/inbox_note_repository.dart';
+export '../data/interfaces/user_repository.dart';
+export '../data/interfaces/audio_repository.dart';
+export '../data/interfaces/settings_repository.dart';
+export '../data/interfaces/audio_service.dart';
+export '../data/interfaces/realtime_service.dart';
+export '../data/interfaces/settings_service.dart';
+export '../data/interfaces/offline_service.dart';
+export '../data/interfaces/auth_service.dart';
 
 // DTOs
 export 'dto/macro_dto.dart';
@@ -25,8 +25,8 @@ export 'dto/user_dto.dart';
 export 'dto/user_settings_dto.dart';
 
 // Models
-export 'models/audio_models.dart';
-export 'models/api_models.dart';
+export 'core/entities/audio_models.dart';
+export 'core/entities/api_models.dart';
 
 // API Client
 export 'api/api_client.dart';
@@ -41,7 +41,7 @@ export 'repositories/cached_macro_repository.dart';
 export 'repositories/api_inbox_note_repository.dart';
 
 // Service Implementations
-export 'services/audio_service_impl.dart';
+export 'data/repositories/audio_service_impl.dart';
 
 // DTO Mappers
 export 'dto/enhanced_dto_mapper.dart';

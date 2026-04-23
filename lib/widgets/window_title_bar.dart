@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../utils/window_manager_proxy.dart';
+import '../platform/utils/window_manager_proxy.dart';
 import 'window_controls.dart';
 
 class WindowTitleBar extends StatelessWidget {
@@ -96,4 +96,6 @@ class WindowTitleBar extends StatelessWidget {
     );
   }
 }
+
+
 

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
-import 'services/oci_request_signer.dart';
+import 'data/repositories/oci_request_signer.dart';
 
 class OciCredentials {
   final String tenancyId;
@@ -77,3 +77,5 @@ cQBOFhw1ZkYvxx4A6HSNxyae
     print("Error: $e");
   }
 }
+
+
