@@ -3,7 +3,7 @@ import 'package:window_manager/window_manager.dart';
 import '../../data/repositories/admin_service.dart';
 import '../../core/entities/company.dart';
 import '../../core/entities/user.dart';
-import '../../widgets/window_title_bar.dart';
+import '../widgets/window_title_bar.dart';
 import 'users_list_screen.dart';
 
 class CompanyDetailScreen extends StatefulWidget {

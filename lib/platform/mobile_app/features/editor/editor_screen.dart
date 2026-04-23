@@ -11,8 +11,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 // App Widgets & Services
-import '../../../../widgets/pattern_highlight_controller.dart';
-import '../../../../widgets/processing_overlay.dart';
+import '../../../../presentation/widgets/pattern_highlight_controller.dart';
+import '../../../../presentation/widgets/processing_overlay.dart';
 import '../../core/theme.dart';
 import '../../models/note_model.dart';
 import '../../services/inbox_service.dart';

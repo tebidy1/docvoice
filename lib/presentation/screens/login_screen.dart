@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../data/repositories/auth_service.dart';
 import '../../platform/utils/window_manager_proxy.dart';
-import '../../widgets/window_controls.dart';
+import '../widgets/window_controls.dart';
 import 'qr_login_screen.dart'; // Added for desktop QR login
 
 class LoginScreen extends StatefulWidget {

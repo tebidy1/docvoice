@@ -12,7 +12,7 @@
 ///
 /// PLATFORM SUPPORT: Works identically on all platforms.
 ///   Mobile uses ArabicScrubber for PII anonymization.
-///   presentation/presentation/widgets/Web skip scrubbing (handled server-side instead).
+///   presentation/widgets/Web skip scrubbing (handled server-side instead).
 ///
 /// PHASE 3 READY:
 ///   When Backend Prompt Management is implemented, only THIS

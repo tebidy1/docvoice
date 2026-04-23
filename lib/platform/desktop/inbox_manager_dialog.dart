@@ -13,8 +13,8 @@ import 'package:intl/intl.dart' hide TextDirection;
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../mobile_app/features/inbox/archive_screen.dart';
-import '../../widgets/animated_record_button.dart';
-import '../../widgets/listening_mode_view.dart';
+import '../../presentation/widgets/animated_record_button.dart';
+import '../../presentation/widgets/listening_mode_view.dart';
 
 class InboxManagerDialog extends StatefulWidget {
   final Future<void> Function()? onRecordTap;

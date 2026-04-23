@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/entities/company.dart';
 import '../../data/repositories/admin_service.dart';
 import '../../data/repositories/auth_service.dart';
-import '../../widgets/create_company_dialog.dart';
-import '../../widgets/window_title_bar.dart';
+import '../widgets/create_company_dialog.dart';
+import '../widgets/window_title_bar.dart';
 import 'company_detail_screen.dart';
 
 class CompaniesListScreen extends StatefulWidget {

@@ -32,8 +32,8 @@ import 'data/repositories/api_service.dart';
 import 'data/repositories/auth_service.dart';
 import 'data/repositories/theme_service.dart';
 import 'platform/utils/window_manager_proxy.dart';
-import 'widgets/admin_guard.dart';
-import 'widgets/auth_guard.dart';
+import 'presentation/widgets/admin_guard.dart';
+import 'presentation/widgets/auth_guard.dart';
 
 void main() async {
   setPathUrlStrategy();

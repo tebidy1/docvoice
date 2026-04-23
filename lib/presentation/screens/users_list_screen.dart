@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/entities/user.dart';
 import '../../data/repositories/admin_service.dart';
 import '../../data/repositories/auth_service.dart';
-import '../../widgets/create_user_dialog.dart';
-import '../../widgets/window_title_bar.dart';
+import '../widgets/create_user_dialog.dart';
+import '../widgets/window_title_bar.dart';
 import 'user_detail_screen.dart';
 
 class UsersListScreen extends StatefulWidget {

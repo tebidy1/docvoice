@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../data/repositories/admin_service.dart';
 import '../../platform/utils/window_manager_helper.dart';
 import '../../data/repositories/auth_service.dart';
-import '../../widgets/window_title_bar.dart';
+import '../widgets/window_title_bar.dart';
 import 'companies_list_screen.dart';
 import 'users_list_screen.dart';
 

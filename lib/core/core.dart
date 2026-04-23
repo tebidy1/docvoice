@@ -2,56 +2,32 @@
 /// This file provides a single import point for all core functionality
 
 // Interfaces
-export '../data/interfaces/base_repository.dart';
-export '../data/interfaces/abstract_repository.dart';
-export '../data/interfaces/base_service.dart';
-export '../data/interfaces/dto_mapper.dart';
-export '../data/interfaces/cache_strategy.dart';
-export '../data/interfaces/macro_repository.dart';
-export '../data/interfaces/inbox_note_repository.dart';
-export '../data/interfaces/user_repository.dart';
-export '../data/interfaces/audio_repository.dart';
-export '../data/interfaces/settings_repository.dart';
-export '../data/interfaces/audio_service.dart';
-export '../data/interfaces/realtime_service.dart';
-export '../data/interfaces/settings_service.dart';
-export '../data/interfaces/offline_service.dart';
-export '../data/interfaces/auth_service.dart';
+export 'repositories/base_repository.dart';
+export 'repositories/abstract_repository.dart';
+export 'repositories/base_service.dart';
+export 'repositories/dto_mapper.dart';
+export 'repositories/cache_strategy.dart';
+export 'repositories/macro_repository.dart';
+export 'repositories/inbox_note_repository.dart';
+export 'repositories/user_repository.dart';
+export 'repositories/audio_repository.dart';
+export 'repositories/settings_repository.dart';
+export 'repositories/audio_service.dart';
+export 'repositories/realtime_service.dart';
+export 'repositories/settings_service.dart';
+export 'repositories/offline_service.dart';
+export 'repositories/auth_service.dart';
 
-// DTOs
-export 'dto/macro_dto.dart';
-export 'dto/inbox_note_dto.dart';
-export 'dto/user_dto.dart';
-export 'dto/user_settings_dto.dart';
+// Entities
+export 'entities/app_theme.dart';
 
-// Models
-export 'core/entities/audio_models.dart';
-export 'core/entities/api_models.dart';
-
-// API Client
-export 'api/api_client.dart';
+// Network
+export 'network/api_client.dart';
 
 // Authentication
 export 'auth/token_manager.dart';
 
-// Repository Implementations
-export 'repositories/api_macro_repository.dart';
-export 'repositories/local_macro_repository.dart';
-export 'repositories/cached_macro_repository.dart';
-export 'repositories/api_inbox_note_repository.dart';
-
-// Service Implementations
-export 'data/repositories/audio_service_impl.dart';
-
-// DTO Mappers
-export 'dto/enhanced_dto_mapper.dart';
-export 'dto/mapping_utils.dart';
-export 'dto/mapping_error_reporter.dart';
-
-// Configuration
-export 'config/api_config.dart';
-
-// Dependency Injection
+// DI
 export 'di/service_locator.dart';
 
 // Error Handling
@@ -61,6 +37,6 @@ export 'error/api_exceptions.dart';
 export 'error/api_error_handler.dart';
 export 'error/error_recovery_manager.dart';
 
-// Testing (only export in test environment)
+// Testing
 export 'testing/property_test.dart';
 export 'testing/generators.dart';

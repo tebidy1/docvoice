@@ -9,8 +9,8 @@ import 'package:uuid/uuid.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:web/web.dart' as web;
 import 'dart:js_interop';
-import '../../../presentation/presentation/widgets/animated_record_button.dart';
-import '../../../presentation/presentation/widgets/listening_mode_view.dart';
+import '../../../presentation/widgets/animated_record_button.dart';
+import '../../../presentation/widgets/listening_mode_view.dart';
 
 class ExtensionHomeScreen extends StatefulWidget {
   const ExtensionHomeScreen({super.key});

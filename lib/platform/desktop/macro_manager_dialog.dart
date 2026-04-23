@@ -9,7 +9,7 @@ import '../../core/entities/app_theme.dart';
 import '../../data/repositories/theme_service.dart';
 import 'dart:async';
 import 'macro_settings_dialog.dart';
-import '../../widgets/user_profile_header.dart';
+import '../../presentation/widgets/user_profile_header.dart';
 
 class MacroManagerDialog extends StatefulWidget {
   const MacroManagerDialog({super.key});

@@ -12,7 +12,7 @@ import '../../../../platform/desktop/desktop_app.dart'
     if (dart.library.html) '../../../../platform/desktop/desktop_app_stub.dart';
 import '../../../../presentation/screens/landing_page/landing_page.dart';
 import '../../../../presentation/screens/landing_page/theme/app_theme.dart';
-import '../../../../widgets/auth_guard.dart';
+import '../../../../presentation/widgets/auth_guard.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../auth/login_screen.dart';
 import '../home/home_screen.dart';
@@ -94,7 +94,7 @@ class _SplashScreenState extends State<SplashScreen>
     } else if (isAuth) {
       destination = isDesktopPlatform ? const DesktopApp() : const HomeScreen();
     } else {
-      // If unauthenticated: presentation/presentation/widgets/Web go to Landing, Mobile goes to LoginScreen
+      // If unauthenticated: presentation/widgets/Web go to Landing, Mobile goes to LoginScreen
       if (isDesktopPlatform || kIsWeb) {
         destination = Theme(
           data: MedTheme.darkTheme,

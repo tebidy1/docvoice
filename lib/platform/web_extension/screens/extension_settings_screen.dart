@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // Screens
-import '../../presentation/presentation/screens/admin_dashboard_screen.dart';
-import '../../presentation/presentation/screens/secure_pairing_screen.dart';
+import '../../presentation/screens/admin_dashboard_screen.dart';
+import '../../presentation/screens/secure_pairing_screen.dart';
 import '../../mobile_app/features/auth/qr_scanner_screen.dart';
 import '../../mobile_app/features/settings/company_settings_screen.dart';
 import '../../mobile_app/features/settings/macro_manager_screen.dart';

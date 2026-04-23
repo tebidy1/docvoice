@@ -15,8 +15,8 @@ import '../settings/settings_screen.dart';
 import '../../services/audio_recording_service.dart';
 import 'package:uuid/uuid.dart';
 import '../../../utils/permission_fixer.dart';
-import '../../../../widgets/animated_record_button.dart';
-import '../../../../widgets/listening_mode_view.dart';
+import '../../../../presentation/widgets/animated_record_button.dart';
+import '../../../../presentation/widgets/listening_mode_view.dart';
 import '../../../../data/repositories/oracle_live_speech_service.dart';
 import '../../../../data/repositories/audio_recorder_service.dart';
 
@@ -158,7 +158,7 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
 
-      // ── presentation/presentation/widgets/Mobile: Oracle works directly ──────────────────────────
+      // ── presentation/widgets/Mobile: Oracle works directly ──────────────────────────
       final hasPermission = await _streamRecorder.hasPermission();
       if (!hasPermission) {
         if (mounted) {

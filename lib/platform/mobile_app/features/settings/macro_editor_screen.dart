@@ -3,7 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/theme.dart';
 import '../../services/macro_service.dart';
-import '../../../../widgets/pattern_highlight_controller.dart';
+import '../../../../presentation/widgets/pattern_highlight_controller.dart';
 
 class MacroEditorScreen extends StatefulWidget {
   final MacroModel? macro; // If null, we are creating a new one

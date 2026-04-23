@@ -141,7 +141,7 @@ class MacroService {
 
   Future<String> getMacrosAsJson() async {
     // Web implementation - basic stub or mimic IO behavior if needed.
-    // ConnectivityServer usually runs on presentation/presentation/widgets/Mobile, so this might not be called.
+    // ConnectivityServer usually runs on presentation/widgets/Mobile, so this might not be called.
     return "[]";
   }
 }

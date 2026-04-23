@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 
-import 'mobile_app/features/auth/login_screen.dart' as unified_login;
-import 'web_extension/presentation/presentation/screens/extension_home_screen.dart'; // New Entry Point
-import 'mobile_app/data/repositories/websocket_service.dart' as unified_ws;
+import 'platform/mobile_app/features/auth/login_screen.dart' as unified_login;
+import 'platform/web_extension/screens/extension_home_screen.dart'; // New Entry Point
+import 'platform/mobile_app/data/repositories/websocket_service.dart' as unified_ws;
 import 'core/entities/app_theme.dart';
 import 'data/repositories/auth_service.dart';
 import 'data/repositories/theme_service.dart';
-import 'presentation/presentation/widgets/auth_guard.dart';
+import 'presentation/widgets/auth_guard.dart';
 
 void main() {
   // 1. Run App Immediately (Don't await anything here to ensure UI shows up)

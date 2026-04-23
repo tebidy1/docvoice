@@ -12,8 +12,8 @@ import '../../data/repositories/keyboard_service.dart';
 import '../../data/repositories/macro_service.dart';
 import 'macro_explorer_dialog.dart';
 import '../utils/window_manager_helper.dart';
-import '../../widgets/processing_overlay.dart';
-import '../../widgets/pattern_highlight_controller.dart';
+import '../../presentation/widgets/processing_overlay.dart';
+import '../../presentation/widgets/pattern_highlight_controller.dart';
 // ✅ Core AI Brain — centralized services (Phase 1 refactor)
 import '../../core/ai/ai_regex_patterns.dart';
 import '../../core/ai/text_processing_service.dart';

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 import '../../data/repositories/admin_service.dart';
 import '../../core/entities/user.dart';
-import '../../widgets/window_title_bar.dart';
+import '../widgets/window_title_bar.dart';
 
 class UserDetailScreen extends StatefulWidget {
   final int userId;
