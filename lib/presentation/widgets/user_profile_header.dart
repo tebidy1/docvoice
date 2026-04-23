@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../data/repositories/auth_service.dart';
+import '../../data/repositories/auth_service.dart';
 
 class UserProfileHeader extends StatefulWidget {
   const UserProfileHeader({super.key});
