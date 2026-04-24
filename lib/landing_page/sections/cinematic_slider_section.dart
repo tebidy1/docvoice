@@ -272,3 +272,9 @@ class _WipeClipper extends CustomClipper<Rect> {
   @override
   bool shouldReclip(_WipeClipper oldClipper) => oldClipper.progress != progress;
 }
+
+
+
+
+
+

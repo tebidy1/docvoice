@@ -106,3 +106,9 @@ class WindowManagerHelper {
     await windowManager.setOpacity(opacity);
   }
 }
+
+
+
+
+
+

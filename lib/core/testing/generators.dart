@@ -1,8 +1,8 @@
 import 'dart:math';
 import 'property_test.dart';
-import '../../models/macro.dart';
-import '../../models/inbox_note.dart';
-import '../../models/user.dart';
+import 'package:soutnote/core/entities/macro.dart';
+import 'package:soutnote/core/entities/inbox_note.dart';
+import 'package:soutnote/core/entities/user.dart';
 
 /// Domain-specific generators for ScribeFlow
 class ScribeFlowGenerators {
@@ -328,3 +328,8 @@ class SettingsDataGenerator extends Generator<Map<String, dynamic>> {
     };
   }
 }
+
+
+
+
+

@@ -36,12 +36,12 @@ final dioProvider = Provider<Dio>((ref) {
 
 // DataSource Provider
 final pairingDataSourceProvider = Provider<PairingRemoteDataSource>((ref) {
-  return PairingRemoteDataSource(ref.watch(dioProvider));
+  return PairingRemoteDataSource(ref.read(dioProvider));
 });
 
 // Repository Provider
 final pairingRepositoryProvider = Provider<PairingRepository>((ref) {
-  return PairingRepositoryImpl(ref.watch(pairingDataSourceProvider));
+  return PairingRepositoryImpl(ref.read(pairingDataSourceProvider));
 });
 
 // State Notifier for Pairing
@@ -71,5 +71,5 @@ class PairingNotifier extends StateNotifier<AsyncValue<PairingSession?>> {
 
 final pairingProvider =
     StateNotifierProvider<PairingNotifier, AsyncValue<PairingSession?>>((ref) {
-  return PairingNotifier(ref.watch(pairingRepositoryProvider));
+  return PairingNotifier(ref.read(pairingRepositoryProvider));
 });

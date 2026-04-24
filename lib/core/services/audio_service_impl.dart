@@ -7,16 +7,16 @@ import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as path;
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../services/api_service.dart';
+import '../network/api_client.dart';
 import '../config/api_config.dart';
 import '../error/app_error.dart';
-import '../interfaces/audio_service.dart';
-import '../interfaces/base_service.dart';
+import '../repositories/audio_service.dart';
+import '../repositories/base_service.dart';
 import '../models/audio_models.dart';
 
 /// Concrete implementation of AudioService for handling audio upload and transcription
 class AudioServiceImpl extends AudioService with ServiceLifecycle {
-  final ApiService _apiService = ApiService();
+  final ApiClient _ApiClient = ApiClient();
   final Map<String, StreamController<TranscriptionStatus>>
       _transcriptionStreams = {};
   final Map<String, StreamController<UploadProgress>> _uploadStreams = {};
@@ -41,7 +41,7 @@ class AudioServiceImpl extends AudioService with ServiceLifecycle {
   @override
   Future<void> initialize() async {
     ensureNotDisposed();
-    await _apiService.init();
+    await _ApiClient.init();
     markInitialized();
   }
 
@@ -196,7 +196,7 @@ class AudioServiceImpl extends AudioService with ServiceLifecycle {
       ));
 
       // Create inbox note via API
-      final response = await _apiService.post('/inbox-notes', body: noteData);
+      final response = await _ApiClient.post('/inbox-notes', body: noteData);
 
       // Update progress to completed
       progressController.add(UploadProgress(
@@ -278,7 +278,7 @@ class AudioServiceImpl extends AudioService with ServiceLifecycle {
 
     try {
       // Get the inbox note which contains the transcription
-      final response = await _apiService.get('/inbox-notes/$audioId');
+      final response = await _ApiClient.get('/inbox-notes/$audioId');
 
       if (response['success'] == true || response['status'] == true) {
         final data = response['data'] ?? response['payload'];
@@ -357,7 +357,7 @@ class AudioServiceImpl extends AudioService with ServiceLifecycle {
 
     try {
       // Update the inbox note to indicate cancellation
-      await _apiService.patch('/inbox-notes/$audioId', body: {
+      await _ApiClient.patch('/inbox-notes/$audioId', body: {
         'content': 'Transcription cancelled by user',
         'status': 'draft'
       });
@@ -391,7 +391,7 @@ class AudioServiceImpl extends AudioService with ServiceLifecycle {
         final fileName = path.basename(audioFile.path);
         final simulatedText = _generateSimulatedTranscription(fileName);
 
-        await _apiService.patch('/inbox-notes/$noteId', body: {
+        await _ApiClient.patch('/inbox-notes/$noteId', body: {
           'content': simulatedText,
           'original_text': simulatedText,
           'status': 'processed'
@@ -406,7 +406,7 @@ class AudioServiceImpl extends AudioService with ServiceLifecycle {
         print('Failed to simulate transcription: $e');
         // Update with error
         try {
-          await _apiService.patch('/inbox-notes/$noteId',
+          await _ApiClient.patch('/inbox-notes/$noteId',
               body: {'content': 'Transcription failed: $e', 'status': 'draft'});
 
           final controller = _transcriptionStreams[noteId];

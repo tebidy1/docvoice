@@ -49,3 +49,4 @@ void main() {
   file.writeAsStringSync(content);
   print('Fixed constants successfully');
 }
+

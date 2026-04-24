@@ -1,52 +1,30 @@
 /// Core module exports
 /// This file provides a single import point for all core functionality
 
-// Interfaces
-export 'interfaces/base_repository.dart';
-export 'interfaces/abstract_repository.dart';
-export 'interfaces/base_service.dart';
-export 'interfaces/dto_mapper.dart';
-export 'interfaces/cache_strategy.dart';
-export 'interfaces/macro_repository.dart';
-export 'interfaces/inbox_note_repository.dart';
-export 'interfaces/user_repository.dart';
-export 'interfaces/audio_repository.dart';
-export 'interfaces/settings_repository.dart';
-export 'interfaces/audio_service.dart';
-export 'interfaces/realtime_service.dart';
-export 'interfaces/settings_service.dart';
-export 'interfaces/offline_service.dart';
-export 'interfaces/auth_service.dart';
+// Repositories (Interfaces)
+export 'repositories/repositories.dart';
 
-// DTOs
-export 'dto/macro_dto.dart';
-export 'dto/inbox_note_dto.dart';
-export 'dto/user_dto.dart';
-export 'dto/user_settings_dto.dart';
+// Entities
+export 'entities/inbox_note.dart';
+export 'entities/macro.dart';
+export 'entities/user.dart';
+export 'entities/company.dart';
+export 'entities/app_theme.dart';
+export 'entities/smart_suggestion.dart';
 
-// Models
-export 'models/audio_models.dart';
-export 'models/api_models.dart';
+// Network (API Client)
+export 'network/api_client.dart';
 
-// API Client
-export 'api/api_client.dart';
+// Services
+export 'services/auth_service.dart';
+export 'services/audio_service_impl.dart';
 
 // Authentication
 export 'auth/token_manager.dart';
 
-// Repository Implementations
-export 'repositories/api_macro_repository.dart';
-export 'repositories/local_macro_repository.dart';
-export 'repositories/cached_macro_repository.dart';
-export 'repositories/api_inbox_note_repository.dart';
-
-// Service Implementations
-export 'services/audio_service_impl.dart';
-
-// DTO Mappers
-export 'dto/enhanced_dto_mapper.dart';
-export 'dto/mapping_utils.dart';
-export 'dto/mapping_error_reporter.dart';
+// Models (Shared/Base models)
+export 'models/audio_models.dart';
+export 'models/api_models.dart';
 
 // Configuration
 export 'config/api_config.dart';

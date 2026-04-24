@@ -46,3 +46,9 @@ class MultimodalAIResult {
       'success=$success, provider=$providerName, '
       'length=${formattedNote.length})';
 }
+
+
+
+
+
+

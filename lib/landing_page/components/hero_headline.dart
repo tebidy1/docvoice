@@ -160,3 +160,9 @@ class _AnimatedWord extends StatelessWidget {
     );
   }
 }
+
+
+
+
+
+

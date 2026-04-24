@@ -142,3 +142,9 @@ class GeminiTranscriptionHelper {
     };
   }
 }
+
+
+
+
+
+

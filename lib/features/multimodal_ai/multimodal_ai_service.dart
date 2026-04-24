@@ -66,3 +66,9 @@ abstract class MultimodalAIService {
   /// Example: "Google AI Studio (gemini-2.5-flash)"
   String get providerDisplayName;
 }
+
+
+
+
+
+

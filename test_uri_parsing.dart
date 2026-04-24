@@ -3,3 +3,4 @@ void main() {
   final uri = Uri.parse(urlStr);
   print('Parsed: \${uri.toString()}');
 }
+

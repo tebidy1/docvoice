@@ -115,3 +115,9 @@ class AIRegexPatterns {
   //   "tylenol"           -> "Acetaminophen (Paracetamol)"
   //   "vit d"             -> "Vitamin D"
 }
+
+
+
+
+
+

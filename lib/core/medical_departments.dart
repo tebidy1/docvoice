@@ -1,7 +1,7 @@
 // Re-export MedicalDepartment from the service
-export 'package:soutnote/services/medical_departments.dart';
+export 'package:soutnote/core/services/medical_departments.dart';
 
-import 'package:soutnote/services/medical_department_service.dart';
+import 'package:soutnote/core/services/medical_department_service.dart';
 
 /// @deprecated Use MedicalDepartmentService from medical_department_service.dart
 class MedicalDepartments {
@@ -24,3 +24,9 @@ class MedicalDepartments {
     return MedicalDepartmentService().getRelevantCategories(departmentId);
   }
 }
+
+
+
+
+
+

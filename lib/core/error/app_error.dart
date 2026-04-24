@@ -132,3 +132,8 @@ class UnknownError extends AppError {
     Map<String, dynamic>? context,
   }) : super(message, code: code, context: context);
 }
+
+
+
+
+

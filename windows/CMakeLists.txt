@@ -124,14 +124,19 @@ target_include_directories(whisper_bridge PRIVATE
 
 target_compile_features(whisper_bridge PUBLIC cxx_std_17)
 if(MSVC)
-    # ── Performance: unlock AVX2 SIMD and full speed optimizations ──
-    # These flags tell the MSVC code generator to emit AVX2/FMA instructions.
     target_compile_options(whisper_bridge PRIVATE
-        /O2          # Maximize speed (replaces Debug /Od)
-        /arch:AVX2   # Enable AVX2 + FMA SIMD (Intel Haswell+ / i7-1065G7)
-        /fp:fast     # Permit floating-point reassociation for speed
-        /Oi          # Enable compiler intrinsic functions
+        /arch:AVX2
+        /fp:fast
     )
+    # Use /O2 for Release, /O1 for Debug (to avoid /RTC1 conflict)
+    target_compile_options(whisper_bridge PRIVATE
+        $<$<CONFIG:Release>:/O2>
+        $<$<CONFIG:Profile>:/O2>
+        $<$<CONFIG:Debug>:/O1>
+    )
+    # Suppress runtime checks in Debug to allow optimization
+    string(REPLACE "/RTC1" "" CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}")
+    string(REPLACE "/RTC1" "" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
     # ── Suppress verbose whisper.cpp conversion warnings ──
     target_compile_options(whisper_bridge PRIVATE /wd4244 /wd4267 /wd4305 /wd4984)
 endif()

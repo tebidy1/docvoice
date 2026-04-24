@@ -38,13 +38,11 @@ void main() async {
   await dotenv.load(fileName: ".env");
 
   // Initialize API service first
-  final apiService = ApiService();
-  await apiService.init();
+  final apiClient = ApiClient();
+  await apiClient.init();
 
   // Initialize dependency injection with backend integration
   await ServiceLocator.initialize();
-
-
 
   // Only set up window manager on desktop platforms
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
@@ -158,7 +156,8 @@ class _ScribeFlowAppState extends State<ScribeFlowApp> {
               elevation: 2,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: currentTheme.borderColor.withValues(alpha: 0.4)),
+                side: BorderSide(
+                    color: currentTheme.borderColor.withValues(alpha: 0.4)),
               ),
             ),
             iconTheme: IconThemeData(

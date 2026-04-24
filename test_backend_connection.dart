@@ -1,10 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'lib/services/api_service.dart';
+import 'lib/core/network/api_client.dart';
 import 'lib/core/di/service_locator.dart';
-import 'lib/core/interfaces/macro_repository.dart';
-import 'lib/core/interfaces/inbox_note_repository.dart';
+import 'lib/core/repositories/repositories.dart';
 
 /// اختبار بسيط للتحقق من الاتصال مع الباك اند
 void main() async {
@@ -18,8 +17,8 @@ void main() async {
     print('✅ تم تحميل متغيرات البيئة');
 
     // تهيئة خدمة الـ API
-    final apiService = ApiService();
-    await apiService.init();
+    final apiClient = ApiClient();
+    await apiClient.init();
     print('✅ تم تهيئة خدمة الـ API');
 
     // تهيئة حاوي الحقن
@@ -29,7 +28,7 @@ void main() async {
     // اختبار 1: الوصول المباشر للـ API
     print('\n📡 اختبار 1: الوصول المباشر للـ API...');
     try {
-      final response = await apiService.get('/macros');
+      final response = await apiClient.get('/macros');
       print('✅ نجح الوصول للـ API');
       print('   الاستجابة: ${response['message'] ?? 'تم تحميل البيانات'}');
 
@@ -100,3 +99,4 @@ void main() async {
   // إنهاء البرنامج
   exit(0);
 }
+

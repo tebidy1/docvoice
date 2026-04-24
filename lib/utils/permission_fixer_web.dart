@@ -5,3 +5,9 @@ void openPermissionFixPage() {
   // Opens the index.html in a new tab
   html.window.open('index.html', '_blank');
 }
+
+
+
+
+
+

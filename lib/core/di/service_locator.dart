@@ -1,19 +1,9 @@
 import 'package:get_it/get_it.dart';
-import '../interfaces/audio_service.dart';
-import '../interfaces/realtime_service.dart';
-import '../interfaces/settings_service.dart';
-import '../interfaces/offline_service.dart';
-import '../interfaces/macro_repository.dart';
-import '../interfaces/inbox_note_repository.dart';
-import '../interfaces/user_repository.dart';
-import '../interfaces/cache_strategy.dart';
-import '../repositories/api_macro_repository.dart';
-import '../repositories/local_macro_repository.dart';
-import '../repositories/cached_macro_repository.dart';
-import '../repositories/api_inbox_note_repository.dart';
-import '../services/audio_service_impl.dart';
-import '../../services/api_service.dart';
-import '../../services/auth_service.dart';
+import 'package:soutnote/core/repositories/repositories.dart';
+import 'package:soutnote/core/network/api_client.dart';
+import 'package:soutnote/core/services/auth_service.dart';
+import 'package:soutnote/core/services/audio_service_impl.dart';
+import 'package:soutnote/data/repositories/repositories.dart';
 
 /// Service locator for dependency injection
 class ServiceLocator {
@@ -28,12 +18,12 @@ class ServiceLocator {
   /// Initialize all services
   static Future<void> initialize() async {
     // Register existing services
-    _getIt.registerSingleton<ApiService>(ApiService());
+    _getIt.registerSingleton<ApiClient>(ApiClient());
     _getIt.registerSingleton<AuthService>(AuthService());
     
     // Register repository implementations
     _getIt.registerLazySingleton<ApiMacroRepository>(() => ApiMacroRepository(
-      apiService: _getIt.get<ApiService>(),
+      ApiClient: _getIt.get<ApiClient>(),
     ));
     
     _getIt.registerLazySingleton<LocalMacroRepository>(() => LocalMacroRepository(
@@ -48,7 +38,7 @@ class ServiceLocator {
     
     // Register inbox note repository
     _getIt.registerLazySingleton<ApiInboxNoteRepository>(() => ApiInboxNoteRepository(
-      apiService: _getIt.get<ApiService>(),
+      ApiClient: _getIt.get<ApiClient>(),
     ));
     
     _getIt.registerLazySingleton<InboxNoteRepository>(() => _getIt.get<ApiInboxNoteRepository>());
@@ -56,16 +46,8 @@ class ServiceLocator {
     // Register audio service
     _getIt.registerLazySingleton<AudioService>(() => AudioServiceImpl());
     
-    // Register other repositories (will be implemented in later tasks)
-    // _getIt.registerLazySingleton<UserRepository>(() => ApiUserRepository());
-    
-    // Register services (will be implemented in later tasks)
-    // _getIt.registerLazySingleton<RealtimeService>(() => WebSocketRealtimeService());
-    // _getIt.registerLazySingleton<SettingsService>(() => SettingsServiceImpl());
-    // _getIt.registerLazySingleton<OfflineService>(() => OfflineServiceImpl());
-    
     // Initialize core services
-    await _getIt.get<ApiService>().init();
+    await _getIt.get<ApiClient>().init();
     await _getIt.get<AudioService>().initialize();
   }
   

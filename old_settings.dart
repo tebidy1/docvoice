@@ -1,4 +1,4 @@
-ï»¿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../screens/admin_dashboard_screen.dart';
@@ -522,7 +522,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                     ),
                     RadioListTile<String>(
-                      title: const Text("Î“Â£Â¿ Smart Magic Flow (Recommended)",
+                      title: const Text("G£¿ Smart Magic Flow (Recommended)",
                           style: TextStyle(color: Colors.amber)),
                       subtitle: const Text("Max speed! Audio maps directly to final formatted note. No intermediate step."),
                       value: 'gemini_oneshot',
@@ -536,7 +536,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         }
                       },
                     ),
-                    // A/B Testing Toggle Î“Ã‡Ã¶ only visible when Oracle is selected
+                    // A/B Testing Toggle GÇö only visible when Oracle is selected
                     if (_sttEnginePref == 'oracle_live') ...
                       [
                         const Divider(height: 1),
@@ -796,3 +796,4 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 }
+

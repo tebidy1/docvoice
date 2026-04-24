@@ -1,9 +1,20 @@
-/// Repository implementations for the ScribeFlow application
+/// Repository interfaces and core services for the ScribeFlow application
 /// 
-/// This module provides concrete implementations of the repository pattern
-/// for data access abstraction, supporting API, local storage, and cached
-/// data access strategies.
+/// This module provides abstract definitions of the repository pattern
+/// and core service interfaces for data access abstraction.
 
-export 'api_macro_repository.dart';
-export 'local_macro_repository.dart';
-export 'cached_macro_repository.dart';
+export 'abstract_repository.dart';
+export 'base_repository.dart';
+export 'inbox_note_repository.dart';
+export 'macro_repository.dart';
+export 'settings_repository.dart';
+export 'user_repository.dart';
+export 'audio_repository.dart';
+export 'cache_strategy.dart';
+export 'dto_mapper.dart';
+export 'audio_service.dart';
+export 'i_auth_service.dart';
+export 'realtime_service.dart';
+export 'settings_service.dart';
+export 'offline_service.dart';
+export 'base_service.dart';

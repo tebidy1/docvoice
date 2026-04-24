@@ -129,8 +129,8 @@ class _BackendIntegrationExampleState extends State<BackendIntegrationExample> {
     });
 
     try {
-      final apiService = ApiService();
-      await apiService.init();
+      final apiClient = ApiClient();
+      await apiClient.init();
 
       // Test 1: Check if we can reach the API
       setState(() {
@@ -138,7 +138,7 @@ class _BackendIntegrationExampleState extends State<BackendIntegrationExample> {
       });
 
       // Try to get macros (this should work even without auth for testing)
-      final macrosResponse = await apiService.get('/macros');
+      final macrosResponse = await apiClient.get('/macros');
 
       setState(() {
         _statusMessage = 'اختبار 1 نجح: تم الوصول للـ API بنجاح\n'
@@ -150,7 +150,7 @@ class _BackendIntegrationExampleState extends State<BackendIntegrationExample> {
         _statusMessage = 'اختبار 2: فحص ملاحظات الصندوق الوارد...';
       });
 
-      final notesResponse = await apiService.get('/inbox-notes');
+      final notesResponse = await apiClient.get('/inbox-notes');
 
       setState(() {
         _statusMessage = 'اختبار 2 نجح: تم الوصول لملاحظات الصندوق الوارد\n'
