@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../services/api_service.dart';
+import '../../../core/network/api_client.dart';
 import '../../core/ai/ai_prompt_constants.dart';
 
 class MacroModel {
@@ -11,7 +11,7 @@ class MacroModel {
   String content;
   bool isFavorite;
   String category;
-  
+
   // API-specific fields
   int? usageCount;
   DateTime? lastUsed;
@@ -20,8 +20,8 @@ class MacroModel {
   DateTime? createdAt;
 
   MacroModel({
-    required this.id, 
-    required this.trigger, 
+    required this.id,
+    required this.trigger,
     required this.content,
     this.isFavorite = false,
     this.category = 'General',
@@ -33,26 +33,26 @@ class MacroModel {
   });
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'trigger': trigger,
-    'content': content,
-    'isFavorite': isFavorite,
-    'category': category,
-    if (usageCount != null) 'usage_count': usageCount,
-    if (lastUsed != null) 'last_used': lastUsed?.toIso8601String(),
-    'is_ai_macro': isAiMacro,
-    if (aiInstruction != null) 'ai_instruction': aiInstruction,
-    if (createdAt != null) 'created_at': createdAt?.toIso8601String(),
-  };
+        'id': id,
+        'trigger': trigger,
+        'content': content,
+        'isFavorite': isFavorite,
+        'category': category,
+        if (usageCount != null) 'usage_count': usageCount,
+        if (lastUsed != null) 'last_used': lastUsed?.toIso8601String(),
+        'is_ai_macro': isAiMacro,
+        if (aiInstruction != null) 'ai_instruction': aiInstruction,
+        if (createdAt != null) 'created_at': createdAt?.toIso8601String(),
+      };
 
   // For API POST/PUT requests
   Map<String, dynamic> toApiJson() => {
-    'trigger': trigger,
-    'content': content,
-    'category': category,
-    'is_ai_macro': isAiMacro,
-    if (aiInstruction != null) 'ai_instruction': aiInstruction,
-  };
+        'trigger': trigger,
+        'content': content,
+        'category': category,
+        'is_ai_macro': isAiMacro,
+        if (aiInstruction != null) 'ai_instruction': aiInstruction,
+      };
 
   factory MacroModel.fromJson(Map<String, dynamic> json) {
     return MacroModel(
@@ -62,13 +62,16 @@ class MacroModel {
       isFavorite: json['isFavorite'] ?? json['is_favorite'] ?? false,
       category: json['category'] ?? "General",
       usageCount: json['usage_count'],
-      lastUsed: json['last_used'] != null ? DateTime.parse(json['last_used']) : null,
+      lastUsed:
+          json['last_used'] != null ? DateTime.parse(json['last_used']) : null,
       isAiMacro: json['is_ai_macro'] ?? false,
       aiInstruction: json['ai_instruction'],
-      createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']) : null,
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'])
+          : null,
     );
   }
-  
+
   // Factory for API responses
   factory MacroModel.fromApi(Map<String, dynamic> json) {
     return MacroModel(
@@ -78,10 +81,13 @@ class MacroModel {
       isFavorite: json['is_favorite'] ?? false,
       category: json['category'] ?? "General",
       usageCount: json['usage_count'] ?? 0,
-      lastUsed: json['last_used'] != null ? DateTime.parse(json['last_used']) : null,
+      lastUsed:
+          json['last_used'] != null ? DateTime.parse(json['last_used']) : null,
       isAiMacro: json['is_ai_macro'] ?? false,
       aiInstruction: json['ai_instruction'],
-      createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']) : DateTime.now(),
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'])
+          : DateTime.now(),
     );
   }
 }
@@ -90,7 +96,7 @@ class MacroService {
   static const String _storageKey = 'user_macros';
   static const String _lastSyncKey = 'macros_last_sync';
   static const String _migratedKey = 'macros_migrated_to_cloud';
-  
+
   final ApiClient _ApiClient = ApiClient();
 
   /// Get all macros - API first, cache fallback
@@ -99,72 +105,82 @@ class MacroService {
       // Try API first
       await _ApiClient.init();
       final response = await _ApiClient.get('/macros');
-      
+
       if (response['status'] == true && response['payload'] != null) {
         final payload = response['payload'];
         final List<dynamic> data = payload['data'] is List
             ? payload['data']
             : (payload is List ? payload : []);
-        
+
         final macros = data.map((json) => MacroModel.fromApi(json)).toList();
-        
+
         // --- NEW CLOUD AUTO-MIGRATION LOGIC ---
         // The backend might still have the old hardcoded legacy macros.
         // If we detect them, we need to wipe them from the user's account and re-seed the new AI ones.
         final legacyTriggers = [
-          '📝 SOAP Note', '🤒 Sick Leave', '📄 Medical Report', 
-          '🏥 Referral', '☢️ Radiology Req', '🩸 Diabetic Follow-up', 
-          '🧠 Neuro Exam', '🦴 Joint Exam'
+          '📝 SOAP Note',
+          '🤒 Sick Leave',
+          '📄 Medical Report',
+          '🏥 Referral',
+          '☢️ Radiology Req',
+          '🩸 Diabetic Follow-up',
+          '🧠 Neuro Exam',
+          '🦴 Joint Exam'
         ];
 
-        final hasLegacy = macros.any((m) => legacyTriggers.contains(m.trigger) && !m.isAiMacro);
-        
+        final hasLegacy = macros
+            .any((m) => legacyTriggers.contains(m.trigger) && !m.isAiMacro);
+
         if (hasLegacy) {
-          debugPrint("MacroService: Detected legacy macros in Cloud. Auto-migrating backend...");
-          
+          debugPrint(
+              "MacroService: Detected legacy macros in Cloud. Auto-migrating backend...");
+
           for (var m in macros) {
             if (legacyTriggers.contains(m.trigger) && !m.isAiMacro) {
-               if (m.id != null) {
-                  try {
-                    await _ApiClient.delete('/macros/${m.id}');
-                  } catch (e) {
-                    debugPrint("Failed to delete legacy macro ${m.id}: $e");
-                  }
-               }
+              if (m.id != null) {
+                try {
+                  await _ApiClient.delete('/macros/${m.id}');
+                } catch (e) {
+                  debugPrint("Failed to delete legacy macro ${m.id}: $e");
+                }
+              }
             }
           }
-          
+
           // Seed the new unified AI defaults
           await seedDefaultMacrosToCloud();
-          
+
           // Re-fetch clean macros from the backend
           return await getMacros();
         }
         // --- END AUTO-MIGRATION LOGIC ---
-        
+
         // Auto-add all missing defaults to cloud for existing users
         final defaults = _defaultMacros();
         for (final def in defaults) {
-          if (!macros.any((m) => m.trigger.trim().toUpperCase() == def.trigger.trim().toUpperCase())) {
-             debugPrint("MacroService: '${def.trigger}' missing in Cloud. Auto-adding...");
-             try {
-               await addMacro(def);
-               macros.add(def);
-             } catch (e) {
-               debugPrint("Failed to add ${def.trigger} to Cloud: $e");
-             }
+          if (!macros.any((m) =>
+              m.trigger.trim().toUpperCase() ==
+              def.trigger.trim().toUpperCase())) {
+            debugPrint(
+                "MacroService: '${def.trigger}' missing in Cloud. Auto-adding...");
+            try {
+              await addMacro(def);
+              macros.add(def);
+            } catch (e) {
+              debugPrint("Failed to add ${def.trigger} to Cloud: $e");
+            }
           }
         }
         // Cache for offline use
         await _cacheLocally(macros);
         await _updateLastSync();
-        
+
         return macros;
       }
     } catch (e) {
       debugPrint("API failed, using cache: $e");
     }
-    
+
     // Fallback to cache
     return await _getFromCache();
   }
@@ -173,8 +189,9 @@ class MacroService {
   Future<void> addMacro(MacroModel macro) async {
     try {
       await _ApiClient.init();
-      final response = await _ApiClient.post('/macros', body: macro.toApiJson());
-      
+      final response =
+          await _ApiClient.post('/macros', body: macro.toApiJson());
+
       if (response['status'] == true) {
         // Refresh from API to get server-assigned ID
         await getMacros();
@@ -191,10 +208,12 @@ class MacroService {
   /// Update existing macro
   Future<void> updateMacro(MacroModel updated) async {
     try {
-      if (updated.id is int) { // API ID
+      if (updated.id is int) {
+        // API ID
         await _ApiClient.init();
-        final response = await _ApiClient.put('/macros/${updated.id}', body: updated.toApiJson());
-        
+        final response = await _ApiClient.put('/macros/${updated.id}',
+            body: updated.toApiJson());
+
         if (response['status'] == true) {
           await getMacros(); // Refresh
         }
@@ -222,25 +241,26 @@ class MacroService {
   /// Toggle Favorite Status
   Future<void> toggleFavorite(dynamic id) async {
     try {
-       if (id is int) { // API ID
-         await _ApiClient.init();
-         // Attempt to use dedicated endpoint if available, otherwise rely on local update + PUT
-         // But for now, we will optimistically update local and try PATCH
-         try {
-            await _ApiClient.patch('/macros/$id/toggle-favorite');
-         } catch (_) {
-            // Fallback if endpoint missing? Assume updateMacro helps.
-         }
-         await getMacros();
-       } else {
-         // Local
-         final macros = await _getFromCache();
-         final index = macros.indexWhere((m) => m.id == id);
-         if (index != -1) {
-           macros[index].isFavorite = !macros[index].isFavorite;
-           await _cacheLocally(macros);
-         }
-       }
+      if (id is int) {
+        // API ID
+        await _ApiClient.init();
+        // Attempt to use dedicated endpoint if available, otherwise rely on local update + PUT
+        // But for now, we will optimistically update local and try PATCH
+        try {
+          await _ApiClient.patch('/macros/$id/toggle-favorite');
+        } catch (_) {
+          // Fallback if endpoint missing? Assume updateMacro helps.
+        }
+        await getMacros();
+      } else {
+        // Local
+        final macros = await _getFromCache();
+        final index = macros.indexWhere((m) => m.id == id);
+        if (index != -1) {
+          macros[index].isFavorite = !macros[index].isFavorite;
+          await _cacheLocally(macros);
+        }
+      }
     } catch (e) {
       debugPrint("Toggle favorite failed: $e");
     }
@@ -275,12 +295,12 @@ class MacroService {
     await prefs.remove(_migratedKey);
     await seedDefaultMacrosToCloud();
   }
-  
+
   /// Seed default macros to cloud (for all users)
   Future<void> seedDefaultMacrosToCloud() async {
     try {
       final defaults = _defaultMacros();
-      
+
       for (final macro in defaults) {
         try {
           await addMacro(macro);
@@ -289,7 +309,7 @@ class MacroService {
           debugPrint("Failed to seed ${macro.trigger}: $e");
         }
       }
-      
+
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_migratedKey, true);
     } catch (e) {
@@ -301,11 +321,11 @@ class MacroService {
   Future<void> migrateLocalToCloud() async {
     final prefs = await SharedPreferences.getInstance();
     final alreadyMigrated = prefs.getBool(_migratedKey) ?? false;
-    
+
     if (!alreadyMigrated) {
       debugPrint("Migrating local macros to cloud...");
       final localMacros = await _getFromCache();
-      
+
       for (final macro in localMacros) {
         try {
           await addMacro(macro);
@@ -313,32 +333,33 @@ class MacroService {
           debugPrint("Migration failed for ${macro.trigger}: $e");
         }
       }
-      
+
       await prefs.setBool(_migratedKey, true);
       debugPrint("Migration complete");
     }
   }
 
   // === Private Helper Methods ===
-  
+
   Future<List<MacroModel>> _getFromCache() async {
     final prefs = await SharedPreferences.getInstance();
     final String? data = prefs.getString(_storageKey);
-    
+
     if (data == null) {
       // No cache - return defaults and cache them
       final defaults = _defaultMacros();
       await _cacheLocally(defaults);
       return defaults;
     }
-    
+
     try {
       final List<dynamic> decoded = jsonDecode(data);
       final macros = decoded.map((e) => MacroModel.fromJson(e)).toList();
-      
+
       // Auto-upgrade legacy cache: if we detect the old hardcoded "📝 SOAP Note", replace with new AI Brain defaults.
       if (macros.any((m) => m.trigger == '📝 SOAP Note' && !m.isAiMacro)) {
-        debugPrint("MacroService: Detected legacy macros in cache. Auto-upgrading to AI Brain defaults.");
+        debugPrint(
+            "MacroService: Detected legacy macros in cache. Auto-upgrading to AI Brain defaults.");
         final defaults = _defaultMacros();
         await _cacheLocally(defaults);
         return defaults;
@@ -347,25 +368,28 @@ class MacroService {
       // Auto-upgrade: make sure all defaults exist for users who already have the new defaults
       final defaults = _defaultMacros();
       for (final def in defaults) {
-        if (!macros.any((m) => m.trigger.trim().toUpperCase() == def.trigger.trim().toUpperCase())) {
-          debugPrint("MacroService: '${def.trigger}' missing in cache. Auto-upgrading...");
+        if (!macros.any((m) =>
+            m.trigger.trim().toUpperCase() ==
+            def.trigger.trim().toUpperCase())) {
+          debugPrint(
+              "MacroService: '${def.trigger}' missing in cache. Auto-upgrading...");
           macros.add(def);
         }
       }
       await _cacheLocally(macros);
-      
+
       return macros;
     } catch (e) {
       return _defaultMacros();
     }
   }
-  
+
   Future<void> _cacheLocally(List<MacroModel> macros) async {
     final prefs = await SharedPreferences.getInstance();
     final String data = jsonEncode(macros.map((e) => e.toJson()).toList());
     await prefs.setString(_storageKey, data);
   }
-  
+
   Future<void> _updateLastSync() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_lastSyncKey, DateTime.now().toIso8601String());
@@ -430,15 +454,10 @@ class MacroService {
         trigger: 'INSURANCE',
         category: 'Admin',
         isFavorite: false,
-        content: 'Rewrite the note to emphasize medical necessity, making it suitable for insurance approval. Ensure justification for any tests, procedures, and medications is clearly documented and aligned with the reported symptoms and diagnosis.',
+        content:
+            'Rewrite the note to emphasize medical necessity, making it suitable for insurance approval. Ensure justification for any tests, procedures, and medications is clearly documented and aligned with the reported symptoms and diagnosis.',
         isAiMacro: true,
       ),
     ];
   }
 }
-
-
-
-
-
-

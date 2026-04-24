@@ -5,12 +5,12 @@ import 'package:window_manager/window_manager.dart';
 
 import '../../platform/desktop/qr_pairing_dialog.dart';
 
-import '../../models/app_theme.dart';
-import '../../services/api_service.dart';
+import '../../core/entities/app_theme.dart';
+import '../../core/network/api_client.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/connectivity_server.dart';
 import '../../core/services/theme_service.dart';
-import '../../utils/window_manager_helper.dart';
+import '../../core/utils/window_manager_helper.dart';
 import 'admin_dashboard_screen.dart';
 import 'company_settings_dialog.dart';
 import '../../core/medical_departments.dart';

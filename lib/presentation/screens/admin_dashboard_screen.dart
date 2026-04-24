@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/services/admin_service.dart';
-import '../../utils/window_manager_helper.dart';
+import '../../core/utils/window_manager_helper.dart';
 import '../../core/services/auth_service.dart';
 import '../widgets/window_title_bar.dart';
 import 'companies_list_screen.dart';

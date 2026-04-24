@@ -7,21 +7,21 @@ import 'package:path_provider/path_provider.dart';
 import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
 
-import '../models/app_theme.dart';
-import '../models/inbox_note.dart'; // Import NoteModel and NoteStatus
-import '../screens/settings_dialog.dart'; // Import Settings Dialog
-import '../services/audio_recorder_service.dart';
-import '../services/audio_chunker_service.dart';
-import '../services/connectivity_server.dart';
-import '../services/inbox_service.dart';
-import '../services/theme_service.dart';
-import '../services/whisper_asset_service.dart';
-import '../services/whisper_isolate_service.dart';
-import '../utils/window_manager_helper.dart';
+import '../../core/entities/app_theme.dart';
+import '../../core/entities/inbox_note.dart';
+import '../../presentation/screens/settings_dialog.dart';
+import '../../core/services/audio_recorder_service.dart';
+import '../../core/services/audio_chunker_service.dart';
+import '../../core/services/connectivity_server.dart';
+import '../../core/services/inbox_service.dart';
+import '../../core/services/theme_service.dart';
+import '../../core/services/whisper_asset_service.dart';
+import '../../core/services/whisper_isolate_service.dart';
+import '../../core/utils/window_manager_helper.dart';
 import 'inbox_manager_dialog.dart';
 import 'inbox_note_detail_view.dart'; // Import Detail View for instant open
 import 'macro_manager_dialog.dart';
-import '../services/oracle_live_speech_service.dart';
+import '../../core/services/oracle_live_speech_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class DesktopApp extends StatefulWidget {
@@ -213,10 +213,11 @@ class _DesktopAppState extends State<DesktopApp> {
                 _isProcessing = true;
               });
             }
-            
+
             if (_oracleService != null && _oracleTranscriptFuture != null) {
               // 1. Push Detail Viewer IMMEDIATELY so user gets instant visual feedback.
-              final instantTextController = StreamController<String>.broadcast();
+              final instantTextController =
+                  StreamController<String>.broadcast();
 
               final tempNote = NoteModel()
                 ..id = 0
@@ -239,9 +240,11 @@ class _DesktopAppState extends State<DesktopApp> {
 
               // 2. Safely stop recorder in the background
               try {
-                 await _recorder.stopRecording().timeout(const Duration(milliseconds: 500));
+                await _recorder
+                    .stopRecording()
+                    .timeout(const Duration(milliseconds: 500));
               } catch (e) {
-                 print("AudioRecorder stop timeout/error ignored: $e");
+                print("AudioRecorder stop timeout/error ignored: $e");
               }
 
               // 3. Complete Oracle
@@ -249,16 +252,18 @@ class _DesktopAppState extends State<DesktopApp> {
                 // Send the correct STOP message for Oracle! It should probably just close the stream, but we wait for stopSession.
                 final text = await _oracleService!.stopSession();
                 if (text.isNotEmpty) {
-                   instantTextController.add(text);
-                   final savedNote = await _inboxService.addNote(text, patientName: 'Untitled', summary: null);
-                   tempNote.id = savedNote.id;
+                  instantTextController.add(text);
+                  final savedNote = await _inboxService.addNote(text,
+                      patientName: 'Untitled', summary: null);
+                  tempNote.id = savedNote.id;
                 } else {
-                   print("Warning: Oracle returned empty transcript");
-                   instantTextController.addError(Exception("No speech detected."));
+                  print("Warning: Oracle returned empty transcript");
+                  instantTextController
+                      .addError(Exception("No speech detected."));
                 }
               } catch (e) {
-                 print("Oracle Streaming Error: $e");
-                 instantTextController.addError(e);
+                print("Oracle Streaming Error: $e");
+                instantTextController.addError(e);
               } finally {
                 _oracleService = null;
                 _oracleTranscriptFuture = null;
@@ -268,8 +273,10 @@ class _DesktopAppState extends State<DesktopApp> {
               await dialogFuture;
               if (mounted) setState(() => _isProcessing = false);
             } else {
-               try { await _recorder.stopRecording(); } catch(_) {}
-               if (mounted) setState(() => _isProcessing = false);
+              try {
+                await _recorder.stopRecording();
+              } catch (_) {}
+              if (mounted) setState(() => _isProcessing = false);
             }
             return; // Skip standard WAV handling
           }
@@ -292,7 +299,7 @@ class _DesktopAppState extends State<DesktopApp> {
                 summary: null,
                 audioPath: oneShotPath,
               );
-              
+
               // Open detail view in One-Shot mode — user picks a template to trigger Gemini
               await showDialog(
                 context: context,
@@ -437,14 +444,18 @@ class _DesktopAppState extends State<DesktopApp> {
             // --- OFFLINE WHISPER FLOW ---
             await _startOfflineWhisperRecording();
           } else if (sttEngine == 'oracle_live') {
-             // ORACLE MULTIPLEXER
-             final useWhisper = prefs.getBool('oracle_use_whisper_model') ?? true;
-             final creds = OciCredentials(
-               tenancyId: 'ocid1.tenancy.oc1..aaaaaaaadt3eulxchu6ygrisqsai4z6qji5dyqiam7tgwgd6rrxe2wsocp2a',
-               userId: 'ocid1.user.oc1..aaaaaaaa3ykq2ykgaixlhze3yip5m3fxrsbkghnzecezym7c7neqk57fupdq',
-               fingerprint: 'a6:24:f0:9f:9a:f0:77:18:c5:85:2d:03:90:02:6d:c2',
-               compartmentId: 'ocid1.tenancy.oc1..aaaaaaaadt3eulxchu6ygrisqsai4z6qji5dyqiam7tgwgd6rrxe2wsocp2a',
-               privateKeyPem: '''-----BEGIN PRIVATE KEY-----
+            // ORACLE MULTIPLEXER
+            final useWhisper =
+                prefs.getBool('oracle_use_whisper_model') ?? true;
+            final creds = OciCredentials(
+              tenancyId:
+                  'ocid1.tenancy.oc1..aaaaaaaadt3eulxchu6ygrisqsai4z6qji5dyqiam7tgwgd6rrxe2wsocp2a',
+              userId:
+                  'ocid1.user.oc1..aaaaaaaa3ykq2ykgaixlhze3yip5m3fxrsbkghnzecezym7c7neqk57fupdq',
+              fingerprint: 'a6:24:f0:9f:9a:f0:77:18:c5:85:2d:03:90:02:6d:c2',
+              compartmentId:
+                  'ocid1.tenancy.oc1..aaaaaaaadt3eulxchu6ygrisqsai4z6qji5dyqiam7tgwgd6rrxe2wsocp2a',
+              privateKeyPem: '''-----BEGIN PRIVATE KEY-----
 MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC9aeoZKxpjh42c
 Gy5DFMUe/Qu9zn5e+jI2uFZ28liFl+K5vok6dUW/pG0H3htbNH03pdo2419nBZ5W
 6or6vFf7lnhHY8eTsZ8ZVXP7UG3yHV5hyG7e4iWCEQgOcprjjWDY9v2Rg5NIRi8V
@@ -472,53 +483,56 @@ PX/UnDv9wjrl95oGxuahSW3LfrrLXGdeN4KAL2IFMQLhghu7O3G72DHM3LboUWQm
 OONRokqHJyqd1n1fNXCCk8wUJJSAVzv3atnDtxP1Vs03yhwL6OkBnr+jyvRT/VSf
 cQBOFhw1ZkYvxx4A6HSNxyae
 -----END PRIVATE KEY-----''',
-             );
+            );
 
-             _oracleService = OracleLiveSpeechService(
-               credentials: creds,
-               model: useWhisper ? OracleSTTModel.whisperGeneric : OracleSTTModel.oracleMedical,
-               language: 'ar',
-               onError: (e) {
-                  print("Oracle Stream Error: $e");
-               },
-             );
+            _oracleService = OracleLiveSpeechService(
+              credentials: creds,
+              model: useWhisper
+                  ? OracleSTTModel.whisperGeneric
+                  : OracleSTTModel.oracleMedical,
+              language: 'ar',
+              onError: (e) {
+                print("Oracle Stream Error: $e");
+              },
+            );
 
-             final audioStream = await _recorder.startRecording();
-             _oracleTranscriptFuture = _oracleService!.startSession(audioStream);
+            final audioStream = await _recorder.startRecording();
+            _oracleTranscriptFuture = _oracleService!.startSession(audioStream);
 
-             if (mounted) {
-               setState(() {
-                 _isRecording = true;
-               });
-               _openRecordingDialog();
-             }
+            if (mounted) {
+              setState(() {
+                _isRecording = true;
+              });
+              _openRecordingDialog();
+            }
           } else if (sttEngine == 'gemini_oneshot') {
-             // --- GEMINI ONE-SHOT START: Record locally to M4A/FLAC, no streaming ---
-             final dir = await getTemporaryDirectory();
-             final ext = Platform.isWindows ? 'flac' : 'm4a';
-             final path = '${dir.path}/oneshot_${DateTime.now().millisecondsSinceEpoch}.$ext';
-             await _recorder.startRecordingCompressed(path);
-             _geminiOneShotPath = path;
-             print("Gemini One-Shot recording started at: $path");
-             if (mounted) {
-               setState(() {
-                 _isRecording = true;
-               });
-               _openRecordingDialog();
-             }
+            // --- GEMINI ONE-SHOT START: Record locally to M4A/FLAC, no streaming ---
+            final dir = await getTemporaryDirectory();
+            final ext = Platform.isWindows ? 'flac' : 'm4a';
+            final path =
+                '${dir.path}/oneshot_${DateTime.now().millisecondsSinceEpoch}.$ext';
+            await _recorder.startRecordingCompressed(path);
+            _geminiOneShotPath = path;
+            print("Gemini One-Shot recording started at: $path");
+            if (mounted) {
+              setState(() {
+                _isRecording = true;
+              });
+              _openRecordingDialog();
+            }
           } else {
-             // --- STANDARD GROQ WAV FLOW ---
-             // Get temp path
-             final dir = await getTemporaryDirectory();
-             final path = '${dir.path}/temp_recording.wav';
-             await _recorder.startRecordingToFile(path);
-             print("Recording started successfully to $path");
-             if (mounted) {
-               setState(() {
-                 _isRecording = true;
-               });
-               _openRecordingDialog();
-             }
+            // --- STANDARD GROQ WAV FLOW ---
+            // Get temp path
+            final dir = await getTemporaryDirectory();
+            final path = '${dir.path}/temp_recording.wav';
+            await _recorder.startRecordingToFile(path);
+            print("Recording started successfully to $path");
+            if (mounted) {
+              setState(() {
+                _isRecording = true;
+              });
+              _openRecordingDialog();
+            }
           }
         } catch (e) {
           print("Error recording: $e");
@@ -549,7 +563,8 @@ cQBOFhw1ZkYvxx4A6HSNxyae
     final sttEngine = prefs.getString('stt_engine_pref') ?? 'oracle_live';
     String? compressionLabel;
     if (sttEngine == 'gemini_oneshot') {
-      compressionLabel = Platform.isWindows ? 'FLAC / High Quality' : 'AAC / M4A';
+      compressionLabel =
+          Platform.isWindows ? 'FLAC / High Quality' : 'AAC / M4A';
     }
 
     await WindowManagerHelper.expandToSidebar(context);
@@ -574,7 +589,6 @@ cQBOFhw1ZkYvxx4A6HSNxyae
       await WindowManagerHelper.collapseToPill(context);
     }
   }
-
 
   // ============================================================
   // OFFLINE WHISPER (Local STT) Methods
@@ -666,7 +680,8 @@ cQBOFhw1ZkYvxx4A6HSNxyae
       if (mounted) {
         setState(() {
           _isRecording = false;
-          _isProcessing = false; // Reset mic button — NO MORE SPINNER ON THE MIC
+          _isProcessing =
+              false; // Reset mic button — NO MORE SPINNER ON THE MIC
         });
       }
 
@@ -675,17 +690,20 @@ cQBOFhw1ZkYvxx4A6HSNxyae
       _whisperRecordSub?.cancel();
       _whisperRecordSub = null;
       try {
-        await _recorder.stopRecording().timeout(const Duration(milliseconds: 500));
+        await _recorder
+            .stopRecording()
+            .timeout(const Duration(milliseconds: 500));
       } catch (e) {
         print('[OfflineWhisper] Recorder stop error (ignored): $e');
       }
       print('[OfflineWhisper] Step 1: Microphone stopped.');
 
       // 3. Open the Detail View IMMEDIATELY with a loading stream
-      //    The InboxNoteDetailView already has a built-in seconds counter + 
+      //    The InboxNoteDetailView already has a built-in seconds counter +
       //    cycling status messages ("Processing Note...", "Consulting AI...", etc.)
       //    It will show this loading state until we push the transcript into the stream.
-      print('[OfflineWhisper] Step 2: Opening detail view immediately (loading state)...');
+      print(
+          '[OfflineWhisper] Step 2: Opening detail view immediately (loading state)...');
 
       final instantTextController = StreamController<String>.broadcast();
       final tempNote = NoteModel()
@@ -719,14 +737,17 @@ cQBOFhw1ZkYvxx4A6HSNxyae
 
       // 5. Get transcript and push it into the stream → makes the text appear
       final transcript = _audioChunker?.fullTranscript ?? '';
-      print('[OfflineWhisper] Step 4: Full transcript: ${transcript.length} chars');
+      print(
+          '[OfflineWhisper] Step 4: Full transcript: ${transcript.length} chars');
       if (transcript.isNotEmpty) {
-        print('[OfflineWhisper] Preview: "${transcript.substring(0, transcript.length > 100 ? 100 : transcript.length)}"');
+        print(
+            '[OfflineWhisper] Preview: "${transcript.substring(0, transcript.length > 100 ? 100 : transcript.length)}"');
       }
 
       if (transcript.trim().isNotEmpty) {
         instantTextController.add(transcript);
-        await _inboxService.addNote(transcript, patientName: 'Untitled', summary: null);
+        await _inboxService.addNote(transcript,
+            patientName: 'Untitled', summary: null);
         print('[OfflineWhisper] ✅ Note saved to inbox');
       } else {
         print('[OfflineWhisper] ⚠️ No speech detected');
@@ -754,7 +775,6 @@ cQBOFhw1ZkYvxx4A6HSNxyae
       if (mounted) setState(() => _isProcessing = false);
     }
   }
-
 
   @override
   void dispose() {
@@ -810,14 +830,16 @@ cQBOFhw1ZkYvxx4A6HSNxyae
                                 boxShadow: theme.shadows, // From Theme
                               ),
                               child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 mainAxisSize: MainAxisSize.max,
                                 children: [
                                   // 1. Drag Handle (Far Left — Windows 11 style dots)
                                   _DragHandleButton(
                                     dotColor: theme.dragHandleColor,
                                     hoverColor: theme.hoverColor,
-                                    onDragStart: () => windowManager.startDragging(),
+                                    onDragStart: () =>
+                                        windowManager.startDragging(),
                                   ),
 
                                   const SizedBox(width: 4),
@@ -892,17 +914,26 @@ cQBOFhw1ZkYvxx4A6HSNxyae
                                         children: [
                                           _buildIconButton(
                                             icon: hasNew
-                                                ? Icons.mark_chat_unread_outlined
+                                                ? Icons
+                                                    .mark_chat_unread_outlined
                                                 : Icons.chat_bubble_outline,
                                             onTap: () async {
                                               setState(() =>
                                                   _lastViewedCount = count);
 
-                                              final prefs = await SharedPreferences.getInstance();
-                                              final sttEngine = prefs.getString('stt_engine_pref') ?? 'oracle_live';
+                                              final prefs =
+                                                  await SharedPreferences
+                                                      .getInstance();
+                                              final sttEngine = prefs.getString(
+                                                      'stt_engine_pref') ??
+                                                  'oracle_live';
                                               String? compressionLabel;
-                                              if (sttEngine == 'gemini_oneshot') {
-                                                compressionLabel = Platform.isWindows ? 'FLAC / High Quality' : 'AAC / M4A';
+                                              if (sttEngine ==
+                                                  'gemini_oneshot') {
+                                                compressionLabel =
+                                                    Platform.isWindows
+                                                        ? 'FLAC / High Quality'
+                                                        : 'AAC / M4A';
                                               }
 
                                               await WindowManagerHelper
@@ -915,15 +946,13 @@ cQBOFhw1ZkYvxx4A6HSNxyae
                                                     Colors.transparent,
                                                 builder: (context) =>
                                                     InboxManagerDialog(
-                                                      isRecording: _isRecording,
-                                                      isProcessing:
-                                                          _isProcessing,
-                                                      onRecordTap:
-                                                          _toggleRecording,
-                                                      recorderService:
-                                                          _recorder,
-                                                      compressionLabel: compressionLabel,
-                                                    ),
+                                                  isRecording: _isRecording,
+                                                  isProcessing: _isProcessing,
+                                                  onRecordTap: _toggleRecording,
+                                                  recorderService: _recorder,
+                                                  compressionLabel:
+                                                      compressionLabel,
+                                                ),
                                               );
                                               await WindowManagerHelper
                                                   .collapseToPill(context);
@@ -950,8 +979,7 @@ cQBOFhw1ZkYvxx4A6HSNxyae
                                               child: Container(
                                                 width: 10,
                                                 height: 10,
-                                                decoration:
-                                                    const BoxDecoration(
+                                                decoration: const BoxDecoration(
                                                   color: Color(0xFF00A5FE),
                                                   shape: BoxShape.circle,
                                                 ),
@@ -1028,7 +1056,8 @@ cQBOFhw1ZkYvxx4A6HSNxyae
   Widget _buildIconButton({
     required IconData icon,
     required VoidCallback onTap,
-    required String tooltip, // kept for backward compatibility if signature used elsewhere
+    required String
+        tooltip, // kept for backward compatibility if signature used elsewhere
     required Color color,
     required AppTheme theme,
   }) {
@@ -1128,9 +1157,12 @@ class _DotGridPainter extends CustomPainter {
     const r = 1.8; // dot radius
     // Fixed 2×3 grid: (left col x=3, right col x=9), rows y=2,9,16 (out of 18)
     const List<Offset> dots = [
-      Offset(2.5, 2),   Offset(9.5, 2),
-      Offset(2.5, 9),   Offset(9.5, 9),
-      Offset(2.5, 16),  Offset(9.5, 16),
+      Offset(2.5, 2),
+      Offset(9.5, 2),
+      Offset(2.5, 9),
+      Offset(9.5, 9),
+      Offset(2.5, 16),
+      Offset(9.5, 16),
     ];
     for (final d in dots) {
       canvas.drawCircle(d, r, paint);
@@ -1140,9 +1172,3 @@ class _DotGridPainter extends CustomPainter {
   @override
   bool shouldRepaint(_DotGridPainter old) => old.color != color;
 }
-
-
-
-
-
-

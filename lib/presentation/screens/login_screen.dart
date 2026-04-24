@@ -10,9 +10,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/auth/pairing/domain/entities/pairing_session.dart';
 import '../../features/auth/pairing/presentation/providers/pairing_provider.dart';
-import '../../services/api_service.dart';
+import '../../core/network/api_client.dart';
 import '../../core/services/auth_service.dart';
-import '../../utils/window_manager_proxy.dart';
+import '../../core/utils/window_manager_proxy.dart';
 
 /// Desktop login screen — shows credentials form + QR code side by side.
 /// QR code is generated automatically on screen open (like WhatsApp Web).

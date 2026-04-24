@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
-import '../../models/app_theme.dart';
+import '../../core/entities/app_theme.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/theme_service.dart';
-import '../../utils/window_manager_helper.dart';
+import '../../core/utils/window_manager_helper.dart';
 
 class CompanySettingsDialog extends StatefulWidget {
   const CompanySettingsDialog({super.key});

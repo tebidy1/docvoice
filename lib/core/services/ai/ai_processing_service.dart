@@ -21,12 +21,12 @@
 ///   PromptConfigRepository. All callers remain unchanged.
 /// ============================================================
 
-import '../../services/api_service.dart';
+import '../../network/api_client.dart';
 import '../../ai/ai_prompt_constants.dart';
 import '../macro_service_api.dart';
 import 'package:http/http.dart' as http;
 import '../../medical_departments.dart';
-import '../../services/department_service.dart';
+import '../department_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Defines the processing mode for the AI engine.

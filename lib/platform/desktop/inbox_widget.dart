@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import '../models/inbox_note.dart';
-import '../models/macro.dart';
-import '../services/inbox_service.dart';
-import '../services/macro_service.dart';
+import '../../core/entities/inbox_note.dart';
+import '../../core/entities/macro.dart';
+import '../../core/services/inbox_service.dart';
+import '../../core/services/macro_service.dart';
 import 'inbox_card.dart';
 
 class InboxWidget extends StatefulWidget {
@@ -118,7 +118,8 @@ class _InboxWidgetState extends State<InboxWidget> {
                 ),
                 border: Border(
                   left: BorderSide(
-                      color: const Color(0xFF00A5FE).withOpacity(0.3), width: 2),
+                      color: const Color(0xFF00A5FE).withOpacity(0.3),
+                      width: 2),
                 ),
               ),
               child: Column(
@@ -136,13 +137,14 @@ class _InboxWidgetState extends State<InboxWidget> {
                         ],
                       ),
                       border: Border(
-                        bottom:
-                            BorderSide(color: const Color(0xFF00A5FE).withOpacity(0.3)),
+                        bottom: BorderSide(
+                            color: const Color(0xFF00A5FE).withOpacity(0.3)),
                       ),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.inbox, color: Color(0xFF00A5FE), size: 24),
+                        const Icon(Icons.inbox,
+                            color: Color(0xFF00A5FE), size: 24),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Container(
@@ -230,8 +232,9 @@ class _InboxWidgetState extends State<InboxWidget> {
         onTap: () => setState(() => _selectedTab = index),
         child: Container(
           decoration: BoxDecoration(
-            color:
-                isSelected ? const Color(0xFF00A5FE).withOpacity(0.2) : Colors.transparent,
+            color: isSelected
+                ? const Color(0xFF00A5FE).withOpacity(0.2)
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(18),
           ),
           alignment: Alignment.center,
@@ -272,9 +275,3 @@ class _InboxWidgetState extends State<InboxWidget> {
     );
   }
 }
-
-
-
-
-
-

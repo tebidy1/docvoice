@@ -1,6 +1,6 @@
 import 'dart:async';
 import '../models/note_model.dart';
-import '../../services/api_service.dart';
+import '../../../core/network/api_client.dart';
 import '../models/generated_output.dart';
 
 // Unified InboxService for Mobile (API Based)
@@ -26,7 +26,7 @@ class InboxService {
     String? summary,
     int? suggestedMacroId,
     // Add formatted text support as Mobile processes it locally first
-    String? formattedText, 
+    String? formattedText,
     String? audioPath,
     List<Map<String, dynamic>>? generatedOutputs,
   }) async {
@@ -39,7 +39,9 @@ class InboxService {
         if (suggestedMacroId != null) 'suggested_macro_id': suggestedMacroId,
         // Mobile sends the processed text directly if available
         if (formattedText != null) 'formatted_text': formattedText,
-        if (formattedText != null) 'status': 'processed', // Auto-mark as processed if we send formatted text
+        if (formattedText != null)
+          'status':
+              'processed', // Auto-mark as processed if we send formatted text
         if (audioPath != null) 'audio_path': audioPath,
         if (generatedOutputs != null) 'generated_outputs': generatedOutputs,
       };
@@ -49,10 +51,11 @@ class InboxService {
       if (response['status'] != true || response['payload'] == null) {
         throw Exception(response['message'] ?? 'Failed to add note');
       }
-      
+
       final payload = response['payload'];
-      return payload['id'] is int ? payload['id'] : int.parse(payload['id'].toString());
-      
+      return payload['id'] is int
+          ? payload['id']
+          : int.parse(payload['id'].toString());
     } catch (e) {
       print('Error adding note: $e');
       rethrow;
@@ -72,14 +75,16 @@ class InboxService {
     try {
       await init();
       final body = <String, dynamic>{};
-      
+
       // API requires raw_text on PUT. If not provided, fetch the note first.
       if (rawText == null) {
         try {
           final noteResponse = await _ApiClient.get('/inbox-notes/$noteId');
-          if (noteResponse['status'] == true && noteResponse['payload'] != null) {
+          if (noteResponse['status'] == true &&
+              noteResponse['payload'] != null) {
             final noteData = noteResponse['payload'];
-            body['raw_text'] = noteData['raw_text'] ?? noteData['original_text'] ?? '';
+            body['raw_text'] =
+                noteData['raw_text'] ?? noteData['original_text'] ?? '';
           }
         } catch (e) {
           print('Warning: Could not fetch note for raw_text: $e');
@@ -88,14 +93,16 @@ class InboxService {
       } else {
         body['raw_text'] = rawText;
       }
-      
+
       if (formattedText != null) body['formatted_text'] = formattedText;
       if (patientName != null) body['patient_name'] = patientName;
       if (summary != null) body['summary'] = summary;
-      if (suggestedMacroId != null) body['suggested_macro_id'] = suggestedMacroId;
+      if (suggestedMacroId != null)
+        body['suggested_macro_id'] = suggestedMacroId;
       if (status != null) body['status'] = status;
-      if (generatedOutputs != null) body['generated_outputs'] = generatedOutputs;
-      
+      if (generatedOutputs != null)
+        body['generated_outputs'] = generatedOutputs;
+
       // Update status to processed if formatted text is provided
       if (formattedText != null && formattedText.isNotEmpty && status == null) {
         body['status'] = 'processed';
@@ -114,7 +121,7 @@ class InboxService {
 
   /// Update just the status
   Future<void> updateStatus(int noteId, NoteStatus status) async {
-      await updateNote(noteId, status: status.name);
+    await updateNote(noteId, status: status.name);
   }
 
   Future<List<NoteModel>> getPendingNotes() async {
@@ -123,10 +130,9 @@ class InboxService {
       final response = await _ApiClient.get('/inbox-notes/pending');
 
       if (response['status'] == true && response['payload'] != null) {
-        final List<dynamic> data = response['payload'] is List
-            ? response['payload']
-            : [];
-        
+        final List<dynamic> data =
+            response['payload'] is List ? response['payload'] : [];
+
         return data.map((json) => _mapToNoteModel(json)).toList();
       }
 
@@ -141,7 +147,7 @@ class InboxService {
     try {
       final response = await _ApiClient.get('/inbox-notes/$id');
       if (response['status'] == true && response['payload'] != null) {
-         return _mapToNoteModel(response['payload']);
+        return _mapToNoteModel(response['payload']);
       }
       return null;
     } catch (e) {
@@ -153,7 +159,7 @@ class InboxService {
   // Polling Stream for Real-time updates (until WebSocket is fully integrated for data sync)
   Stream<List<NoteModel>> watchPendingNotes() async* {
     int consecutiveErrors = 0;
-    
+
     while (true) {
       try {
         final notes = await getPendingNotes();
@@ -162,7 +168,7 @@ class InboxService {
         await Future.delayed(const Duration(seconds: 5));
       } catch (e) {
         consecutiveErrors++;
-         // Exponential backoff
+        // Exponential backoff
         await Future.delayed(Duration(seconds: 5 * consecutiveErrors));
         if (consecutiveErrors > 5) yield []; // Return empty on verified failure
       }
@@ -173,24 +179,29 @@ class InboxService {
     // Map API response to Mobile's NoteModel
     final note = NoteModel();
     note.id = json['id'] is int ? json['id'] : int.parse(json['id'].toString());
-    note.title = json['patient_name'] ?? 'Untitled'; // Map patient_name to title
+    note.title =
+        json['patient_name'] ?? 'Untitled'; // Map patient_name to title
     note.originalText = json['raw_text'] ?? '';
-    note.formattedText = json['formatted_text'] ?? ''; // Ensure API returns this
+    note.formattedText =
+        json['formatted_text'] ?? ''; // Ensure API returns this
     note.status = _mapStatus(json['status'] ?? 'pending');
     note.createdAt = json['created_at'] != null
         ? DateTime.parse(json['created_at'])
         : DateTime.now();
-    note.uuid = json['uuid'] ?? json['id'].toString(); // Fallback to ID if UUID missing
-    note.content = note.formattedText.isNotEmpty ? note.formattedText : note.originalText; // Populate content
+    note.uuid =
+        json['uuid'] ?? json['id'].toString(); // Fallback to ID if UUID missing
+    note.content = note.formattedText.isNotEmpty
+        ? note.formattedText
+        : note.originalText; // Populate content
     note.audioPath = json['audio_path']; // Add this line to map audio path
-    note.updatedAt = json['updated_at'] != null 
-        ? DateTime.parse(json['updated_at']) 
+    note.updatedAt = json['updated_at'] != null
+        ? DateTime.parse(json['updated_at'])
         : note.createdAt;
-    
+
     // Map suggested/applied macro ID
     if (json['suggested_macro_id'] != null) {
-      note.appliedMacroId = json['suggested_macro_id'] is int 
-          ? json['suggested_macro_id'] 
+      note.appliedMacroId = json['suggested_macro_id'] is int
+          ? json['suggested_macro_id']
           : int.tryParse(json['suggested_macro_id'].toString());
     }
 
@@ -200,12 +211,13 @@ class InboxService {
     }
 
     // Map generated outputs
-    if (json['generated_outputs'] != null && json['generated_outputs'] is List) {
+    if (json['generated_outputs'] != null &&
+        json['generated_outputs'] is List) {
       note.generatedOutputs = (json['generated_outputs'] as List)
           .map((e) => GeneratedOutput.fromJson(Map<String, dynamic>.from(e)))
           .toList();
     }
-    
+
     // Also check for 'outputs' field (alternative naming from backend)
     if (json['outputs'] != null && note.generatedOutputs.isEmpty) {
       if (json['outputs'] is List) {
@@ -214,7 +226,7 @@ class InboxService {
             .toList();
       }
     }
-    
+
     return note;
   }
 
@@ -235,9 +247,3 @@ class InboxService {
     }
   }
 }
-
-
-
-
-
-

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import '../models/macro.dart';
-import '../services/macro_service.dart';
+import '../../core/entities/macro.dart';
+import '../../core/services/macro_service.dart';
 import '../../core/medical_departments.dart';
-import '../../services/department_service.dart';
+import '../../core/services/department_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class MacroExplorerDialog extends StatefulWidget {
@@ -27,7 +27,7 @@ class _MacroExplorerDialogState extends State<MacroExplorerDialog> {
 
   Future<void> _loadMacros() async {
     setState(() => _isLoading = true);
-    
+
     List<Macro> macros;
     if (_selectedCategory == 'Favorites') {
       macros = await _macroService.getFavorites();
@@ -36,16 +36,18 @@ class _MacroExplorerDialogState extends State<MacroExplorerDialog> {
     } else {
       macros = await _macroService.getMacrosByCategory(_selectedCategory);
     }
-    
+
     final prefs = await SharedPreferences.getInstance();
     final deptId = DepartmentService().value ?? prefs.getString('specialty');
-    final allowedCategories = deptId != null 
+    final allowedCategories = deptId != null
         ? MedicalDepartments.getRelevantCategories(deptId)
         : ['General'];
 
-    final filteredMacros = macros.where((m) => 
-        allowedCategories.contains(m.category) || 
-        allowedCategories.contains('General')).toList();
+    final filteredMacros = macros
+        .where((m) =>
+            allowedCategories.contains(m.category) ||
+            allowedCategories.contains('General'))
+        .toList();
 
     setState(() {
       _macros = filteredMacros;
@@ -76,16 +78,15 @@ class _MacroExplorerDialogState extends State<MacroExplorerDialog> {
           children: [
             // Left Sidebar - Categories (25%)
             _buildCategoriesSidebar(),
-            
+
             // Right Grid - Macros (75%)
             Expanded(
               child: Stack(
                 children: [
                   _buildMacroGrid(),
-                  
+
                   // Preview Drawer
-                  if (_previewMacro != null)
-                    _buildPreviewDrawer(),
+                  if (_previewMacro != null) _buildPreviewDrawer(),
                 ],
               ),
             ),
@@ -125,7 +126,7 @@ class _MacroExplorerDialogState extends State<MacroExplorerDialog> {
               ],
             ),
           ),
-          
+
           // Categories List
           Expanded(
             child: ListView(
@@ -133,12 +134,10 @@ class _MacroExplorerDialogState extends State<MacroExplorerDialog> {
               children: [
                 _buildCategoryItem('⭐', 'Favorites', Colors.amber),
                 _buildCategoryItem('📈', 'Most Used', Colors.green),
-                
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 12),
                   child: Divider(color: Colors.white10),
                 ),
-                
                 _buildCategoryItem('🗂️', 'General', Colors.grey),
                 _buildCategoryItem('❤️', 'Cardiology', Colors.red),
                 _buildCategoryItem('🫁', 'Pulmonology', Colors.cyan),
@@ -154,7 +153,7 @@ class _MacroExplorerDialogState extends State<MacroExplorerDialog> {
 
   Widget _buildCategoryItem(String emoji, String name, Color color) {
     final isSelected = _selectedCategory == name;
-    
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -189,7 +188,8 @@ class _MacroExplorerDialogState extends State<MacroExplorerDialog> {
                   style: TextStyle(
                     color: isSelected ? Colors.white : Colors.white70,
                     fontSize: 13,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    fontWeight:
+                        isSelected ? FontWeight.w600 : FontWeight.normal,
                   ),
                 ),
               ),
@@ -206,23 +206,25 @@ class _MacroExplorerDialogState extends State<MacroExplorerDialog> {
         child: CircularProgressIndicator(color: Colors.blue),
       );
     }
-    
+
     if (_macros.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.search_off, color: Colors.white.withOpacity(0.3), size: 60),
+            Icon(Icons.search_off,
+                color: Colors.white.withOpacity(0.3), size: 60),
             const SizedBox(height: 16),
             Text(
               'No templates in this category',
-              style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 14),
+              style:
+                  TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 14),
             ),
           ],
         ),
       );
     }
-    
+
     return ListView.builder(
       padding: const EdgeInsets.all(20),
       itemCount: _macros.length,
@@ -277,7 +279,12 @@ class _MacroExplorerDialogState extends State<MacroExplorerDialog> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  macro.content.substring(0, macro.content.length > 80 ? 80 : macro.content.length) + '...',
+                  macro.content.substring(
+                          0,
+                          macro.content.length > 80
+                              ? 80
+                              : macro.content.length) +
+                      '...',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.6),
                     fontSize: 12,
@@ -288,13 +295,14 @@ class _MacroExplorerDialogState extends State<MacroExplorerDialog> {
               ],
             ),
           ),
-          
+
           // Actions
           Row(
             children: [
               // Preview Button
               IconButton(
-                icon: const Icon(Icons.visibility, color: Colors.blue, size: 20),
+                icon:
+                    const Icon(Icons.visibility, color: Colors.blue, size: 20),
                 onPressed: () {
                   setState(() {
                     _previewMacro = macro;
@@ -302,7 +310,7 @@ class _MacroExplorerDialogState extends State<MacroExplorerDialog> {
                 },
                 tooltip: 'Preview',
               ),
-              
+
               // Use Button
               ElevatedButton.icon(
                 icon: const Icon(Icons.check, size: 16),
@@ -310,7 +318,8 @@ class _MacroExplorerDialogState extends State<MacroExplorerDialog> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 ),
                 onPressed: () {
                   Navigator.of(context).pop(macro);
@@ -380,7 +389,7 @@ class _MacroExplorerDialogState extends State<MacroExplorerDialog> {
                   ],
                 ),
               ),
-              
+
               // Content
               Expanded(
                 child: SingleChildScrollView(
@@ -416,7 +425,7 @@ class _MacroExplorerDialogState extends State<MacroExplorerDialog> {
                   ),
                 ),
               ),
-              
+
               // Bottom Action
               Container(
                 padding: const EdgeInsets.all(16),
@@ -448,9 +457,3 @@ class _MacroExplorerDialogState extends State<MacroExplorerDialog> {
     );
   }
 }
-
-
-
-
-
-

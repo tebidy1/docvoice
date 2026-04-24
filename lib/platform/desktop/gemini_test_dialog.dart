@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/gemini_service.dart';
+import '../../core/services/gemini_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class GeminiTestDialog extends StatefulWidget {
@@ -10,12 +10,13 @@ class GeminiTestDialog extends StatefulWidget {
 }
 
 class _GeminiTestDialogState extends State<GeminiTestDialog> {
-  final _geminiService = GeminiService(apiKey: dotenv.env['GEMINI_API_KEY'] ?? "");
+  final _geminiService =
+      GeminiService(apiKey: dotenv.env['GEMINI_API_KEY'] ?? "");
   final _inputController = TextEditingController(
-    text: "Patient John Doe presented with mild headache and fever. Temperature 38.5C, BP 120/80. Prescribed Paracetamol 500mg TID for 3 days. Follow up in 1 week."
-  );
+      text:
+          "Patient John Doe presented with mild headache and fever. Temperature 38.5C, BP 120/80. Prescribed Paracetamol 500mg TID for 3 days. Follow up in 1 week.");
   final _questionController = TextEditingController();
-  
+
   String _result = "";
   bool _isLoading = false;
   String _error = "";
@@ -30,7 +31,8 @@ class _GeminiTestDialogState extends State<GeminiTestDialog> {
     try {
       final analysis = await _geminiService.analyzeNote(_inputController.text);
       setState(() {
-        _result = "✅ Success!\n\nPatient: ${analysis['patientName']}\nSummary: ${analysis['summary']}\nType: ${analysis['suggestedMacroType']}";
+        _result =
+            "✅ Success!\n\nPatient: ${analysis['patientName']}\nSummary: ${analysis['summary']}\nType: ${analysis['suggestedMacroType']}";
         _isLoading = false;
       });
     } catch (e) {
@@ -51,7 +53,8 @@ class _GeminiTestDialogState extends State<GeminiTestDialog> {
     try {
       final formatted = await _geminiService.formatText(
         _inputController.text,
-        macroContext: "SOAP Note Format: Subjective, Objective, Assessment, Plan",
+        macroContext:
+            "SOAP Note Format: Subjective, Objective, Assessment, Plan",
       );
       setState(() {
         _result = "✅ Success!\n\nFormatted Text:\n$formatted";
@@ -83,7 +86,8 @@ class _GeminiTestDialogState extends State<GeminiTestDialog> {
         _questionController.text,
       );
       setState(() {
-        _result = "❓ Question: ${_questionController.text}\n\n💡 Answer: $answer";
+        _result =
+            "❓ Question: ${_questionController.text}\n\n💡 Answer: $answer";
         _isLoading = false;
       });
     } catch (e) {
@@ -139,7 +143,7 @@ class _GeminiTestDialogState extends State<GeminiTestDialog> {
               ],
             ),
             const SizedBox(height: 16),
-            
+
             // API Key Status
             Container(
               padding: const EdgeInsets.all(12),
@@ -177,9 +181,10 @@ class _GeminiTestDialogState extends State<GeminiTestDialog> {
               ),
             ),
             const SizedBox(height: 16),
-            
+
             // Input
-            const Text('Test Input:', style: TextStyle(color: Colors.white70, fontSize: 14)),
+            const Text('Test Input:',
+                style: TextStyle(color: Colors.white70, fontSize: 14)),
             const SizedBox(height: 8),
             TextField(
               controller: _inputController,
@@ -197,9 +202,10 @@ class _GeminiTestDialogState extends State<GeminiTestDialog> {
               ),
             ),
             const SizedBox(height: 16),
-            
+
             // Question Input
-            const Text('Verification Question (Optional):', style: TextStyle(color: Colors.white70, fontSize: 14)),
+            const Text('Verification Question (Optional):',
+                style: TextStyle(color: Colors.white70, fontSize: 14)),
             const SizedBox(height: 8),
             Row(
               children: [
@@ -216,7 +222,8 @@ class _GeminiTestDialogState extends State<GeminiTestDialog> {
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide(color: Colors.grey),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 14),
                     ),
                   ),
                 ),
@@ -227,14 +234,15 @@ class _GeminiTestDialogState extends State<GeminiTestDialog> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.amber,
                     foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 14, horizontal: 20),
                   ),
                   onPressed: _isLoading ? null : _testAskQuestion,
                 ),
               ],
             ),
             const SizedBox(height: 16),
-            
+
             // Test Buttons
             Row(
               children: [
@@ -266,9 +274,10 @@ class _GeminiTestDialogState extends State<GeminiTestDialog> {
               ],
             ),
             const SizedBox(height: 16),
-            
+
             // Result
-            const Text('Result:', style: TextStyle(color: Colors.white70, fontSize: 14)),
+            const Text('Result:',
+                style: TextStyle(color: Colors.white70, fontSize: 14)),
             const SizedBox(height: 8),
             Expanded(
               child: Container(
@@ -294,9 +303,14 @@ class _GeminiTestDialogState extends State<GeminiTestDialog> {
                       )
                     : SingleChildScrollView(
                         child: Text(
-                          _error.isNotEmpty ? _error : (_result.isNotEmpty ? _result : 'Press a button to test Gemini AI'),
+                          _error.isNotEmpty
+                              ? _error
+                              : (_result.isNotEmpty
+                                  ? _result
+                                  : 'Press a button to test Gemini AI'),
                           style: TextStyle(
-                            color: _error.isNotEmpty ? Colors.red : Colors.white,
+                            color:
+                                _error.isNotEmpty ? Colors.red : Colors.white,
                             fontSize: 13,
                             height: 1.5,
                           ),
@@ -317,9 +331,3 @@ class _GeminiTestDialogState extends State<GeminiTestDialog> {
     super.dispose();
   }
 }
-
-
-
-
-
-

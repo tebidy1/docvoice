@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../services/admin_service.dart';
+import '../../core/services/admin_service.dart';
 
 class CreateCompanyDialog extends StatefulWidget {
   const CreateCompanyDialog({super.key});
@@ -246,9 +246,3 @@ class _CreateCompanyDialogState extends State<CreateCompanyDialog> {
     );
   }
 }
-
-
-
-
-
-

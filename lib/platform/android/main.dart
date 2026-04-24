@@ -4,7 +4,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'core/theme.dart';
 import 'features/home/home_screen.dart';
 import 'features/auth/login_screen.dart';
-import '../services/auth_service.dart';
+import '../../core/services/auth_service.dart';
 import 'services/websocket_service.dart';
 import 'services/macro_service.dart';
 
@@ -13,17 +13,17 @@ void main() async {
   await dotenv.load(fileName: ".env");
 
   final isAuthenticated = await AuthService().isAuthenticated();
-  
+
   // Seed default macros to cloud if user is authenticated
   if (isAuthenticated) {
     final macroService = MacroService();
     try {
       // Migrate any local macros to cloud first
       await macroService.migrateLocalToCloud();
-      
+
       // Check if cloud has macros - getMacros() tries API first
       final macros = await macroService.getMacros();
-      
+
       // If still empty after migration, seed defaults
       if (macros.isEmpty) {
         debugPrint("No macros found, seeding defaults...");
@@ -66,16 +66,10 @@ class SoutNoteMobileApp extends StatelessWidget {
       // Fallback for named routes not found, though we only use these two
       onGenerateRoute: (settings) {
         if (settings.name == '/') {
-           return MaterialPageRoute(builder: (_) => const HomeScreen());
+          return MaterialPageRoute(builder: (_) => const HomeScreen());
         }
         return MaterialPageRoute(builder: (_) => const LoginScreen());
       },
     );
   }
 }
-
-
-
-
-
-

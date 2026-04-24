@@ -4,11 +4,11 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:uuid/uuid.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
-import '../../../services/audio_recorder_service.dart';
-import '../../../services/oracle_live_speech_service.dart';
-import '../../../utils/permission_fixer.dart';
-import '../../../widgets/animated_record_button.dart';
-import '../../../widgets/listening_mode_view.dart';
+import '../../../../core/services/audio_recorder_service.dart';
+import '../../../../core/services/oracle_live_speech_service.dart';
+import '../../../../core/utils/permission_fixer.dart';
+import '../../../../presentation/widgets/animated_record_button.dart';
+import '../../../../presentation/widgets/listening_mode_view.dart';
 import 'package:soutnote/core/entities/note_model.dart';
 import '../../services/audio_recording_service.dart';
 import '../editor/editor_screen.dart';
@@ -336,7 +336,8 @@ cQBOFhw1ZkYvxx4A6HSNxyae
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('⚡ لم يتم التقاط الصوت بشكل صحيح، يرجى المحاولة مرة أخرى'),
+              content: Text(
+                  '⚡ لم يتم التقاط الصوت بشكل صحيح، يرجى المحاولة مرة أخرى'),
               backgroundColor: Colors.orange,
             ),
           );
@@ -467,7 +468,7 @@ cQBOFhw1ZkYvxx4A6HSNxyae
               index: _selectedIndex,
               children: _screens,
             ),
-            
+
             if (_isRecording)
               Positioned.fill(
                 child: ListeningModeView(
@@ -554,9 +555,3 @@ cQBOFhw1ZkYvxx4A6HSNxyae
     );
   }
 }
-
-
-
-
-
-

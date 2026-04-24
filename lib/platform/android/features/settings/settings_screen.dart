@@ -1,21 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../screens/admin_dashboard_screen.dart';
-import '../../../screens/secure_pairing_screen.dart';
-import '../../../services/auth_service.dart';
+import '../../../../presentation/screens/admin_dashboard_screen.dart';
+import '../../../../presentation/screens/secure_pairing_screen.dart';
+import '../../../../core/services/auth_service.dart';
 import '../../core/theme.dart';
 import '../../services/macro_service.dart';
 import '../../services/model_download_service.dart';
 import '../../services/websocket_service.dart';
-import '../../../models/app_theme.dart' as global_theme;
-import '../../../services/theme_service.dart';
+import '../../../../core/entities/app_theme.dart' as global_theme;
+import '../../../../core/services/theme_service.dart';
 import '../auth/qr_scanner_screen.dart';
 import 'company_settings_screen.dart';
 import 'macro_manager_screen.dart';
 import '../../../core/medical_departments.dart';
-import '../../../services/department_service.dart';
-import '../../../services/medical_department_service.dart';
+import '../../../../core/services/department_service.dart';
+import '../../../../core/services/medical_department_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -83,7 +83,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         final colorScheme = Theme.of(context).colorScheme;
         return AlertDialog(
           backgroundColor: colorScheme.surface,
-          title: Text("Log Out?", style: TextStyle(color: colorScheme.onSurface)),
+          title:
+              Text("Log Out?", style: TextStyle(color: colorScheme.onSurface)),
           content: Text(
             "Are you sure you want to log out?",
             style: TextStyle(color: colorScheme.onSurface.withOpacity(0.7)),
@@ -146,7 +147,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() {
       _ipController.text = prefs.getString('server_ip') ?? "192.168.1.100";
       _sttEnginePref = prefs.getString('stt_engine_pref') ?? 'gemini_oneshot';
-      _useOracleWhisperModel = prefs.getBool('oracle_use_whisper_model') ?? true;
+      _useOracleWhisperModel =
+          prefs.getBool('oracle_use_whisper_model') ?? true;
     });
   }
 
@@ -334,22 +336,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           leading: Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: (MedicalDepartments.getById(DepartmentService().value)?.color ?? Colors.grey).withOpacity(0.2),
+                              color: (MedicalDepartments.getById(
+                                              DepartmentService().value)
+                                          ?.color ??
+                                      Colors.grey)
+                                  .withOpacity(0.2),
                               shape: BoxShape.circle,
                             ),
                             child: Icon(
-                              MedicalDepartments.getById(DepartmentService().value)?.icon ?? Icons.local_hospital,
-                              color: MedicalDepartments.getById(DepartmentService().value)?.color ?? Colors.grey,
+                              MedicalDepartments.getById(
+                                          DepartmentService().value)
+                                      ?.icon ??
+                                  Icons.local_hospital,
+                              color: MedicalDepartments.getById(
+                                          DepartmentService().value)
+                                      ?.color ??
+                                  Colors.grey,
                               size: 20,
                             ),
                           ),
-                          title: const Text("Medical Department", 
-                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                          title: const Text("Medical Department",
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 14)),
                           subtitle: Text(
-                            MedicalDepartments.getById(DepartmentService().value)?.nameEn ?? "Tap to select specialty",
+                            MedicalDepartments.getById(
+                                        DepartmentService().value)
+                                    ?.nameEn ??
+                                "Tap to select specialty",
                             style: TextStyle(
                               fontSize: 12,
-                              color: DepartmentService().value == null ? Colors.redAccent : Colors.grey,
+                              color: DepartmentService().value == null
+                                  ? Colors.redAccent
+                                  : Colors.grey,
                             ),
                           ),
                           trailing: const Icon(Icons.arrow_drop_down),
@@ -472,7 +490,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           groupValue: currentTheme.id,
                           activeColor: AppTheme.accent,
                           onChanged: (val) {
-                            if (val != null) ThemeService().setTheme(global_theme.AppTheme.lightNative);
+                            if (val != null)
+                              ThemeService()
+                                  .setTheme(global_theme.AppTheme.lightNative);
                           },
                         ),
                         RadioListTile<String>(
@@ -481,7 +501,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           groupValue: currentTheme.id,
                           activeColor: AppTheme.accent,
                           onChanged: (val) {
-                            if (val != null) ThemeService().setTheme(global_theme.AppTheme.slateDark);
+                            if (val != null)
+                              ThemeService()
+                                  .setTheme(global_theme.AppTheme.slateDark);
                           },
                         ),
                         RadioListTile<String>(
@@ -490,7 +512,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           groupValue: currentTheme.id,
                           activeColor: AppTheme.accent,
                           onChanged: (val) {
-                            if (val != null) ThemeService().setTheme(global_theme.AppTheme.darkOnyx);
+                            if (val != null)
+                              ThemeService()
+                                  .setTheme(global_theme.AppTheme.darkOnyx);
                           },
                         ),
                       ],
@@ -565,7 +589,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   children: [
                     RadioListTile<String>(
                       title: const Text("High-Speed Dictation (Cloud)"),
-                      subtitle: const Text("Lightning-fast processing via cloud servers."),
+                      subtitle: const Text(
+                          "Lightning-fast processing via cloud servers."),
                       value: 'groq',
                       groupValue: _sttEnginePref,
                       activeColor: AppTheme.accent,
@@ -662,7 +687,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   ElevatedButton.icon(
                                     onPressed: _startDownload,
                                     icon: const Icon(Icons.download, size: 16),
-                                    label: const Text('Download Model (~358 MB)'),
+                                    label:
+                                        const Text('Download Model (~358 MB)'),
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: Colors.blueAccent,
                                       foregroundColor: Colors.white,
@@ -705,7 +731,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                     RadioListTile<String>(
                       title: const Text("Specialized Medical Dictation"),
-                      subtitle: const Text("Cloud-based engine trained on complex medical terminology."),
+                      subtitle: const Text(
+                          "Cloud-based engine trained on complex medical terminology."),
                       value: 'oracle_live',
                       groupValue: _sttEnginePref,
                       activeColor: Colors.orange,
@@ -720,7 +747,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     RadioListTile<String>(
                       title: const Text("✨ Smart Magic Flow (Recommended)",
                           style: TextStyle(color: Colors.amber)),
-                      subtitle: const Text("Max speed! Audio maps directly to final formatted note. No intermediate step."),
+                      subtitle: const Text(
+                          "Max speed! Audio maps directly to final formatted note. No intermediate step."),
                       value: 'gemini_oneshot',
                       groupValue: _sttEnginePref,
                       activeColor: Colors.amber,
@@ -733,61 +761,72 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                     ),
                     // A/B Testing Toggle — only visible when Oracle is selected
-                    if (_sttEnginePref == 'oracle_live') ...
-                      [
-                        const Divider(height: 1),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.science_outlined, size: 16, color: Colors.orange),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      _useOracleWhisperModel
-                                          ? 'Engine: Ultra-Fast General'
-                                          : 'Engine: Deep Medical Focus',
-                                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                                    ),
-                                    Text(
-                                      _useOracleWhisperModel
-                                          ? 'Prioritizes speed and general vocabulary'
-                                          : 'Prioritizes complex clinical terminology',
-                                      style: const TextStyle(fontSize: 11, color: Colors.grey),
-                                    ),
-                                  ],
-                                ),
+                    if (_sttEnginePref == 'oracle_live') ...[
+                      const Divider(height: 1),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 4),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.science_outlined,
+                                size: 16, color: Colors.orange),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _useOracleWhisperModel
+                                        ? 'Engine: Ultra-Fast General'
+                                        : 'Engine: Deep Medical Focus',
+                                    style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600),
+                                  ),
+                                  Text(
+                                    _useOracleWhisperModel
+                                        ? 'Prioritizes speed and general vocabulary'
+                                        : 'Prioritizes complex clinical terminology',
+                                    style: const TextStyle(
+                                        fontSize: 11, color: Colors.grey),
+                                  ),
+                                ],
                               ),
-                              Switch(
-                                value: _useOracleWhisperModel,
-                                activeColor: Colors.orange,
-                                onChanged: (val) async {
-                                  setState(() => _useOracleWhisperModel = val);
-                                  final prefs = await SharedPreferences.getInstance();
-                                  await prefs.setBool('oracle_use_whisper_model', val);
-                                },
-                              ),
-                            ],
-                          ),
+                            ),
+                            Switch(
+                              value: _useOracleWhisperModel,
+                              activeColor: Colors.orange,
+                              onChanged: (val) async {
+                                setState(() => _useOracleWhisperModel = val);
+                                final prefs =
+                                    await SharedPreferences.getInstance();
+                                await prefs.setBool(
+                                    'oracle_use_whisper_model', val);
+                              },
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
+                    ],
                     // Info block for One-Shot mode
                     if (_sttEnginePref == 'gemini_oneshot') ...[
                       const Divider(height: 1),
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 10),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(Icons.info_outline, size: 16, color: Colors.amber),
+                            const Icon(Icons.info_outline,
+                                size: 16, color: Colors.amber),
                             const SizedBox(width: 8),
                             const Expanded(
                               child: Text(
                                 'Records audio and applies your template in a single, lightning-fast step for ultimate speed and accuracy. Ideal for fast, high-quality clinical notes.',
-                                style: TextStyle(fontSize: 12, color: Colors.grey, height: 1.4),
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey,
+                                    height: 1.4),
                               ),
                             ),
                           ],
@@ -862,10 +901,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _showDepartmentPicker() {
     String searchQuery = '';
-    
+
     // Ensure departments are loaded from API
     MedicalDepartmentService().loadDepartments();
-    
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -878,8 +917,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           builder: (context, setSheetState) {
             final filteredDepts = MedicalDepartments.all.where((dept) {
               final q = searchQuery.toLowerCase();
-              return dept.nameEn.toLowerCase().contains(q) || 
-                     dept.nameAr.contains(q);
+              return dept.nameEn.toLowerCase().contains(q) ||
+                  dept.nameAr.contains(q);
             }).toList();
 
             return DraggableScrollableSheet(
@@ -900,28 +939,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-                    
+
                     // Title
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Row(
                         children: [
-                          const Icon(Icons.local_hospital, color: AppTheme.accent),
+                          const Icon(Icons.local_hospital,
+                              color: AppTheme.accent),
                           const SizedBox(width: 12),
-                          Text("Select Department", 
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)
-                          ),
+                          Text("Select Department",
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleLarge
+                                  ?.copyWith(fontWeight: FontWeight.bold)),
                         ],
                       ),
                     ),
                     const SizedBox(height: 16),
-                    
+
                     // Search bar
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: TextField(
                         decoration: InputDecoration(
-                          hintText: "Search specialties in English or Arabic...",
+                          hintText:
+                              "Search specialties in English or Arabic...",
                           prefixIcon: const Icon(Icons.search),
                           filled: true,
                           fillColor: Colors.grey.withOpacity(0.1),
@@ -929,7 +972,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             borderRadius: BorderRadius.circular(12),
                             borderSide: BorderSide.none,
                           ),
-                          contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                          contentPadding:
+                              const EdgeInsets.symmetric(vertical: 0),
                         ),
                         onChanged: (val) {
                           setSheetState(() {
@@ -939,7 +983,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    
+
                     // List
                     Expanded(
                       child: ListView.builder(
@@ -947,8 +991,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         itemCount: filteredDepts.length,
                         itemBuilder: (context, index) {
                           final dept = filteredDepts[index];
-                          final isSelected = DepartmentService().value == dept.id;
-                          
+                          final isSelected =
+                              DepartmentService().value == dept.id;
+
                           return ListTile(
                             leading: Container(
                               padding: const EdgeInsets.all(8),
@@ -956,23 +1001,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 color: dept.color.withOpacity(0.15),
                                 shape: BoxShape.circle,
                               ),
-                              child: Icon(dept.icon, color: dept.color, size: 24),
+                              child:
+                                  Icon(dept.icon, color: dept.color, size: 24),
                             ),
-                            title: Text(dept.nameEn, 
-                              style: TextStyle(
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                                color: isSelected ? AppTheme.accent : null,
-                              )
-                            ),
-                            subtitle: Text(dept.nameAr, 
-                              style: TextStyle(
-                                fontSize: 13, 
-                                color: Colors.grey.shade600,
-                                fontFamily: 'Cairo', // Assuming an Arabic font is available
-                              )
-                            ),
-                            trailing: isSelected 
-                                ? const Icon(Icons.check_circle, color: AppTheme.accent)
+                            title: Text(dept.nameEn,
+                                style: TextStyle(
+                                  fontWeight: isSelected
+                                      ? FontWeight.bold
+                                      : FontWeight.w500,
+                                  color: isSelected ? AppTheme.accent : null,
+                                )),
+                            subtitle: Text(dept.nameAr,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.grey.shade600,
+                                  fontFamily:
+                                      'Cairo', // Assuming an Arabic font is available
+                                )),
+                            trailing: isSelected
+                                ? const Icon(Icons.check_circle,
+                                    color: AppTheme.accent)
                                 : null,
                             onTap: () {
                               DepartmentService().setDepartment(dept.id);
@@ -992,9 +1040,3 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 }
-
-
-
-
-
-

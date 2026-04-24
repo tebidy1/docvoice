@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import '../services/connectivity_server.dart';
+import '../../core/services/connectivity_server.dart';
 
 class QrConnectDialog extends StatefulWidget {
   const QrConnectDialog({super.key});
@@ -44,7 +44,11 @@ class _QrConnectDialogState extends State<QrConnectDialog> {
         ],
       ),
       content: _isLoading
-          ? const SizedBox(height: 200, width: 200, child: Center(child: CircularProgressIndicator(color: Colors.amber)))
+          ? const SizedBox(
+              height: 200,
+              width: 200,
+              child:
+                  Center(child: CircularProgressIndicator(color: Colors.amber)))
           : Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -68,14 +72,18 @@ class _QrConnectDialogState extends State<QrConnectDialog> {
                 ),
                 const SizedBox(height: 5),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
                     color: Colors.black26,
                     borderRadius: BorderRadius.circular(5),
                   ),
                   child: Text(
                     connectionUrl,
-                    style: const TextStyle(color: Colors.white30, fontSize: 10, fontFamily: 'monospace'),
+                    style: const TextStyle(
+                        color: Colors.white30,
+                        fontSize: 10,
+                        fontFamily: 'monospace'),
                   ),
                 ),
               ],
@@ -89,9 +97,3 @@ class _QrConnectDialogState extends State<QrConnectDialog> {
     );
   }
 }
-
-
-
-
-
-

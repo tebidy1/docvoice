@@ -8,8 +8,8 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../core/config/api_config.dart';
 import '../../mobile_app/services/websocket_service.dart' as unified_ws;
-import '../../services/api_service.dart';
-import '../../services/auth_service.dart';
+import '../../../core/network/api_client.dart';
+import '../../../core/services/auth_service.dart';
 import 'extension_home_screen.dart';
 
 /// Extension login screen — shows credentials form + QR code together.

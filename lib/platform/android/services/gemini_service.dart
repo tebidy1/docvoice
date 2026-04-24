@@ -1,5 +1,5 @@
-import '../../services/api_service.dart';
-import '../../utils/arabic_scrubber.dart';
+import '../../../core/network/api_client.dart';
+import '../../../core/utils/arabic_scrubber.dart';
 
 class GeminiService {
   final ApiClient _ApiClient = ApiClient();
@@ -9,7 +9,7 @@ class GeminiService {
   /// Analyzes raw note text and extracts patient name, summary, and suggests macro type
   Future<Map<String, dynamic>> analyzeNote(String rawText) async {
     final scrubbedText = ArabicScrubber.anonymizePII(rawText);
-    
+
     try {
       final response = await _ApiClient.post('/audio/analyze', body: {
         'transcript': scrubbedText,
@@ -24,19 +24,19 @@ class GeminiService {
 
     return {
       'patientName': 'Unknown Patient',
-      'summary': rawText.substring(0, rawText.length > 50 ? 50 : rawText.length),
+      'summary':
+          rawText.substring(0, rawText.length > 50 ? 50 : rawText.length),
       'suggestedMacroType': 'general'
     };
   }
 
-  Future<String> formatText(String rawText, {
-    String? macroContext, 
-    String? instruction, 
-    String? specialty, 
-    String? globalPrompt
-  }) async {
+  Future<String> formatText(String rawText,
+      {String? macroContext,
+      String? instruction,
+      String? specialty,
+      String? globalPrompt}) async {
     final scrubbedText = ArabicScrubber.anonymizePII(rawText);
-    
+
     try {
       final response = await _ApiClient.post('/audio/process', body: {
         'transcript': scrubbedText,
@@ -83,9 +83,3 @@ class GeminiService {
     return null;
   }
 }
-
-
-
-
-
-

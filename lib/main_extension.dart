@@ -5,12 +5,12 @@ import 'package:provider/provider.dart';
 
 import 'web_extension/screens/extension_login_screen.dart';
 
-import 'web_extension/screens/extension_home_screen.dart'; // New Entry Point
+import 'web_extension/screens/extension_home_screen.dart';
 import 'mobile_app/services/websocket_service.dart' as unified_ws;
-import 'models/app_theme.dart';
-import 'services/auth_service.dart';
-import 'services/theme_service.dart';
-import 'widgets/auth_guard.dart';
+import 'core/entities/app_theme.dart';
+import 'core/services/auth_service.dart';
+import 'core/services/theme_service.dart';
+import 'presentation/widgets/auth_guard.dart';
 
 void main() {
   // 1. Run App Immediately (Don't await anything here to ensure UI shows up)
@@ -130,7 +130,8 @@ class _SafeExtensionLauncherState extends State<SafeExtensionLauncher> {
   }
 }
 
-final GlobalKey<NavigatorState> extensionNavigatorKey = GlobalKey<NavigatorState>();
+final GlobalKey<NavigatorState> extensionNavigatorKey =
+    GlobalKey<NavigatorState>();
 
 class ScribeFlowExtensionApp extends StatefulWidget {
   const ScribeFlowExtensionApp({super.key});
@@ -265,7 +266,6 @@ class _ScribeFlowExtensionAppState extends State<ScribeFlowExtensionApp> {
                     return const ExtensionLoginScreen();
                   }
                 },
-
               ),
             );
           },
@@ -276,7 +276,8 @@ class _ScribeFlowExtensionAppState extends State<ScribeFlowExtensionApp> {
   }
 }
 
-final RouteObserver<ModalRoute<void>> extensionRouteObserver = RouteObserver<ModalRoute<void>>();
+final RouteObserver<ModalRoute<void>> extensionRouteObserver =
+    RouteObserver<ModalRoute<void>>();
 
 class GlobalExtensionWrapper extends StatefulWidget {
   final Widget child;
@@ -286,25 +287,25 @@ class GlobalExtensionWrapper extends StatefulWidget {
   State<GlobalExtensionWrapper> createState() => _GlobalExtensionWrapperState();
 }
 
-class _GlobalExtensionWrapperState extends State<GlobalExtensionWrapper> with RouteAware {
-
+class _GlobalExtensionWrapperState extends State<GlobalExtensionWrapper>
+    with RouteAware {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // In a global wrapper above MaterialApp, we cannot easily use RouteObserver 
+    // In a global wrapper above MaterialApp, we cannot easily use RouteObserver
     // because the context here is ABOVE the Navigator.
     // Instead of using RouteObserver here, we will just use a builder inside
-    // the Stack that periodically checks, or we rely on the fact that we can 
+    // the Stack that periodically checks, or we rely on the fact that we can
     // inject a listener into the MaterialApp.
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     // To properly react to navigation changes when wrapped ABOVE the navigator,
-    // we use a stream or a valuelistenable. 
-    // A simpler approach for the back button in Flutter is to just rebuild 
+    // we use a stream or a valuelistenable.
+    // A simpler approach for the back button in Flutter is to just rebuild
     // when navigation happens, but Flutter doesn't notify generic wrappers.
     // We will build the button inside a specific widget that subscribes to the observer.
     return Scaffold(
@@ -335,7 +336,7 @@ class _GlobalBackButtonState extends State<GlobalBackButton> {
   @override
   void initState() {
     super.initState();
-    // A simple, robust way to check navigation state from completely outside 
+    // A simple, robust way to check navigation state from completely outside
     // without complex RouteObserver setups in the extension wrapper:
     _timer = Timer.periodic(const Duration(milliseconds: 300), (timer) {
       final canPopNow = widget.navigatorKey.currentState?.canPop() ?? false;
@@ -374,8 +375,10 @@ class _GlobalBackButtonState extends State<GlobalBackButton> {
             height: 50,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Colors.white.withValues(alpha: 0.1), // Glassy neutral effect
-              border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1.5),
+              color:
+                  Colors.white.withValues(alpha: 0.1), // Glassy neutral effect
+              border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.2), width: 1.5),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.2),
@@ -386,7 +389,8 @@ class _GlobalBackButtonState extends State<GlobalBackButton> {
             ),
             child: const Padding(
               padding: EdgeInsets.only(right: 4.0), // center slightly optical
-              child: Icon(Icons.arrow_back_ios_new, color: Colors.white70, size: 20),
+              child: Icon(Icons.arrow_back_ios_new,
+                  color: Colors.white70, size: 20),
             ),
           ),
         ),
@@ -394,10 +398,3 @@ class _GlobalBackButtonState extends State<GlobalBackButton> {
     );
   }
 }
-
-
-
-
-
-
-

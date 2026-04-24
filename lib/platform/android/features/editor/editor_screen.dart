@@ -8,8 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 // App Widgets & Services
-import '../../../widgets/pattern_highlight_controller.dart';
-import '../../../widgets/processing_overlay.dart';
+import '../../../../presentation/widgets/pattern_highlight_controller.dart';
+import '../../../../presentation/widgets/processing_overlay.dart';
 import '../../core/theme.dart';
 import 'package:soutnote/core/entities/note_model.dart';
 import 'package:soutnote/core/entities/generated_output.dart';
@@ -18,13 +18,13 @@ import '../../services/macro_service.dart';
 import '../../services/whisper_local_stub.dart'
     if (dart.library.io) '../../services/whisper_local_service.dart';
 
-import '../../../services/api_service.dart';
+import '../../../../core/network/api_client.dart';
 import '../../services/groq_service.dart'; // Direct Groq for faster Web transcription
 import '../../../core/ai/ai_regex_patterns.dart';
 import '../../../core/ai/text_processing_service.dart';
 import '../../../services/ai/ai_processing_service.dart';
-import '../../../../core/medical_departments.dart';
-import '../../../../services/department_service.dart';
+import '../../../../../core/medical_departments.dart';
+import '../../../../../core/services/department_service.dart';
 import '../../../../web_extension/services/extension_injection_service.dart';
 import '../../../../features/multimodal_ai/multimodal_ai_service.dart';
 import '../../../../features/multimodal_ai/ai_studio_multimodal_service.dart';

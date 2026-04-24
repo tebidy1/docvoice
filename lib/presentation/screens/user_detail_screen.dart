@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
-import '../services/admin_service.dart';
-import '../models/user.dart';
+import '../../core/services/admin_service.dart';
+import '../../core/entities/user.dart';
 import '../widgets/window_title_bar.dart';
 
 class UserDetailScreen extends StatefulWidget {
@@ -100,7 +100,8 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
 
     if (confirmed == true && passwordController.text.isNotEmpty) {
       try {
-        await _adminService.resetUserPassword(_user!.id, passwordController.text);
+        await _adminService.resetUserPassword(
+            _user!.id, passwordController.text);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -149,163 +150,187 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
           // Content
           Expanded(
             child: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text('Error: $_error', style: const TextStyle(color: Colors.red)),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _loadUser,
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                )
-              : _user == null
-                  ? const Center(child: Text('User not found'))
-                  : SingleChildScrollView(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // User Info Card
-                          Card(
-                            color: const Color(0xFF1E293B),
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      CircleAvatar(
-                                        radius: 40,
-                                        backgroundColor: _getRoleColor(_user!.role),
-                                        child: Text(
-                                          _user!.name[0].toUpperCase(),
-                                          style: const TextStyle(
-                                            fontSize: 32,
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 16),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text('Error: $_error',
+                                style: const TextStyle(color: Colors.red)),
+                            const SizedBox(height: 16),
+                            ElevatedButton(
+                              onPressed: _loadUser,
+                              child: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      )
+                    : _user == null
+                        ? const Center(child: Text('User not found'))
+                        : SingleChildScrollView(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // User Info Card
+                                Card(
+                                  color: const Color(0xFF1E293B),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
                                           children: [
-                                            Text(
-                                              _user!.name,
-                                              style: const TextStyle(
-                                                fontSize: 24,
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.white,
+                                            CircleAvatar(
+                                              radius: 40,
+                                              backgroundColor:
+                                                  _getRoleColor(_user!.role),
+                                              child: Text(
+                                                _user!.name[0].toUpperCase(),
+                                                style: const TextStyle(
+                                                  fontSize: 32,
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
                                               ),
                                             ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              _user!.email,
-                                              style: const TextStyle(
-                                                color: Colors.grey,
-                                                fontSize: 16,
+                                            const SizedBox(width: 16),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    _user!.name,
+                                                    style: const TextStyle(
+                                                      fontSize: 24,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: Colors.white,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    _user!.email,
+                                                    style: const TextStyle(
+                                                      color: Colors.grey,
+                                                      fontSize: 16,
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
                                             ),
                                           ],
                                         ),
+                                        const SizedBox(height: 16),
+                                        _DetailRow(
+                                            label: 'ID',
+                                            value: _user!.id.toString()),
+                                        _DetailRow(
+                                            label: 'Email',
+                                            value: _user!.email),
+                                        if (_user!.phone != null)
+                                          _DetailRow(
+                                              label: 'Phone',
+                                              value: _user!.phone!),
+                                        _DetailRow(
+                                          label: 'Role',
+                                          value: _user!.role.toUpperCase(),
+                                          valueColor:
+                                              _getRoleColor(_user!.role),
+                                        ),
+                                        if (_user!.status != null)
+                                          _DetailRow(
+                                              label: 'Status',
+                                              value: _user!.status!),
+                                        if (_user!.companyName != null)
+                                          _DetailRow(
+                                              label: 'Company',
+                                              value: _user!.companyName!),
+                                        _DetailRow(
+                                          label: 'Online',
+                                          value: _user!.isOnline ? 'Yes' : 'No',
+                                          valueColor: _user!.isOnline
+                                              ? Colors.green
+                                              : Colors.grey,
+                                        ),
+                                        _DetailRow(
+                                            label: 'Created At',
+                                            value: _user!.createdAt.toString()),
+                                        _DetailRow(
+                                            label: 'Updated At',
+                                            value: _user!.updatedAt.toString()),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                // Actions
+                                Column(
+                                  children: [
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: ElevatedButton.icon(
+                                        onPressed: () {
+                                          showDialog(
+                                            context: context,
+                                            builder: (context) => AlertDialog(
+                                              title: const Text('Change Role'),
+                                              content: Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  ListTile(
+                                                    title: const Text('Admin'),
+                                                    onTap: () {
+                                                      Navigator.pop(context);
+                                                      _updateUserRole('admin');
+                                                    },
+                                                  ),
+                                                  ListTile(
+                                                    title: const Text(
+                                                        'Company Manager'),
+                                                    onTap: () {
+                                                      Navigator.pop(context);
+                                                      _updateUserRole(
+                                                          'company_manager');
+                                                    },
+                                                  ),
+                                                  ListTile(
+                                                    title: const Text('Member'),
+                                                    onTap: () {
+                                                      Navigator.pop(context);
+                                                      _updateUserRole('member');
+                                                    },
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                        icon: const Icon(Icons.person),
+                                        label: const Text('Change Role'),
                                       ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 16),
-                                  _DetailRow(label: 'ID', value: _user!.id.toString()),
-                                  _DetailRow(label: 'Email', value: _user!.email),
-                                  if (_user!.phone != null)
-                                    _DetailRow(label: 'Phone', value: _user!.phone!),
-                                  _DetailRow(
-                                    label: 'Role',
-                                    value: _user!.role.toUpperCase(),
-                                    valueColor: _getRoleColor(_user!.role),
-                                  ),
-                                  if (_user!.status != null)
-                                    _DetailRow(label: 'Status', value: _user!.status!),
-                                  if (_user!.companyName != null)
-                                    _DetailRow(label: 'Company', value: _user!.companyName!),
-                                  _DetailRow(
-                                    label: 'Online',
-                                    value: _user!.isOnline ? 'Yes' : 'No',
-                                    valueColor: _user!.isOnline ? Colors.green : Colors.grey,
-                                  ),
-                                  _DetailRow(label: 'Created At', value: _user!.createdAt.toString()),
-                                  _DetailRow(label: 'Updated At', value: _user!.updatedAt.toString()),
-                                ],
-                              ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: ElevatedButton.icon(
+                                        onPressed: _resetPassword,
+                                        icon: const Icon(Icons.lock_reset),
+                                        label: const Text('Reset Password'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.orange,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(height: 16),
-                          // Actions
-                          Column(
-                            children: [
-                              SizedBox(
-                                width: double.infinity,
-                                child: ElevatedButton.icon(
-                                  onPressed: () {
-                                    showDialog(
-                                      context: context,
-                                      builder: (context) => AlertDialog(
-                                        title: const Text('Change Role'),
-                                        content: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            ListTile(
-                                              title: const Text('Admin'),
-                                              onTap: () {
-                                                Navigator.pop(context);
-                                                _updateUserRole('admin');
-                                              },
-                                            ),
-                                            ListTile(
-                                              title: const Text('Company Manager'),
-                                              onTap: () {
-                                                Navigator.pop(context);
-                                                _updateUserRole('company_manager');
-                                              },
-                                            ),
-                                            ListTile(
-                                              title: const Text('Member'),
-                                              onTap: () {
-                                                Navigator.pop(context);
-                                                _updateUserRole('member');
-                                              },
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                  icon: const Icon(Icons.person),
-                                  label: const Text('Change Role'),
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              SizedBox(
-                                width: double.infinity,
-                                child: ElevatedButton.icon(
-                                  onPressed: _resetPassword,
-                                  icon: const Icon(Icons.lock_reset),
-                                  label: const Text('Reset Password'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.orange,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
           ),
         ],
       ),
@@ -356,7 +381,8 @@ class _DetailRow extends StatelessWidget {
               value,
               style: TextStyle(
                 color: valueColor ?? Colors.white,
-                fontWeight: valueColor != null ? FontWeight.bold : FontWeight.normal,
+                fontWeight:
+                    valueColor != null ? FontWeight.bold : FontWeight.normal,
               ),
             ),
           ),
@@ -365,10 +391,3 @@ class _DetailRow extends StatelessWidget {
     );
   }
 }
-
-
-
-
-
-
-

@@ -7,11 +7,11 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../../../core/brand/brand_colors.dart';
-import '../../../services/auth_service.dart';
-import '../../../desktop/desktop_app.dart'
-    if (dart.library.html) '../../../desktop/desktop_app_stub.dart';
+import '../../../../core/services/auth_service.dart';
+import '../../../../platform/desktop/desktop_app.dart'
+    if (dart.library.html) '../../../../platform/desktop/desktop_app_stub.dart';
 
-import '../../../widgets/auth_guard.dart';
+import '../../../../presentation/widgets/auth_guard.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../auth/login_screen.dart';
 import '../home/home_screen.dart';
@@ -60,7 +60,8 @@ class _SplashScreenState extends State<SplashScreen>
     final prefsFuture = SharedPreferences.getInstance();
     final authFuture = AuthService().isAuthenticated().timeout(
           const Duration(milliseconds: 2500),
-          onTimeout: () => false, // fallback to login screen if network is too slow
+          onTimeout: () =>
+              false, // fallback to login screen if network is too slow
         );
 
     // Wait for the animation to finish OR a reasonable timeout if it hangs
@@ -82,8 +83,8 @@ class _SplashScreenState extends State<SplashScreen>
 
     if (!mounted) return;
 
-    final isDesktopPlatform = !kIsWeb &&
-        (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
+    final isDesktopPlatform =
+        !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
 
     Widget? destination;
 
@@ -358,13 +359,13 @@ class _SplashIconPainter extends CustomPainter {
 
           // Checkbox square
           final sqPaint = Paint()
-            ..color = BrandColors.navy.withValues(alpha: lineOp * clipboardOpacity)
+            ..color =
+                BrandColors.navy.withValues(alpha: lineOp * clipboardOpacity)
             ..style = PaintingStyle.stroke
             ..strokeWidth = 2 * s;
           canvas.drawRRect(
             RRect.fromRectAndRadius(
-              Rect.fromLTWH(
-                  (8 + slideX / s) * s, (y - 3.5 * s), 7 * s, 7 * s),
+              Rect.fromLTWH((8 + slideX / s) * s, (y - 3.5 * s), 7 * s, 7 * s),
               Radius.circular(1.5 * s),
             ),
             sqPaint,
@@ -372,7 +373,8 @@ class _SplashIconPainter extends CustomPainter {
 
           // Text line
           final linePaint = Paint()
-            ..color = BrandColors.navy.withValues(alpha: lineOp * clipboardOpacity)
+            ..color =
+                BrandColors.navy.withValues(alpha: lineOp * clipboardOpacity)
             ..style = PaintingStyle.stroke
             ..strokeWidth = 3 * s
             ..strokeCap = StrokeCap.round;
@@ -462,9 +464,7 @@ class _SplashIconPainter extends CustomPainter {
         ..strokeCap = StrokeCap.round;
       canvas.drawArc(
         Rect.fromCenter(
-            center: Offset(68 * s, 21 * s),
-            width: 14 * s,
-            height: 10 * s),
+            center: Offset(68 * s, 21 * s), width: 14 * s, height: 10 * s),
         0,
         pi,
         false,
@@ -514,9 +514,3 @@ class _SplashIconPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _SplashIconPainter old) => true;
 }
-
-
-
-
-
-

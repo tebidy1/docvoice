@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import '../services/auth_service.dart';
+import '../../core/services/auth_service.dart';
 
 class SecurePairingScreen extends StatefulWidget {
   const SecurePairingScreen({super.key});
@@ -32,10 +32,10 @@ class _SecurePairingScreenState extends State<SecurePairingScreen> {
           _isLoading = false;
         });
       } else {
-         ScaffoldMessenger.of(context).showSnackBar(
-           const SnackBar(content: Text("Failed to initiate pairing session")),
-         );
-         Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Failed to initiate pairing session")),
+        );
+        Navigator.pop(context);
       }
     }
   }
@@ -47,7 +47,8 @@ class _SecurePairingScreenState extends State<SecurePairingScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: Text("Link New Device", style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+        title: Text("Link New Device",
+            style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
         leading: const BackButton(color: Colors.white),
       ),
       body: Center(
@@ -58,7 +59,10 @@ class _SecurePairingScreenState extends State<SecurePairingScreen> {
             children: [
               Text(
                 "Authorize Another Device",
-                style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+                style: GoogleFonts.inter(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white),
               ),
               const SizedBox(height: 12),
               Text(
@@ -67,7 +71,6 @@ class _SecurePairingScreenState extends State<SecurePairingScreen> {
                 style: GoogleFonts.inter(color: Colors.white70),
               ),
               const SizedBox(height: 40),
-              
               if (_isLoading)
                 const CircularProgressIndicator()
               else ...[
@@ -90,7 +93,8 @@ class _SecurePairingScreenState extends State<SecurePairingScreen> {
                 ),
                 const SizedBox(height: 12),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   decoration: BoxDecoration(
                     color: Colors.white10,
                     borderRadius: BorderRadius.circular(12),
@@ -107,7 +111,6 @@ class _SecurePairingScreenState extends State<SecurePairingScreen> {
                   ),
                 ),
               ],
-              
               const SizedBox(height: 40),
               Text(
                 "This code is valid for 5 minutes.",
@@ -120,9 +123,3 @@ class _SecurePairingScreenState extends State<SecurePairingScreen> {
     );
   }
 }
-
-
-
-
-
-

@@ -6,7 +6,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../features/auth/pairing/presentation/providers/pairing_provider.dart';
-import '../../../services/auth_service.dart';
+import '../../../../core/services/auth_service.dart';
 import '../home/home_screen.dart';
 
 class QrScannerScreen extends ConsumerStatefulWidget {
@@ -337,9 +337,3 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen>
     );
   }
 }
-
-
-
-
-
-

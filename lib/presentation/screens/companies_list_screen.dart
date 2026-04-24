@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../models/company.dart';
-import '../services/admin_service.dart';
-import '../services/auth_service.dart';
+import '../../core/entities/company.dart';
+import '../../core/services/admin_service.dart';
+import '../../core/services/auth_service.dart';
 import '../widgets/create_company_dialog.dart';
 import '../widgets/create_company_dialog.dart';
 import '../widgets/window_title_bar.dart';
@@ -459,9 +459,3 @@ class _CompanyCard extends StatelessWidget {
     );
   }
 }
-
-
-
-
-
-

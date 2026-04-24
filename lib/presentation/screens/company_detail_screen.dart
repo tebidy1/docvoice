@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
-import '../services/admin_service.dart';
-import '../models/company.dart';
-import '../models/user.dart';
+import '../../core/services/admin_service.dart';
+import '../../core/entities/company.dart';
+import '../../core/entities/user.dart';
 import '../widgets/window_title_bar.dart';
 import 'users_list_screen.dart';
 
@@ -74,131 +74,166 @@ class _CompanyDetailScreenState extends State<CompanyDetailScreen> {
           // Content
           Expanded(
             child: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text('Error: $_error', style: const TextStyle(color: Colors.red)),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _loadCompany,
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                )
-              : _company == null
-                  ? const Center(child: Text('Company not found'))
-                  : SingleChildScrollView(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Company Info Card
-                          Card(
-                            color: const Color(0xFF1E293B),
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        _company!.name,
-                                        style: const TextStyle(
-                                          fontSize: 24,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text('Error: $_error',
+                                style: const TextStyle(color: Colors.red)),
+                            const SizedBox(height: 16),
+                            ElevatedButton(
+                              onPressed: _loadCompany,
+                              child: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      )
+                    : _company == null
+                        ? const Center(child: Text('Company not found'))
+                        : SingleChildScrollView(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Company Info Card
+                                Card(
+                                  color: const Color(0xFF1E293B),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(
+                                              _company!.name,
+                                              style: const TextStyle(
+                                                fontSize: 24,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                            Chip(
+                                              label: Text(
+                                                _company!.status.toUpperCase(),
+                                                style: const TextStyle(
+                                                    fontSize: 12),
+                                              ),
+                                              backgroundColor:
+                                                  _company!.isActive
+                                                      ? Colors.green
+                                                      : Colors.orange,
+                                            ),
+                                          ],
                                         ),
-                                      ),
-                                      Chip(
-                                        label: Text(
-                                          _company!.status.toUpperCase(),
-                                          style: const TextStyle(fontSize: 12),
-                                        ),
-                                        backgroundColor: _company!.isActive ? Colors.green : Colors.orange,
-                                      ),
-                                    ],
+                                        const SizedBox(height: 16),
+                                        _DetailRow(
+                                            label: 'ID',
+                                            value: _company!.id.toString()),
+                                        if (_company!.domain != null)
+                                          _DetailRow(
+                                              label: 'Domain',
+                                              value: _company!.domain!),
+                                        if (_company!.invitationCode != null)
+                                          _DetailRow(
+                                              label: 'Invitation Code',
+                                              value: _company!.invitationCode!),
+                                        if (_company!.code != null)
+                                          _DetailRow(
+                                              label: 'Code',
+                                              value: _company!.code!),
+                                        _DetailRow(
+                                            label: 'Plan Type',
+                                            value: _company!.planType),
+                                        _DetailRow(
+                                            label: 'Created At',
+                                            value:
+                                                _company!.createdAt.toString()),
+                                        _DetailRow(
+                                            label: 'Updated At',
+                                            value:
+                                                _company!.updatedAt.toString()),
+                                      ],
+                                    ),
                                   ),
-                                  const SizedBox(height: 16),
-                                  _DetailRow(label: 'ID', value: _company!.id.toString()),
-                                  if (_company!.domain != null)
-                                    _DetailRow(label: 'Domain', value: _company!.domain!),
-                                  if (_company!.invitationCode != null)
-                                    _DetailRow(label: 'Invitation Code', value: _company!.invitationCode!),
-                                  if (_company!.code != null)
-                                    _DetailRow(label: 'Code', value: _company!.code!),
-                                  _DetailRow(label: 'Plan Type', value: _company!.planType),
-                                  _DetailRow(label: 'Created At', value: _company!.createdAt.toString()),
-                                  _DetailRow(label: 'Updated At', value: _company!.updatedAt.toString()),
-                                ],
-                              ),
+                                ),
+                                const SizedBox(height: 16),
+                                // Actions
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: ElevatedButton.icon(
+                                        onPressed: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) =>
+                                                  UsersListScreen(
+                                                      companyId: _company!.id),
+                                            ),
+                                          );
+                                        },
+                                        icon: const Icon(Icons.people),
+                                        label: const Text('View Users'),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: ElevatedButton.icon(
+                                        onPressed: () async {
+                                          try {
+                                            final updated = await _adminService
+                                                .toggleCompanyStatus(
+                                                    _company!.id);
+                                            setState(() {
+                                              _company = updated;
+                                            });
+                                            if (mounted) {
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                    'Company ${updated.isActive ? "activated" : "suspended"} successfully',
+                                                  ),
+                                                  backgroundColor: Colors.green,
+                                                ),
+                                              );
+                                            }
+                                          } catch (e) {
+                                            if (mounted) {
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                SnackBar(
+                                                  content: Text('Error: $e'),
+                                                  backgroundColor: Colors.red,
+                                                ),
+                                              );
+                                            }
+                                          }
+                                        },
+                                        icon: Icon(_company!.isActive
+                                            ? Icons.pause
+                                            : Icons.play_arrow),
+                                        label: Text(_company!.isActive
+                                            ? 'Suspend'
+                                            : 'Activate'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: _company!.isActive
+                                              ? Colors.orange
+                                              : Colors.green,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(height: 16),
-                          // Actions
-                          Row(
-                            children: [
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => UsersListScreen(companyId: _company!.id),
-                                      ),
-                                    );
-                                  },
-                                  icon: const Icon(Icons.people),
-                                  label: const Text('View Users'),
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: () async {
-                                    try {
-                                      final updated = await _adminService.toggleCompanyStatus(_company!.id);
-                                      setState(() {
-                                        _company = updated;
-                                      });
-                                      if (mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                              'Company ${updated.isActive ? "activated" : "suspended"} successfully',
-                                            ),
-                                            backgroundColor: Colors.green,
-                                          ),
-                                        );
-                                      }
-                                    } catch (e) {
-                                      if (mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text('Error: $e'),
-                                            backgroundColor: Colors.red,
-                                          ),
-                                        );
-                                      }
-                                    }
-                                  },
-                                  icon: Icon(_company!.isActive ? Icons.pause : Icons.play_arrow),
-                                  label: Text(_company!.isActive ? 'Suspend' : 'Activate'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: _company!.isActive ? Colors.orange : Colors.green,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
           ),
         ],
       ),
@@ -237,10 +272,3 @@ class _DetailRow extends StatelessWidget {
     );
   }
 }
-
-
-
-
-
-
-

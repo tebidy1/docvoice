@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../utils/window_manager_proxy.dart';
+import '../../core/utils/window_manager_proxy.dart';
 import 'window_controls.dart';
 
 class WindowTitleBar extends StatelessWidget {
@@ -22,7 +22,8 @@ class WindowTitleBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bgColor = backgroundColor ?? const Color(0xFF1E293B).withValues(alpha: 0.8);
+    final bgColor =
+        backgroundColor ?? const Color(0xFF1E293B).withValues(alpha: 0.8);
     final txtColor = textColor ?? Colors.grey[400]!;
     final barHeight = height ?? 32.0;
 
@@ -78,7 +79,8 @@ class WindowTitleBar extends StatelessWidget {
               Expanded(
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: () {}, // Prevent window dragging when clicking on center widget
+                  onTap:
+                      () {}, // Prevent window dragging when clicking on center widget
                   child: centerWidget!,
                 ),
               ),
@@ -96,10 +98,3 @@ class WindowTitleBar extends StatelessWidget {
     );
   }
 }
-
-
-
-
-
-
-

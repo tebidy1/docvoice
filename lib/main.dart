@@ -8,29 +8,31 @@ import 'package:provider/provider.dart';
 import 'package:url_strategy/url_strategy.dart';
 
 import 'core/di/service_locator.dart';
-import 'desktop/desktop_app.dart'
-    if (dart.library.html) 'desktop/desktop_app_stub.dart';
+import 'platform/desktop/desktop_app.dart'
+    if (dart.library.html) 'platform/desktop/desktop_app_stub.dart';
 import 'landing_page/landing_page.dart';
 import 'landing_page/theme/app_theme.dart';
 import 'mobile_app/features/auth/login_screen.dart' as unified_login;
 import 'mobile_app/features/home/home_screen.dart' as unified_mobile;
 import 'mobile_app/features/splash/splash_screen.dart' as unified_splash;
 import 'mobile_app/services/websocket_service.dart' as unified_ws;
-import 'models/app_theme.dart';
-import 'screens/admin_dashboard_screen.dart'
-    if (dart.library.html) 'desktop/desktop_app_stub.dart' as desktop_admin;
-import 'screens/login_screen.dart'
+import 'core/entities/app_theme.dart';
+import 'presentation/screens/admin_dashboard_screen.dart'
+    if (dart.library.html) 'platform/desktop/desktop_app_stub.dart'
+    as desktop_admin;
+import 'presentation/screens/login_screen.dart'
     if (dart.library.html) 'mobile_app/features/auth/login_screen.dart'
     as desktop_login;
-import 'screens/qr_login_screen.dart';
-import 'screens/register_screen.dart'
-    if (dart.library.html) 'desktop/desktop_app_stub.dart' as desktop_register;
-import 'services/api_service.dart';
-import 'services/auth_service.dart';
-import 'services/theme_service.dart';
-import 'utils/window_manager_proxy.dart';
-import 'widgets/admin_guard.dart';
-import 'widgets/auth_guard.dart';
+import 'presentation/screens/qr_login_screen.dart';
+import 'presentation/screens/register_screen.dart'
+    if (dart.library.html) 'platform/desktop/desktop_app_stub.dart'
+    as desktop_register;
+import 'core/network/api_client.dart';
+import 'core/services/auth_service.dart';
+import 'core/services/theme_service.dart';
+import 'core/utils/window_manager_proxy.dart';
+import 'presentation/widgets/admin_guard.dart';
+import 'presentation/widgets/auth_guard.dart';
 
 void main() async {
   setPathUrlStrategy();

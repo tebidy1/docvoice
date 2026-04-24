@@ -10,9 +10,9 @@ import '../../mobile_app/models/note_model.dart';
 import '../../mobile_app/services/macro_service.dart';
 import '../../mobile_app/services/inbox_service.dart';
 import '../../mobile_app/services/groq_service.dart';
-import '../../services/api_service.dart';
-import '../../widgets/pattern_highlight_controller.dart';
-import '../../widgets/processing_overlay.dart';
+import '../../../core/network/api_client.dart';
+import '../../../presentation/widgets/pattern_highlight_controller.dart';
+import '../../../presentation/widgets/processing_overlay.dart';
 import '../../core/ai/ai_regex_patterns.dart';
 import '../../core/ai/text_processing_service.dart';
 import '../../services/ai/ai_processing_service.dart';
@@ -24,7 +24,7 @@ import '../../features/multimodal_ai/ai_studio_multimodal_service.dart';
 import '../../features/multimodal_ai/gemini_transcription_helper.dart';
 import '../../core/ai/ai_prompt_constants.dart';
 import '../../core/medical_departments.dart';
-import '../../services/department_service.dart';
+import '../../../core/services/department_service.dart';
 
 class ExtensionEditorScreen extends StatefulWidget {
   final NoteModel draftNote;

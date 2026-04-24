@@ -2,9 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
-import '../services/auth_service.dart';
-import '../utils/window_manager_helper.dart';
-
+import '../../core/services/auth_service.dart';
+import '../../core/utils/window_manager_helper.dart';
 
 class UserProfileHeader extends StatefulWidget {
   const UserProfileHeader({super.key});
@@ -96,7 +95,8 @@ class _UserProfileHeaderState extends State<UserProfileHeader> {
         print('Logout error: $e');
       } finally {
         // On desktop, resize window back to login screen size
-        if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+        if (!kIsWeb &&
+            (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
           try {
             // Signal that no dialog dispose should collapse the window
             WindowManagerHelper.isLoggingOut = true;
@@ -149,7 +149,7 @@ class _UserProfileHeaderState extends State<UserProfileHeader> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-         color: _isMenuOpen
+          color: _isMenuOpen
               ? Colors.white.withValues(alpha: 0.1)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
@@ -254,10 +254,3 @@ class _UserProfileHeaderState extends State<UserProfileHeader> {
     );
   }
 }
-
-
-
-
-
-
-

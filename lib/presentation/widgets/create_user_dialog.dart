@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../services/admin_service.dart';
+import '../../core/services/admin_service.dart';
 
 class CreateUserDialog extends StatefulWidget {
   final int companyId;
@@ -198,9 +198,3 @@ class _CreateUserDialogState extends State<CreateUserDialog> {
     );
   }
 }
-
-
-
-
-
-

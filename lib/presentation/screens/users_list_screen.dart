@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../models/user.dart';
-import '../services/admin_service.dart';
-import '../services/auth_service.dart';
+import '../../core/entities/user.dart';
+import '../../core/services/admin_service.dart';
+import '../../core/services/auth_service.dart';
 import '../widgets/create_user_dialog.dart';
 import '../widgets/window_title_bar.dart';
 import 'user_detail_screen.dart';
@@ -459,9 +459,3 @@ class _UserCard extends StatelessWidget {
     );
   }
 }
-
-
-
-
-
-

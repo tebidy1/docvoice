@@ -6,7 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../features/auth/pairing/presentation/providers/pairing_provider.dart';
-import '../../services/api_service.dart';
+import '../../core/network/api_client.dart';
 import '../../core/services/auth_service.dart';
 
 class QrLoginScreen extends ConsumerStatefulWidget {

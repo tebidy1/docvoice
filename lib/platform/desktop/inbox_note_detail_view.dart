@@ -3,31 +3,31 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/inbox_note.dart';
-import '../mobile_app/models/generated_output.dart';
-import '../models/macro.dart';
-import '../models/smart_suggestion.dart';
-import '../services/inbox_service.dart';
-import '../services/macro_service.dart';
-import '../utils/window_manager_helper.dart';
-import '../widgets/processing_overlay.dart';
-import '../widgets/pattern_highlight_controller.dart';
-// ✅ Core AI Brain — centralized services (Phase 1 refactor)
-import '../core/ai/ai_regex_patterns.dart';
-import '../core/ai/text_processing_service.dart';
-import '../services/ai/ai_processing_service.dart';
-import '../services/windows_injector.dart';
-// ⚡ Multimodal AI — Windows Pilot (Phase 1)
-import '../features/multimodal_ai/multimodal_ai_service.dart';
-import '../features/multimodal_ai/ai_studio_multimodal_service.dart';
-import '../features/multimodal_ai/gemini_transcription_helper.dart';
+import '../../core/entities/inbox_note.dart';
+import '../../mobile_app/models/generated_output.dart';
+import '../../core/entities/macro.dart';
+import '../../core/entities/smart_suggestion.dart';
+import '../../core/services/inbox_service.dart';
+import '../../core/services/macro_service.dart';
+import '../../core/utils/window_manager_helper.dart';
+import '../../presentation/widgets/processing_overlay.dart';
+import '../../presentation/widgets/pattern_highlight_controller.dart';
+import '../../core/ai/ai_regex_patterns.dart';
+import '../../core/ai/text_processing_service.dart';
+import '../../core/services/ai/ai_processing_service.dart';
+import '../../core/services/windows_injector.dart';
+import '../../features/multimodal_ai/multimodal_ai_service.dart';
+import '../../features/multimodal_ai/ai_studio_multimodal_service.dart';
+import '../../features/multimodal_ai/gemini_transcription_helper.dart';
 import 'dart:io' show File;
-import '../core/medical_departments.dart';
-import '../services/department_service.dart';
+import '../../core/medical_departments.dart';
+import '../../core/services/department_service.dart';
+
 class InboxNoteDetailView extends StatefulWidget {
   final NoteModel note;
   final Macro? autoStartMacro;
-  final Stream<String>? pendingTextStream; // For instant open after Groq/Oracle recording
+  final Stream<String>?
+      pendingTextStream; // For instant open after Groq/Oracle recording
   final int noteNumber; // 1-based, oldest = 1
   /// When provided, the view enters One-Shot mode:
   /// The template card is shown immediately, and choosing a template sends
@@ -55,13 +55,12 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     text: "",
     patternStyles: {
       // ✅ Using centralized AIRegexPatterns (Phase 1 refactor)
-      AIRegexPatterns.selectPlaceholderPattern:
-          const TextStyle(
-              color: Colors.orange,
-              backgroundColor: Color(0x33FF9800),
-              fontWeight: FontWeight.bold),
-      AIRegexPatterns.anyBracketPattern:
-          const TextStyle(color: Colors.orange, backgroundColor: Color(0x33FF9800)),
+      AIRegexPatterns.selectPlaceholderPattern: const TextStyle(
+          color: Colors.orange,
+          backgroundColor: Color(0x33FF9800),
+          fontWeight: FontWeight.bold),
+      AIRegexPatterns.anyBracketPattern: const TextStyle(
+          color: Colors.orange, backgroundColor: Color(0x33FF9800)),
       AIRegexPatterns.headerPattern: const TextStyle(
         decoration: TextDecoration.underline,
         decorationColor: Colors.white,
@@ -74,7 +73,8 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   Macro? _selectedMacro;
   bool _isGenerating = false;
   bool _isOneShotGenerating = false; // ⚡ One-Shot AI state
-  bool _isTemplateCardExpanded = true;  // Accordion: template card expanded by default
+  bool _isTemplateCardExpanded =
+      true; // Accordion: template card expanded by default
   List<SmartSuggestion> _suggestions = [];
   List<Macro> _quickMacros = [];
 
@@ -113,92 +113,100 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     if (widget.oneShotAudioPath != null) {
       _isOneShotMode = true;
       _isTemplateCardExpanded = true;
-      
+
       // Proactive 2-Step Transcription: If this is a new recording (placeholder text), transcribe it immediately in the background.
-      if (widget.note.rawText.isEmpty || widget.note.rawText.contains('لا يوجد نص')) {
+      if (widget.note.rawText.isEmpty ||
+          widget.note.rawText.contains('لا يوجد نص')) {
         _showCleanTemplatePicker = true; // Shows the clean UI
-        _backgroundTranscriptionFuture = _proactiveTranscribe(widget.oneShotAudioPath!);
+        _backgroundTranscriptionFuture =
+            _proactiveTranscribe(widget.oneShotAudioPath!);
       } else {
         // If we already have text or it's an existing note opened in One-Shot mode, turn off One-Shot
         // to force subsequent macro clicks to use the text-based generator.
         _isOneShotMode = false;
       }
-      return; 
+      return;
     }
 
     // Attempt to determine if we opened an existing note while in Gemini One-Shot mode
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-       if (widget.oneShotAudioPath == null && widget.note.audioPath != null && widget.note.audioPath!.isNotEmpty) {
-           final prefs = await SharedPreferences.getInstance();
-           final sttEngine = prefs.getString('stt_engine_desktop_pref') ?? 'oracle_live';
-           if (sttEngine == 'gemini_oneshot' && mounted) {
-              setState(() {
-                 _isOneShotMode = true;
-                 _isTemplateCardExpanded = true;
-              });
-           }
-       }
+      if (widget.oneShotAudioPath == null &&
+          widget.note.audioPath != null &&
+          widget.note.audioPath!.isNotEmpty) {
+        final prefs = await SharedPreferences.getInstance();
+        final sttEngine =
+            prefs.getString('stt_engine_desktop_pref') ?? 'oracle_live';
+        if (sttEngine == 'gemini_oneshot' && mounted) {
+          setState(() {
+            _isOneShotMode = true;
+            _isTemplateCardExpanded = true;
+          });
+        }
+      }
     });
 
     // 1. Setup Stream (If Instant Open after Groq/Oracle recording)
     if (widget.pendingTextStream != null) {
       _isLoadingText = true;
-      
+
       // Start the same animation timer as AI generation
       _generationTimer?.cancel();
-      _generationTimer = Timer.periodic(const Duration(milliseconds: 1500), (timer) {
+      _generationTimer =
+          Timer.periodic(const Duration(milliseconds: 1500), (timer) {
         if (mounted) {
           setState(() {
             _elapsedSeconds++;
-            _statusMessageIndex = (_statusMessageIndex + 1) % _statusMessages.length;
+            _statusMessageIndex =
+                (_statusMessageIndex + 1) % _statusMessages.length;
           });
         }
       });
 
       _textStreamSubscription = widget.pendingTextStream!.listen((text) {
         if (mounted) {
-            setState(() {
-             _isLoadingText = false; // Stop Loading
-             _generationTimer?.cancel(); // Stop animation
-             
-             // Update the "source" note model effectively so future operations use this text
-             widget.note.rawText = text; // <-- CRITICAL FIX: Ensure UI reads from NoteModel
-             
-             // Update the editor controller so Source tab shows the text immediately
-             if (_activeTabIndex == 0) {
-               _finalNoteController.text = text;
-             }
-           });
+          setState(() {
+            _isLoadingText = false; // Stop Loading
+            _generationTimer?.cancel(); // Stop animation
+
+            // Update the "source" note model effectively so future operations use this text
+            widget.note.rawText =
+                text; // <-- CRITICAL FIX: Ensure UI reads from NoteModel
+
+            // Update the editor controller so Source tab shows the text immediately
+            if (_activeTabIndex == 0) {
+              _finalNoteController.text = text;
+            }
+          });
         }
       }, onError: (e) {
-         if (mounted) {
-             _showError("Transcription Failed: $e");
-             setState(() {
-               _isLoadingText = false;
-               _generationTimer?.cancel();
-             });
-         }
+        if (mounted) {
+          _showError("Transcription Failed: $e");
+          setState(() {
+            _isLoadingText = false;
+            _generationTimer?.cancel();
+          });
+        }
       }, onDone: () {
-         if (mounted && _isLoadingText) {
-            setState(() {
-              _isLoadingText = false;
-              _generationTimer?.cancel();
-            });
-         }
+        if (mounted && _isLoadingText) {
+          setState(() {
+            _isLoadingText = false;
+            _generationTimer?.cancel();
+          });
+        }
       });
     }
 
     // 2. Initial Load from passed widget (Fast) - Only if not loading stream
     if (widget.note.generatedOutputs.isNotEmpty) {
-       _generatedOutputs = List.from(widget.note.generatedOutputs);
-       _activeTabIndex = _generatedOutputs.length;
-       _finalNoteController.text = _generatedOutputs.last.content ?? "";
-       _isTemplateCardExpanded = false;
+      _generatedOutputs = List.from(widget.note.generatedOutputs);
+      _activeTabIndex = _generatedOutputs.length;
+      _finalNoteController.text = _generatedOutputs.last.content ?? "";
+      _isTemplateCardExpanded = false;
     } else if (widget.note.formattedText.isNotEmpty && !_isLoadingText) {
       // Legacy compatibility
       final legacyName = widget.note.summary ?? 'Legacy Note';
       _generatedOutputs.add(GeneratedOutput(
-        title: legacyName, 
+        title: legacyName,
         content: widget.note.formattedText,
         macroId: widget.note.appliedMacroId,
       ));
@@ -209,11 +217,11 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
       _isTemplateCardExpanded = true;
       _finalNoteController.text = widget.note.rawText;
     }
-    
+
     // 3. Fresh Fetch from Database (Robust)
     // Fixes "Stale Data" issue where parent list has old object
     if (!_isLoadingText) {
-       _refreshNoteContent();
+      _refreshNoteContent();
     }
 
     if (widget.autoStartMacro != null) {
@@ -228,51 +236,55 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
       final freshNote = await _inboxService.getNoteById(widget.note.id);
       if (freshNote != null) {
         if (mounted) {
-           setState(() {
-             // 1. Update Text if empty (or force update if needed, but usually we trust local if user is typing)
-             if (_generatedOutputs.isEmpty && freshNote.generatedOutputs.isNotEmpty) {
-                 _generatedOutputs = List.from(freshNote.generatedOutputs);
-                 _activeTabIndex = _generatedOutputs.length;
-                 _finalNoteController.text = _generatedOutputs.last.content ?? "";
-                 _isTemplateCardExpanded = false;
-             } else if (_generatedOutputs.isEmpty && freshNote.formattedText.isNotEmpty) {
-                 final legacyName = freshNote.summary ?? 'Legacy Note';
-                 _generatedOutputs.add(GeneratedOutput(
-                   title: legacyName, 
-                   content: freshNote.formattedText,
-                   macroId: freshNote.appliedMacroId,
-                 ));
-                 _activeTabIndex = 1;
-                 _finalNoteController.text = freshNote.formattedText;
-                 _isTemplateCardExpanded = false;
-             }
-             
-             // 2. Restore Selected Macro
-             if (_selectedMacro == null && freshNote.appliedMacroId != null) {
-                 // Try to find in quick macros first
-                 final found = _quickMacros.firstWhere(
-                     (m) => m.id == freshNote.appliedMacroId, 
-                     orElse: () => Macro()..id = -1 // Dummy
-                 );
-                 
-                 if (found.id != -1) {
-                     _selectedMacro = found;
-                 } else {
-                     // If not in quick macros, we might need to fetch it?
-                     // For now, let's just leave it or try to fetch from service if we want to be perfect.
-                     // But _quickMacros usually has popular ones.
-                     // Let's rely on _loadQuickMacros logic too, but this refreshes it.
-                     
-                     // Optimization: If we really want to show it, we should fetch it.
-                     _macroService.getAllMacros().then((all) {
-                         final exact = all.where((m) => m.id == freshNote.appliedMacroId).firstOrNull;
-                         if (exact != null && mounted) {
-                             setState(() => _selectedMacro = exact);
-                         }
-                     });
-                 }
-             }
-           });
+          setState(() {
+            // 1. Update Text if empty (or force update if needed, but usually we trust local if user is typing)
+            if (_generatedOutputs.isEmpty &&
+                freshNote.generatedOutputs.isNotEmpty) {
+              _generatedOutputs = List.from(freshNote.generatedOutputs);
+              _activeTabIndex = _generatedOutputs.length;
+              _finalNoteController.text = _generatedOutputs.last.content ?? "";
+              _isTemplateCardExpanded = false;
+            } else if (_generatedOutputs.isEmpty &&
+                freshNote.formattedText.isNotEmpty) {
+              final legacyName = freshNote.summary ?? 'Legacy Note';
+              _generatedOutputs.add(GeneratedOutput(
+                title: legacyName,
+                content: freshNote.formattedText,
+                macroId: freshNote.appliedMacroId,
+              ));
+              _activeTabIndex = 1;
+              _finalNoteController.text = freshNote.formattedText;
+              _isTemplateCardExpanded = false;
+            }
+
+            // 2. Restore Selected Macro
+            if (_selectedMacro == null && freshNote.appliedMacroId != null) {
+              // Try to find in quick macros first
+              final found = _quickMacros.firstWhere(
+                  (m) => m.id == freshNote.appliedMacroId,
+                  orElse: () => Macro()..id = -1 // Dummy
+                  );
+
+              if (found.id != -1) {
+                _selectedMacro = found;
+              } else {
+                // If not in quick macros, we might need to fetch it?
+                // For now, let's just leave it or try to fetch from service if we want to be perfect.
+                // But _quickMacros usually has popular ones.
+                // Let's rely on _loadQuickMacros logic too, but this refreshes it.
+
+                // Optimization: If we really want to show it, we should fetch it.
+                _macroService.getAllMacros().then((all) {
+                  final exact = all
+                      .where((m) => m.id == freshNote.appliedMacroId)
+                      .firstOrNull;
+                  if (exact != null && mounted) {
+                    setState(() => _selectedMacro = exact);
+                  }
+                });
+              }
+            }
+          });
         }
       }
     } catch (e) {
@@ -285,17 +297,28 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
 
     final prefs = await SharedPreferences.getInstance();
     final deptId = DepartmentService().value ?? prefs.getString('specialty');
-    final allowedCategories = (deptId != null 
-        ? MedicalDepartments.getRelevantCategories(deptId)
-        : ['General']).map((c) => c.toLowerCase()).toList();
+    final allowedCategories = (deptId != null
+            ? MedicalDepartments.getRelevantCategories(deptId)
+            : ['General'])
+        .map((c) => c.toLowerCase())
+        .toList();
 
     bool isAllowed(Macro m) {
       // The API might send category as "[Cardiology, General]" or "Cardiology, General"
-      final cleanCat = m.category.replaceAll('[', '').replaceAll(']', '').replaceAll('"', '').replaceAll("'", "");
-      final cats = cleanCat.split(',').map((e) => e.trim().toLowerCase()).where((e) => e.isNotEmpty).toList();
-      
+      final cleanCat = m.category
+          .replaceAll('[', '')
+          .replaceAll(']', '')
+          .replaceAll('"', '')
+          .replaceAll("'", "");
+      final cats = cleanCat
+          .split(',')
+          .map((e) => e.trim().toLowerCase())
+          .where((e) => e.isNotEmpty)
+          .toList();
+
       if (cats.isEmpty) return true;
-      if (cats.any((c) => c == 'general' || c == 'general practice')) return true;
+      if (cats.any((c) => c == 'general' || c == 'general practice'))
+        return true;
       return cats.any((c) => allowedCategories.contains(c));
     }
 
@@ -311,16 +334,18 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     if (mounted) {
       Macro? restoredMacro;
       if (_selectedMacro == null && widget.note.appliedMacroId != null) {
-          restoredMacro = allowedMacros.where((m) => m.id == widget.note.appliedMacroId).firstOrNull;
-          if (restoredMacro != null) {
-              allowedMacros.remove(restoredMacro);
-              allowedMacros.insert(0, restoredMacro);
-          }
+        restoredMacro = allowedMacros
+            .where((m) => m.id == widget.note.appliedMacroId)
+            .firstOrNull;
+        if (restoredMacro != null) {
+          allowedMacros.remove(restoredMacro);
+          allowedMacros.insert(0, restoredMacro);
+        }
       }
 
       setState(() {
-         _quickMacros = allowedMacros;
-         if (restoredMacro != null) _selectedMacro = restoredMacro;
+        _quickMacros = allowedMacros;
+        if (restoredMacro != null) _selectedMacro = restoredMacro;
       });
     }
   }
@@ -330,19 +355,22 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     _generationTimer?.cancel();
     _textStreamSubscription?.cancel(); // Clean up stream
     _debounceTimer?.cancel();
-    
+
     // Sync current text field state before saving
     if (_activeTabIndex == 0) {
       widget.note.rawText = _finalNoteController.text;
-    } else if (_activeTabIndex > 0 && _activeTabIndex <= _generatedOutputs.length) {
-      _generatedOutputs[_activeTabIndex - 1].content = _finalNoteController.text;
+    } else if (_activeTabIndex > 0 &&
+        _activeTabIndex <= _generatedOutputs.length) {
+      _generatedOutputs[_activeTabIndex - 1].content =
+          _finalNoteController.text;
     }
-    
+
     // Attempt one final sync fire-and-forget in case user typed quickly and closed
     _inboxService.updateNote(
       widget.note.id,
       rawText: widget.note.rawText,
-      formattedText: _generatedOutputs.isNotEmpty ? _generatedOutputs.last.content : '',
+      formattedText:
+          _generatedOutputs.isNotEmpty ? _generatedOutputs.last.content : '',
       generatedOutputs: _generatedOutputs.map((e) => e.toJson()).toList(),
       summary: widget.note.summary,
       suggestedMacroId: widget.note.suggestedMacroId,
@@ -362,7 +390,7 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   Future<void> _restoreWindow() async {
     // Restore to sidebar dimensions (InboxManagerDialog is still open underneath)
     if (mounted) {
-       await WindowManagerHelper.expandToSidebar(context);
+      await WindowManagerHelper.expandToSidebar(context);
     }
   }
 
@@ -372,7 +400,7 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
       _selectedMacro = macro;
       _elapsedSeconds = 0;
       _statusMessageIndex = 0;
-      _isTemplateCardExpanded = false;  // Collapse template accordion
+      _isTemplateCardExpanded = false; // Collapse template accordion
     });
 
     // Start timer for AI Processing Ring
@@ -404,22 +432,23 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     try {
       // ✅ Use centralized AIProcessingService (Phase 1 refactor)
       final aiService = AIProcessingService();
-      final enableSuggestions = await AIProcessingService.isSmartSuggestionsEnabled();
-      
+      final enableSuggestions =
+          await AIProcessingService.isSmartSuggestionsEnabled();
+
       final result = await aiService.processNote(
         transcript: widget.note.rawText,
         macroContent: macro.content,
-        mode: enableSuggestions ? AIProcessingMode.smart : AIProcessingMode.fast,
+        mode:
+            enableSuggestions ? AIProcessingMode.smart : AIProcessingMode.fast,
       );
 
       if (result.success) {
         if (enableSuggestions) {
           setState(() {
             _generatedOutputs.add(GeneratedOutput(
-              macroId: macro.id,
-              title: macro.trigger, 
-              content: result.formattedNote
-            ));
+                macroId: macro.id,
+                title: macro.trigger,
+                content: result.formattedNote));
             _activeTabIndex = _generatedOutputs.length;
             _finalNoteController.text = result.formattedNote;
             _suggestions = result.missingSuggestions
@@ -431,10 +460,9 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
         } else {
           setState(() {
             _generatedOutputs.add(GeneratedOutput(
-              macroId: macro.id,
-              title: macro.trigger, 
-              content: result.formattedNote
-            ));
+                macroId: macro.id,
+                title: macro.trigger,
+                content: result.formattedNote));
             _activeTabIndex = _generatedOutputs.length;
             _finalNoteController.text = result.formattedNote;
             _suggestions = [];
@@ -456,16 +484,15 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
 
   Future<void> _applyInsuranceTemplate() async {
     final allMacros = await _macroService.getAllMacros();
-    final insuranceMacro = allMacros.firstWhere(
-      (m) => m.trigger.toUpperCase() == 'INSURANCE',
-      orElse: () {
-        final m = Macro();
-        m.trigger = 'INSURANCE';
-        m.content = 'Rewrite the note to emphasize medical necessity, making it suitable for insurance approval. Ensure justification for any tests, procedures, and medications is clearly documented and aligned with the reported symptoms and diagnosis.';
-        m.isAiMacro = true;
-        return m;
-      }
-    );
+    final insuranceMacro = allMacros
+        .firstWhere((m) => m.trigger.toUpperCase() == 'INSURANCE', orElse: () {
+      final m = Macro();
+      m.trigger = 'INSURANCE';
+      m.content =
+          'Rewrite the note to emphasize medical necessity, making it suitable for insurance approval. Ensure justification for any tests, procedures, and medications is clearly documented and aligned with the reported symptoms and diagnosis.';
+      m.isAiMacro = true;
+      return m;
+    });
 
     if (_isGenerating || _isLoadingText) return;
 
@@ -476,18 +503,20 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     });
 
     _generationTimer?.cancel();
-    _generationTimer = Timer.periodic(const Duration(milliseconds: 1500), (timer) {
+    _generationTimer =
+        Timer.periodic(const Duration(milliseconds: 1500), (timer) {
       if (mounted) {
         setState(() {
           _elapsedSeconds++;
-          _statusMessageIndex = (_statusMessageIndex + 1) % _statusMessages.length;
+          _statusMessageIndex =
+              (_statusMessageIndex + 1) % _statusMessages.length;
         });
       }
     });
 
     try {
       final aiService = AIProcessingService();
-      
+
       final textToProcess = _finalNoteController.text;
 
       final result = await aiService.processNote(
@@ -499,10 +528,9 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
       if (result.success) {
         setState(() {
           _generatedOutputs.add(GeneratedOutput(
-            macroId: insuranceMacro.id,
-            title: insuranceMacro.trigger, 
-            content: result.formattedNote
-          ));
+              macroId: insuranceMacro.id,
+              title: insuranceMacro.trigger,
+              content: result.formattedNote));
           _activeTabIndex = _generatedOutputs.length;
           _finalNoteController.text = result.formattedNote;
         });
@@ -518,7 +546,7 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
       setState(() => _isGenerating = false);
     }
   }
-  
+
   // ═══════════════════════════════════════════════════════════════════════
   // 🎙 PROACTIVE TRANSCRIPTION (2-Step Architecture Step 1)
   // ═══════════════════════════════════════════════════════════════════════
@@ -527,7 +555,8 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     // so the user can immediately select a template while this runs in the background.
     // Uses the unified GeminiTranscriptionHelper (single source of truth).
 
-    final transcript = await GeminiTranscriptionHelper().transcribeFromPath(audioPath);
+    final transcript =
+        await GeminiTranscriptionHelper().transcribeFromPath(audioPath);
 
     if (mounted) {
       if (transcript != null) {
@@ -580,11 +609,11 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     // Determine MIME type from file extension
     final ext = audioPath.split('.').last.toLowerCase();
     final mimeType = switch (ext) {
-      'm4a'  => 'audio/m4a',
-      'mp4'  => 'audio/mp4',
+      'm4a' => 'audio/m4a',
+      'mp4' => 'audio/mp4',
       'webm' => 'audio/webm',
-      'ogg'  => 'audio/ogg',
-      _      => 'audio/wav', // Windows default
+      'ogg' => 'audio/ogg',
+      _ => 'audio/wav', // Windows default
     };
 
     setState(() {
@@ -601,7 +630,8 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
       if (mounted) {
         setState(() {
           _elapsedSeconds++;
-          _statusMessageIndex = (_statusMessageIndex + 1) % _statusMessages.length;
+          _statusMessageIndex =
+              (_statusMessageIndex + 1) % _statusMessages.length;
         });
       }
     });
@@ -613,21 +643,20 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
 
       // Single multimodal call — transcription + formatting in one pass
       final result = await _multimodalService.processAudioNote(
-        audioBytes:   audioBytes,
-        mimeType:     mimeType,
+        audioBytes: audioBytes,
+        mimeType: mimeType,
         macroContent: macro.content,
         globalPrompt: globalPrmt,
-        specialty:    specialty,
+        specialty: specialty,
       );
 
       if (result.success) {
         if (mounted) {
           setState(() {
             _generatedOutputs.add(GeneratedOutput(
-              macroId: macro.id,
-              title: macro.trigger, 
-              content: result.formattedNote
-            ));
+                macroId: macro.id,
+                title: macro.trigger,
+                content: result.formattedNote));
             _activeTabIndex = _generatedOutputs.length;
             _finalNoteController.text = result.formattedNote;
             _suggestions = []; // One-Shot mode has no separate suggestions
@@ -639,7 +668,8 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
                 children: [
                   const Icon(Icons.bolt, color: Colors.amber, size: 18),
                   const SizedBox(width: 8),
-                  Expanded(child: Text(
+                  Expanded(
+                      child: Text(
                     '⚡ One-Shot AI complete (${result.providerName})',
                     style: const TextStyle(fontSize: 13),
                   )),
@@ -662,41 +692,45 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   }
 
   Future<void> _autoSaveGeneratedContent(String content, Macro macro) async {
-      try {
-        await _inboxService.updateNote(
-          widget.note.id,
-          rawText: widget.note.rawText.isNotEmpty ? widget.note.rawText : 'لا يوجد نص اصلي عند اختيار هذا النموذج',
-          formattedText: _generatedOutputs.isNotEmpty ? _generatedOutputs.last.content : '',
-          generatedOutputs: _generatedOutputs.map((e) => e.toJson()).toList(),
-          summary: macro.trigger, // Store template name for badge display
-          suggestedMacroId: macro.id, 
-        );
-        
-        // Update local object so dispose/'Back' saves the correct summary too
-        widget.note.summary = macro.trigger;
-        widget.note.suggestedMacroId = macro.id;
-        
-        if (mounted) {
-           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-             content: Text("✅ Auto-saved AI Result"),
-             backgroundColor: Colors.green,
-             duration: Duration(seconds: 2),
-           ));
-        }
-      } catch (e) {
-        print("Auto-save failed: $e");
+    try {
+      await _inboxService.updateNote(
+        widget.note.id,
+        rawText: widget.note.rawText.isNotEmpty
+            ? widget.note.rawText
+            : 'لا يوجد نص اصلي عند اختيار هذا النموذج',
+        formattedText:
+            _generatedOutputs.isNotEmpty ? _generatedOutputs.last.content : '',
+        generatedOutputs: _generatedOutputs.map((e) => e.toJson()).toList(),
+        summary: macro.trigger, // Store template name for badge display
+        suggestedMacroId: macro.id,
+      );
+
+      // Update local object so dispose/'Back' saves the correct summary too
+      widget.note.summary = macro.trigger;
+      widget.note.suggestedMacroId = macro.id;
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("✅ Auto-saved AI Result"),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ));
       }
+    } catch (e) {
+      print("Auto-save failed: $e");
+    }
   }
 
   void _onManualEdit(String newText) {
     if (_activeTabIndex == 0) {
       widget.note.rawText = newText;
-    } else if (_activeTabIndex > 0 && _activeTabIndex <= _generatedOutputs.length) {
+    } else if (_activeTabIndex > 0 &&
+        _activeTabIndex <= _generatedOutputs.length) {
       _generatedOutputs[_activeTabIndex - 1].content = newText;
     }
-    
+
     if (_debounceTimer?.isActive ?? false) _debounceTimer!.cancel();
-    
+
     _debounceTimer = Timer(const Duration(seconds: 2), () {
       _saveDraftUpdate();
     });
@@ -705,18 +739,23 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   Future<void> _saveDraftUpdate() async {
     try {
       if (!mounted) return;
-      
+
       // Sync current text field state before saving
       if (_activeTabIndex == 0) {
         widget.note.rawText = _finalNoteController.text;
-      } else if (_activeTabIndex > 0 && _activeTabIndex <= _generatedOutputs.length) {
-        _generatedOutputs[_activeTabIndex - 1].content = _finalNoteController.text;
+      } else if (_activeTabIndex > 0 &&
+          _activeTabIndex <= _generatedOutputs.length) {
+        _generatedOutputs[_activeTabIndex - 1].content =
+            _finalNoteController.text;
       }
-      
+
       await _inboxService.updateNote(
         widget.note.id,
-        rawText: widget.note.rawText.isNotEmpty ? widget.note.rawText : 'لا يوجد نص اصلي عند اختيار هذا النموذج', // REQUIRED by backend to not lose transcript
-        formattedText: _generatedOutputs.isNotEmpty ? _generatedOutputs.last.content : '',
+        rawText: widget.note.rawText.isNotEmpty
+            ? widget.note.rawText
+            : 'لا يوجد نص اصلي عند اختيار هذا النموذج', // REQUIRED by backend to not lose transcript
+        formattedText:
+            _generatedOutputs.isNotEmpty ? _generatedOutputs.last.content : '',
         generatedOutputs: _generatedOutputs.map((e) => e.toJson()).toList(),
         summary: widget.note.summary,
         suggestedMacroId: widget.note.suggestedMacroId,
@@ -733,8 +772,10 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     // Save current tab content
     if (_activeTabIndex == 0) {
       widget.note.rawText = _finalNoteController.text;
-    } else if (_activeTabIndex > 0 && _activeTabIndex <= _generatedOutputs.length) {
-      _generatedOutputs[_activeTabIndex - 1].content = _finalNoteController.text;
+    } else if (_activeTabIndex > 0 &&
+        _activeTabIndex <= _generatedOutputs.length) {
+      _generatedOutputs[_activeTabIndex - 1].content =
+          _finalNoteController.text;
     }
 
     setState(() {
@@ -754,7 +795,7 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
 
     setState(() {
       _generatedOutputs.removeAt(index - 1);
-      
+
       // Select the preceding tab
       if (_activeTabIndex == index) {
         _switchTab(index - 1);
@@ -763,12 +804,14 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
         _activeTabIndex--;
       }
     });
-    
+
     // Auto save the deletion
     _inboxService.updateNote(
       widget.note.id,
       generatedOutputs: _generatedOutputs.map((e) => e.toJson()).toList(),
-      formattedText: _generatedOutputs.isNotEmpty ? _generatedOutputs.last.content ?? '' : '',
+      formattedText: _generatedOutputs.isNotEmpty
+          ? _generatedOutputs.last.content ?? ''
+          : '',
     );
   }
 
@@ -808,10 +851,11 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     String sourceText = '';
     if (_activeTabIndex == 0) {
       sourceText = widget.note.rawText;
-    } else if (_activeTabIndex > 0 && _activeTabIndex <= _generatedOutputs.length) {
+    } else if (_activeTabIndex > 0 &&
+        _activeTabIndex <= _generatedOutputs.length) {
       sourceText = _generatedOutputs[_activeTabIndex - 1].content ?? '';
     }
-    
+
     // ✅ Use TextProcessingService.applySmartCopy (Phase 1 refactor)
     // FIXED: Removes placeholder tokens inline, NOT entire lines
     return TextProcessingService.applySmartCopy(sourceText);
@@ -827,13 +871,15 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     try {
       // Use smartInject: handles alwaysOnTop toggle + blur + Ctrl+V
       await WindowsInjector().smartInject(cleanText);
-      
+
       // SET STATUS TO COPIED
       await _inboxService.updateStatus(widget.note.id, NoteStatus.copied);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("✅ Copied & Injected into EMR"), backgroundColor: Colors.green),
+          const SnackBar(
+              content: Text("✅ Copied & Injected into EMR"),
+              backgroundColor: Colors.green),
         );
       }
     } catch (e) {
@@ -842,23 +888,23 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   }
 
   void _handleEditorTap() {
-      if (_activeTabIndex == 0) return; // Don't format placeholders in raw text
-      
-      Future.delayed(const Duration(milliseconds: 100), () {
-          if (!mounted) return;
-          final selection = _finalNoteController.selection;
-          if (!selection.isValid || !selection.isCollapsed) return;
+    if (_activeTabIndex == 0) return; // Don't format placeholders in raw text
 
-          // ✅ Use TextProcessingService.findPlaceholderAtCursor (Phase 1 refactor)
-          final placeholder = TextProcessingService.findPlaceholderAtCursor(
-              _finalNoteController.text, selection.baseOffset);
-          if (placeholder != null) {
-              _finalNoteController.selection = TextSelection(
-                  baseOffset: placeholder.start,
-                  extentOffset: placeholder.end,
-              );
-          }
-      });
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (!mounted) return;
+      final selection = _finalNoteController.selection;
+      if (!selection.isValid || !selection.isCollapsed) return;
+
+      // ✅ Use TextProcessingService.findPlaceholderAtCursor (Phase 1 refactor)
+      final placeholder = TextProcessingService.findPlaceholderAtCursor(
+          _finalNoteController.text, selection.baseOffset);
+      if (placeholder != null) {
+        _finalNoteController.selection = TextSelection(
+          baseOffset: placeholder.start,
+          extentOffset: placeholder.end,
+        );
+      }
+    });
   }
 
   bool _isWordBoundary(String char) {
@@ -937,7 +983,7 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    
+
     if (_showCleanTemplatePicker) {
       return _buildCleanTemplateScreen(theme);
     }
@@ -945,57 +991,66 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: Stack(
-       children: [
-        MouseRegion(
-        onEnter: (_) => WindowManagerHelper.setOpacity(1.0),
-        onExit: (_) => WindowManagerHelper.setOpacity(0.95), // Less transparent
-        child: Container(
-          width: double.infinity,
-          height: double.infinity,
-          decoration: BoxDecoration(
-            color: theme.scaffoldBackgroundColor,
-            border: Border(
-              left: BorderSide(color: colorScheme.surface, width: 1),
-            ),
-          ),
-          child: Column(
-            children: [
-              _buildSmartHeader(theme),
-              
-              // Template Selector
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _buildTemplateSelectorCard(theme),
-              ),
-
-              const SizedBox(height: 8),
-
-              // Smart Tabs Editor
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-                  child: _buildSmartTabsEditorCard(theme),
+        children: [
+          MouseRegion(
+            onEnter: (_) => WindowManagerHelper.setOpacity(1.0),
+            onExit: (_) =>
+                WindowManagerHelper.setOpacity(0.95), // Less transparent
+            child: Container(
+              width: double.infinity,
+              height: double.infinity,
+              decoration: BoxDecoration(
+                color: theme.scaffoldBackgroundColor,
+                border: Border(
+                  left: BorderSide(color: colorScheme.surface, width: 1),
                 ),
               ),
-              
-              // 4. Action Dock
-              _buildActionDock(theme),
-            ],
+              child: Column(
+                children: [
+                  _buildSmartHeader(theme),
+
+                  // Template Selector
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: _buildTemplateSelectorCard(theme),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // Smart Tabs Editor
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                      child: _buildSmartTabsEditorCard(theme),
+                    ),
+                  ),
+
+                  // 4. Action Dock
+                  _buildActionDock(theme),
+                ],
+              ),
+            ),
           ),
-        ),
-      ),
-        // Overlay for AI Generation/Transcription (New Unified Style)
-        if (_isGenerating || _isLoadingText || _isOneShotGenerating)
-           Positioned.fill(
-             child: ProcessingOverlay(
-               cyclingMessages: _isOneShotGenerating
-                 ? ['⚡ Listening to audio...', '⚡ Filling template...', '⚡ Structuring note...']
-                 : _isGenerating 
-                   ? _statusMessages 
-                   : ['Transcribing Audio...', 'Analyzing Speech...', 'Extracting Text...'],
-             ),
-           ),
-       ],
+          // Overlay for AI Generation/Transcription (New Unified Style)
+          if (_isGenerating || _isLoadingText || _isOneShotGenerating)
+            Positioned.fill(
+              child: ProcessingOverlay(
+                cyclingMessages: _isOneShotGenerating
+                    ? [
+                        '⚡ Listening to audio...',
+                        '⚡ Filling template...',
+                        '⚡ Structuring note...'
+                      ]
+                    : _isGenerating
+                        ? _statusMessages
+                        : [
+                            'Transcribing Audio...',
+                            'Analyzing Speech...',
+                            'Extracting Text...'
+                          ],
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -1014,9 +1069,9 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
             IconButton(
               icon: Icon(Icons.arrow_back, color: theme.colorScheme.onSurface),
               onPressed: () async {
-                 await _saveDraftUpdate();
-                 await _restoreWindow();
-                 if (mounted) Navigator.of(context).pop();
+                await _saveDraftUpdate();
+                await _restoreWindow();
+                if (mounted) Navigator.of(context).pop();
               },
               tooltip: 'Close',
               padding: EdgeInsets.zero,
@@ -1030,7 +1085,7 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    widget.noteNumber > 0 
+                    widget.noteNumber > 0
                         ? 'NO-${widget.noteNumber}'
                         : (widget.note.patientName.isNotEmpty
                             ? widget.note.patientName
@@ -1061,19 +1116,21 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
 
             // 3. Window Controls
             IconButton(
-              icon: Icon(Icons.close_fullscreen, color: Colors.grey[400], size: 20),
+              icon: Icon(Icons.close_fullscreen,
+                  color: Colors.grey[400], size: 20),
               onPressed: () async {
-                 await _saveDraftUpdate();
-                 await _restoreWindow(); 
-                 if (mounted) Navigator.of(context).pop();
+                await _saveDraftUpdate();
+                await _restoreWindow();
+                if (mounted) Navigator.of(context).pop();
               },
               tooltip: 'Return to List',
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
             ),
-             const SizedBox(width: 16),
-             IconButton(
-              icon: Icon(Icons.delete_outline, color: Colors.red[300], size: 20),
+            const SizedBox(width: 16),
+            IconButton(
+              icon:
+                  Icon(Icons.delete_outline, color: Colors.red[300], size: 20),
               onPressed: () async {
                 await _inboxService.deleteNote(widget.note.id);
                 await _restoreWindow();
@@ -1085,11 +1142,12 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
             ),
             const SizedBox(width: 8),
             // 4. Mark Ready (Moved to Header)
-             IconButton(
-              icon: Icon(Icons.check_circle_outline, color: Colors.green[300], size: 20),
+            IconButton(
+              icon: Icon(Icons.check_circle_outline,
+                  color: Colors.green[300], size: 20),
               onPressed: _markAsReady,
               tooltip: 'Mark as Ready',
-             ),
+            ),
           ],
         ),
       ),
@@ -1097,47 +1155,48 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   }
 
   Widget _buildStatusBadge(ThemeData theme) {
-      Color color;
-      String label;
-      
-      switch(widget.note.status) {
-          case NoteStatus.ready:
-            color = Colors.green;
-            label = "READY";
-            break;
-          case NoteStatus.copied:
-            color = Colors.blue;
-            label = "COPIED";
-            break;
-          case NoteStatus.archived:
-            color = Colors.grey;
-            label = "ARCHIVED";
-            break;
-          case NoteStatus.processed:
-          case NoteStatus.draft:
-          default:
-             color = Colors.orange;
-             label = "DRAFT";
-             break;
-      }
-      
-      return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: color.withOpacity(0.3)),
-          ),
-          child: Text(
-              label,
-      style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold),
-          ),
-      );
+    Color color;
+    String label;
+
+    switch (widget.note.status) {
+      case NoteStatus.ready:
+        color = Colors.green;
+        label = "READY";
+        break;
+      case NoteStatus.copied:
+        color = Colors.blue;
+        label = "COPIED";
+        break;
+      case NoteStatus.archived:
+        color = Colors.grey;
+        label = "ARCHIVED";
+        break;
+      case NoteStatus.processed:
+      case NoteStatus.draft:
+      default:
+        color = Colors.orange;
+        label = "DRAFT";
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Text(
+        label,
+        style:
+            TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold),
+      ),
+    );
   }
 
   Widget _buildSmartTabsEditorCard(ThemeData theme) {
     final colorScheme = theme.colorScheme;
-    
+
     return Container(
       decoration: BoxDecoration(
         color: colorScheme.surface,
@@ -1160,8 +1219,11 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
             height: 40,
             decoration: BoxDecoration(
               color: Colors.black12,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
-              border: Border(bottom: BorderSide(color: colorScheme.outline.withOpacity(0.2))),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(10)),
+              border: Border(
+                  bottom:
+                      BorderSide(color: colorScheme.outline.withOpacity(0.2))),
             ),
             child: ListView(
               scrollDirection: Axis.horizontal,
@@ -1173,7 +1235,7 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
                   label: "Source",
                   theme: theme,
                 ),
-                
+
                 // Generated Output Tabs
                 for (int i = 0; i < _generatedOutputs.length; i++)
                   _buildTab(
@@ -1189,40 +1251,49 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
 
           // --- EDITOR AREA ---
           Expanded(child: _buildWhitePaperEditor(theme)),
-          
+
           // --- SUGGESTIONS (Only show if on a generated tab) ---
           if (_suggestions.isNotEmpty && _activeTabIndex > 0)
             Container(
-               padding: const EdgeInsets.all(12),
-               decoration: BoxDecoration(
-                  color: colorScheme.primary.withOpacity(0.05),
-                  border: Border(top: BorderSide(color: colorScheme.primary.withOpacity(0.2))),
-               ),
-               child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.lightbulb_outline, size: 14, color: colorScheme.primary),
-                        const SizedBox(width: 6),
-                        Text("AI Missing Suggestions", style: TextStyle(
-                            color: colorScheme.primary, fontSize: 12, fontWeight: FontWeight.bold
-                        )),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _suggestions.map((s) => ActionChip(
-                          label: Text('+ ${s.label}', style: const TextStyle(fontSize: 11)),
-                          backgroundColor: colorScheme.surface,
-                          side: BorderSide(color: colorScheme.primary.withOpacity(0.5)),
-                          onPressed: () => _insertSuggestion(s),
-                      )).toList(),
-                    ),
-                  ],
-               ),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: colorScheme.primary.withOpacity(0.05),
+                border: Border(
+                    top: BorderSide(
+                        color: colorScheme.primary.withOpacity(0.2))),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.lightbulb_outline,
+                          size: 14, color: colorScheme.primary),
+                      const SizedBox(width: 6),
+                      Text("AI Missing Suggestions",
+                          style: TextStyle(
+                              color: colorScheme.primary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _suggestions
+                        .map((s) => ActionChip(
+                              label: Text('+ ${s.label}',
+                                  style: const TextStyle(fontSize: 11)),
+                              backgroundColor: colorScheme.surface,
+                              side: BorderSide(
+                                  color: colorScheme.primary.withOpacity(0.5)),
+                              onPressed: () => _insertSuggestion(s),
+                            ))
+                        .toList(),
+                  ),
+                ],
+              ),
             ),
         ],
       ),
@@ -1238,7 +1309,7 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   }) {
     final bool isActive = _activeTabIndex == index;
     final colorScheme = theme.colorScheme;
-    
+
     return GestureDetector(
       onTap: () => _switchTab(index),
       child: Container(
@@ -1256,28 +1327,33 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-             Icon(
-               icon,
-               size: 14,
-               color: isActive ? colorScheme.primary : colorScheme.onSurface.withOpacity(0.5),
-             ),
-             const SizedBox(width: 8),
-             Text(
-               label,
-               style: TextStyle(
-                 fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                 color: isActive ? colorScheme.onSurface : colorScheme.onSurface.withOpacity(0.5),
-                 fontSize: 12,
-               ),
-             ),
-             if (onDelete != null) ...[
-               const SizedBox(width: 8),
-               InkWell(
-                 onTap: onDelete,
-                 borderRadius: BorderRadius.circular(12),
-                 child: Icon(Icons.close, size: 14, color: colorScheme.onSurface.withOpacity(0.4)),
-               )
-             ]
+            Icon(
+              icon,
+              size: 14,
+              color: isActive
+                  ? colorScheme.primary
+                  : colorScheme.onSurface.withOpacity(0.5),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                color: isActive
+                    ? colorScheme.onSurface
+                    : colorScheme.onSurface.withOpacity(0.5),
+                fontSize: 12,
+              ),
+            ),
+            if (onDelete != null) ...[
+              const SizedBox(width: 8),
+              InkWell(
+                onTap: onDelete,
+                borderRadius: BorderRadius.circular(12),
+                child: Icon(Icons.close,
+                    size: 14, color: colorScheme.onSurface.withOpacity(0.4)),
+              )
+            ]
           ],
         ),
       ),
@@ -1299,7 +1375,11 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
           width: _isTemplateCardExpanded ? 1.5 : 1.0,
         ),
         boxShadow: _isTemplateCardExpanded
-            ? [BoxShadow(color: colorScheme.primary.withOpacity(0.06), blurRadius: 10)]
+            ? [
+                BoxShadow(
+                    color: colorScheme.primary.withOpacity(0.06),
+                    blurRadius: 10)
+              ]
             : [],
       ),
       child: Column(
@@ -1307,7 +1387,8 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
         children: [
           // Header — always visible
           InkWell(
-            onTap: () => setState(() => _isTemplateCardExpanded = !_isTemplateCardExpanded),
+            onTap: () => setState(
+                () => _isTemplateCardExpanded = !_isTemplateCardExpanded),
             borderRadius: BorderRadius.circular(10),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
@@ -1316,7 +1397,9 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 250),
                     child: Icon(
-                      _isTemplateCardExpanded ? Icons.extension : Icons.extension_outlined,
+                      _isTemplateCardExpanded
+                          ? Icons.extension
+                          : Icons.extension_outlined,
                       key: ValueKey(_isTemplateCardExpanded),
                       color: _isTemplateCardExpanded
                           ? colorScheme.primary
@@ -1349,7 +1432,9 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
                   ] else
                     const Spacer(),
                   Icon(
-                    _isTemplateCardExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                    _isTemplateCardExpanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
                     size: 16,
                     color: colorScheme.onSurface.withOpacity(0.4),
                   ),
@@ -1385,7 +1470,9 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
                               // In classic mode: transcribe with backend STT first
                               if (_isLoadingText) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('يرجى الانتظار حتى يكتمل التفريغ الصوتي')),
+                                  const SnackBar(
+                                      content: Text(
+                                          'يرجى الانتظار حتى يكتمل التفريغ الصوتي')),
                                 );
                               } else {
                                 // 2-Step Process: Always apply the template to the text!
@@ -1398,8 +1485,12 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
                           checkmarkColor: colorScheme.primary,
                           labelStyle: TextStyle(
                             fontSize: 12,
-                            color: isSelected ? colorScheme.primary : colorScheme.onSurface.withOpacity(0.7),
-                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                            color: isSelected
+                                ? colorScheme.primary
+                                : colorScheme.onSurface.withOpacity(0.7),
+                            fontWeight: isSelected
+                                ? FontWeight.w600
+                                : FontWeight.normal,
                           ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(20),
@@ -1411,7 +1502,8 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
                           ),
                           showCheckmark: true,
                           visualDensity: VisualDensity.compact,
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
                         );
                       }).toList(),
                     ),
@@ -1464,7 +1556,9 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.auto_awesome, size: 48, color: colorScheme.primary.withOpacity(0.8)),
+                            Icon(Icons.auto_awesome,
+                                size: 48,
+                                color: colorScheme.primary.withOpacity(0.8)),
                             const SizedBox(height: 16),
                             Text(
                               "How would you like to format this note?",
@@ -1515,11 +1609,12 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
       children: _quickMacros.map((macro) {
         return ActionChip(
           label: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
             child: Text(macro.trigger),
           ),
           onPressed: () {
-             _applyTemplate(macro);
+            _applyTemplate(macro);
           },
           backgroundColor: colorScheme.surface,
           labelStyle: TextStyle(
@@ -1553,51 +1648,52 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
         }
       },
       child: ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(0), bottom: Radius.circular(0)),
-          child: Stack(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(24),
-                child: _finalNoteController.text.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.edit_note,
-                                    size: 64, color: Colors.white10),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'Select a template to start',
-                                  style: const TextStyle(
-                                      color: Colors.white24, fontSize: 14),
-                                ),
-                              ],
-                            ),
-                          )
-                        : TextField(
-                              controller: _finalNoteController,
-                              maxLines: null,
-                              expands: true,
-                              onTap: _handleEditorTap,
-                              onChanged: _onManualEdit,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                height: 1.6,
-                                fontFamily: 'Inter',
-                              ),
-                              decoration: const InputDecoration(
-                                filled: false, 
-                                border: InputBorder.none,
-                                hintText: 'Type your note here...',
-                                hintStyle: TextStyle(color: Colors.white24),
-                                contentPadding: EdgeInsets.zero,
-                              ),
-                            ),
-              ),
-            ],
-          ),
+        borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(0), bottom: Radius.circular(0)),
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: _finalNoteController.text.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.edit_note,
+                              size: 64, color: Colors.white10),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Select a template to start',
+                            style: const TextStyle(
+                                color: Colors.white24, fontSize: 14),
+                          ),
+                        ],
+                      ),
+                    )
+                  : TextField(
+                      controller: _finalNoteController,
+                      maxLines: null,
+                      expands: true,
+                      onTap: _handleEditorTap,
+                      onChanged: _onManualEdit,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        height: 1.6,
+                        fontFamily: 'Inter',
+                      ),
+                      decoration: const InputDecoration(
+                        filled: false,
+                        border: InputBorder.none,
+                        hintText: 'Type your note here...',
+                        hintStyle: TextStyle(color: Colors.white24),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+            ),
+          ],
         ),
+      ),
     );
   }
 
@@ -1634,62 +1730,70 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E), // Dark surface
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10, offset: const Offset(0, -5))
-        ]
-      ),
+          color: const Color(0xFF1E1E1E), // Dark surface
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 10,
+                offset: const Offset(0, -5))
+          ]),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-            if (_activeTabIndex > 0) ...[
-              Align(
-                alignment: Alignment.center,
-                child: ActionChip(
-                  label: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.shield, size: 16, color: Colors.white),
-                      SizedBox(width: 6),
-                      Text("INSURANCE k", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-                    ],
-                  ),
-                  backgroundColor: Colors.amber[700],
-                  onPressed: _finalNoteController.text.isEmpty || _isGenerating ? null : _applyInsuranceTemplate,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Colors.transparent)),
+          if (_activeTabIndex > 0) ...[
+            Align(
+              alignment: Alignment.center,
+              child: ActionChip(
+                label: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.shield, size: 16, color: Colors.white),
+                    SizedBox(width: 6),
+                    Text("INSURANCE k",
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: Colors.white)),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 12),
-            ],
-            // Unified Button
-            ElevatedButton(
-              onPressed: _finalNoteController.text.isEmpty ? null : _smartCopyAndInject,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: theme.colorScheme.primary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shadowColor: theme.colorScheme.primary.withOpacity(0.4),
-                elevation: 4,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.input, size: 20),
-                  SizedBox(width: 8),
-                  Text("SMART COPY / INJECT", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                ],
+                backgroundColor: Colors.amber[700],
+                onPressed: _finalNoteController.text.isEmpty || _isGenerating
+                    ? null
+                    : _applyInsuranceTemplate,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    side: const BorderSide(color: Colors.transparent)),
               ),
             ),
+            const SizedBox(height: 12),
+          ],
+          // Unified Button
+          ElevatedButton(
+            onPressed:
+                _finalNoteController.text.isEmpty ? null : _smartCopyAndInject,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: theme.colorScheme.primary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shadowColor: theme.colorScheme.primary.withOpacity(0.4),
+              elevation: 4,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.input, size: 20),
+                SizedBox(width: 8),
+                Text("SMART COPY / INJECT",
+                    style:
+                        TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 }
-
-
-
-
-
-

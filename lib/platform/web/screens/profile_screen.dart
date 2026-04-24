@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../services/auth_service.dart';
-import '../../screens/secure_pairing_screen.dart';
+import '../../../core/services/auth_service.dart';
+import '../../../presentation/screens/secure_pairing_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -127,7 +127,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                           Divider(
                               height: 1,
-                              color: theme.dividerColor.withValues(alpha: 0.12)),
+                              color:
+                                  theme.dividerColor.withValues(alpha: 0.12)),
                           ListTile(
                             leading: const Icon(Icons.devices,
                                 color: Colors.blueAccent, size: 20),
@@ -151,7 +152,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                           Divider(
                               height: 1,
-                              color: theme.dividerColor.withValues(alpha: 0.12)),
+                              color:
+                                  theme.dividerColor.withValues(alpha: 0.12)),
                           ListTile(
                             leading: const Icon(Icons.logout,
                                 color: Colors.redAccent, size: 20),
@@ -171,7 +173,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   title: Text("ScribeFlow Extension",
                       style: TextStyle(color: onSurface)),
                   subtitle: Text("Version 1.0.0",
-                      style: TextStyle(color: onSurface.withValues(alpha: 0.54))),
+                      style:
+                          TextStyle(color: onSurface.withValues(alpha: 0.54))),
                   leading: const Icon(Icons.info_outline),
                 ),
               ),
@@ -195,9 +198,3 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 }
-
-
-
-
-
-

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/brand/brand_colors.dart';
-import '../../../services/auth_service.dart';
+import '../../../../core/services/auth_service.dart';
 import '../../features/home/home_screen.dart';
 
 /// Redesigned login screen – white background, brand blue accents,
@@ -558,9 +558,3 @@ class _LoginLogoPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-
-
-
-
-
-

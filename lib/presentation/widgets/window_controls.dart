@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../utils/window_manager_proxy.dart';
+import '../../core/utils/window_manager_proxy.dart';
 
 class WindowControls extends StatefulWidget {
   final Color? backgroundColor;
@@ -41,7 +41,8 @@ class _WindowControlsState extends State<WindowControls> {
 
   @override
   Widget build(BuildContext context) {
-    final bgColor = widget.backgroundColor ?? const Color(0xFF1E293B).withValues(alpha: 0.8);
+    final bgColor = widget.backgroundColor ??
+        const Color(0xFF1E293B).withValues(alpha: 0.8);
     final iconColor = widget.iconColor ?? Colors.grey[400]!;
     final height = widget.height ?? 32.0;
 
@@ -121,7 +122,10 @@ class _WindowControlsState extends State<WindowControls> {
                 width: 46,
                 height: height,
                 color: _isCloseHovered
-                    ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
+                    ? Theme.of(context)
+                        .colorScheme
+                        .primary
+                        .withValues(alpha: 0.1)
                     : Colors.transparent,
                 child: Icon(
                   Icons.close,
@@ -136,10 +140,3 @@ class _WindowControlsState extends State<WindowControls> {
     );
   }
 }
-
-
-
-
-
-
-
