@@ -25,10 +25,10 @@ import '../../../core/ai/text_processing_service.dart';
 import '../../../services/ai/ai_processing_service.dart';
 import '../../../../../core/medical_departments.dart';
 import '../../../../../core/services/department_service.dart';
-import '../../../../web_extension/services/extension_injection_service.dart';
-import '../../../../features/multimodal_ai/multimodal_ai_service.dart';
-import '../../../../features/multimodal_ai/ai_studio_multimodal_service.dart';
-import '../../../../features/multimodal_ai/gemini_transcription_helper.dart';
+import '../../../../platform/web/services/extension_injection_service.dart';
+import '../../../../core/services/multimodal_ai/multimodal_ai_service.dart';
+import '../../../../core/services/multimodal_ai/ai_studio_multimodal_service.dart';
+import '../../../../core/services/multimodal_ai/gemini_transcription_helper.dart';
 import '../../../core/ai/ai_prompt_constants.dart';
 
 class EditorScreen extends StatefulWidget {

@@ -1,1 +1,1 @@
-export '../../utils/permission_fixer.dart';
+export '../../core/utils/permission_fixer.dart';

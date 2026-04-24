@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../network/api_client.dart';
+import '../repositories/i_auth_service.dart';
 
-class AuthService {
+class AuthService implements IAuthService {
   static final AuthService _instance = AuthService._internal();
   factory AuthService() => _instance;
   AuthService._internal();
@@ -10,8 +13,24 @@ class AuthService {
   final ApiClient _ApiClient = ApiClient();
   Map<String, dynamic>? _currentUser;
 
+  AuthState _currentState = AuthState.unauthenticated;
+  final _authStateController = StreamController<AuthState>.broadcast();
+
+  @override
+  AuthState get currentState => _currentState;
+
+  @override
+  Stream<AuthState> get authStateStream => _authStateController.stream;
+
+  void _setState(AuthState state) {
+    _currentState = state;
+    _authStateController.add(state);
+  }
+
+  @override
   Future<bool> login(String email, String password,
       {String? deviceName}) async {
+    _setState(AuthState.authenticating);
     try {
       final response = await _ApiClient.post('/auth/login', body: {
         'email': email,
@@ -19,8 +38,6 @@ class AuthService {
         if (deviceName != null) 'device_name': deviceName,
       });
 
-      // ... (Rest of successful logic is fine) ...
-      // Laravel API returns success/user/token format
       if (response['success'] == true) {
         String? token = response['token'];
         if (token == null &&
@@ -33,11 +50,11 @@ class AuthService {
           await _ApiClient.setToken(token);
           _currentUser = response['user'] ?? response;
           await _saveUser(_currentUser);
+          _setState(AuthState.authenticated);
           return true;
         }
       }
 
-      // Fallback for standard API response format
       if (response['status'] == true && response['payload'] != null) {
         final payload = response['payload'];
 
@@ -52,19 +69,21 @@ class AuthService {
           await _ApiClient.setToken(token);
           _currentUser = payload['user'] ?? payload;
           await _saveUser(_currentUser);
+          _setState(AuthState.authenticated);
           return true;
         }
       }
 
-      // If we got a valid JSON response but success is false, it's likely credentials
+      _setState(AuthState.unauthenticated);
       return false;
     } catch (e) {
       print('Login error: $e');
-      // Rethrow so the UI can show "Network Error" or "CORS Error"
+      _setState(AuthState.error);
       rethrow;
     }
   }
 
+  @override
   Future<bool> register({
     required String name,
     required String email,
@@ -73,6 +92,7 @@ class AuthService {
     String? invitationCode,
     String? role,
   }) async {
+    _setState(AuthState.authenticating);
     try {
       final response = await _ApiClient.post('/auth/register', body: {
         'name': name,
@@ -84,7 +104,6 @@ class AuthService {
         if (role != null) 'role': role,
       });
 
-      // Laravel API returns success/user/token format
       if (response['success'] == true) {
         String? token = response['token'];
         if (token == null &&
@@ -97,11 +116,11 @@ class AuthService {
           await _ApiClient.setToken(token);
           _currentUser = response['user'] ?? response;
           await _saveUser(_currentUser);
+          _setState(AuthState.authenticated);
           return true;
         }
       }
 
-      // Fallback for standard API response format
       if (response['status'] == true && response['payload'] != null) {
         final payload = response['payload'];
 
@@ -116,17 +135,21 @@ class AuthService {
           await _ApiClient.setToken(token);
           _currentUser = payload['user'] ?? payload;
           await _saveUser(_currentUser);
+          _setState(AuthState.authenticated);
           return true;
         }
       }
 
+      _setState(AuthState.unauthenticated);
       return false;
     } catch (e) {
       print('Register error: $e');
+      _setState(AuthState.error);
       rethrow;
     }
   }
 
+  @override
   Future<void> logout() async {
     try {
       await _ApiClient.post('/auth/logout');
@@ -136,9 +159,11 @@ class AuthService {
       await _ApiClient.setToken(null);
       _currentUser = null;
       await _clearUser();
+      _setState(AuthState.unauthenticated);
     }
   }
 
+  @override
   Future<Map<String, dynamic>?> getCurrentUser() async {
     if (_currentUser != null) {
       return _currentUser;
@@ -147,14 +172,12 @@ class AuthService {
     try {
       final response = await _ApiClient.get('/auth/profile');
 
-      // Laravel API format
       if (response['success'] == true && response['user'] != null) {
         _currentUser = response['user'];
         await _saveUser(_currentUser);
         return _currentUser;
       }
 
-      // Standard API format
       if (response['status'] == true && response['payload'] != null) {
         _currentUser = response['payload'];
         await _saveUser(_currentUser);
@@ -162,39 +185,40 @@ class AuthService {
       }
     } catch (e) {
       print('Get current user error: $e');
-      // Try to load from storage
       _currentUser = await _loadUser();
     }
 
     return _currentUser;
   }
 
+  @override
   bool isAdmin() {
     if (_currentUser == null) return false;
     final role = _currentUser!['role']?.toString().toLowerCase();
     return role == 'admin';
   }
 
+  @override
   bool isCompanyManager() {
     if (_currentUser == null) return false;
     final role = _currentUser!['role']?.toString().toLowerCase();
     return role == 'company_manager' || role == 'company-manager';
   }
 
+  @override
   bool isMember() {
-    if (_currentUser == null)
-      return true; // Default to member if logged in but no role
+    if (_currentUser == null) return true;
     final role = _currentUser!['role']?.toString().toLowerCase();
     return role == 'member';
   }
 
+  @override
   Future<bool> isAuthenticated() async {
     final token = await _getToken();
     if (token == null || token.isEmpty) {
       return false;
     }
 
-    // Verify token is still valid by getting current user
     try {
       final user = await getCurrentUser();
       return user != null;
@@ -203,37 +227,7 @@ class AuthService {
     }
   }
 
-  Future<String?> _getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('auth_token');
-  }
-
-  Future<void> _saveUser(Map<String, dynamic>? user) async {
-    if (user == null) return;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('current_user', user.toString());
-  }
-
-  Future<Map<String, dynamic>?> _loadUser() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final userString = prefs.getString('current_user');
-      if (userString != null) {
-        // Simple parsing - in production, use proper JSON serialization
-        return null; // For now, return null and fetch from API
-      }
-    } catch (e) {
-      print('Load user error: $e');
-    }
-    return null;
-  }
-
-  Future<void> _clearUser() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('current_user');
-  }
-
-  /// Authorize a desktop pairing session via QR or Code
+  @override
   Future<bool> authorizePairing(String pairingIdOrCode,
       {String? deviceName}) async {
     try {
@@ -249,7 +243,7 @@ class AuthService {
     }
   }
 
-  /// Initiate a secure pairing session (Source device already logged in)
+  @override
   Future<Map<String, dynamic>?> initiateSecurePairing() async {
     try {
       final response = await _ApiClient.get('/pairing/initiate-secure');
@@ -263,41 +257,33 @@ class AuthService {
     }
   }
 
-  /// Claim a secure pairing session (Target device logging in)
+  @override
   Future<bool> claimPairing(String pairingIdOrCode,
       {String? deviceName}) async {
     try {
-      print('🔄 Claiming pairing with code: $pairingIdOrCode');
-
       final response = await _ApiClient.post('/pairing/claim', body: {
         'pairing_id': pairingIdOrCode,
         if (deviceName != null) 'device_name': deviceName,
       });
 
-      print('📥 Claim response: $response');
-
       if (response['success'] == true && response['token'] != null) {
         final token = response['token'];
-        print('✅ Token received, saving...');
 
         await _ApiClient.setToken(token);
         _currentUser = response['user'];
         await _saveUser(_currentUser);
-
-        print('✅ User saved: ${_currentUser?['email']}');
+        _setState(AuthState.authenticated);
         return true;
       }
 
-      print(
-          '❌ Claim failed: success=${response['success']}, has_token=${response['token'] != null}');
       return false;
     } catch (e) {
-      print('❌ Claim pairing error: $e');
+      print('Claim pairing error: $e');
       return false;
     }
   }
 
-  /// Get company settings (API keys, etc.)
+  @override
   Future<Map<String, dynamic>?> getCompanySettings() async {
     try {
       final response = await _ApiClient.get('/company/settings');
@@ -320,7 +306,7 @@ class AuthService {
     }
   }
 
-  /// Update company settings
+  @override
   Future<bool> updateCompanySettings(Map<String, dynamic> settings) async {
     try {
       final response =
@@ -328,7 +314,51 @@ class AuthService {
       return response['success'] == true;
     } catch (e) {
       print('Update company settings error: $e');
-      rethrow; // Rethrow to let UI show the error
+      rethrow;
     }
+  }
+
+  @override
+  Future<String?> getAccessToken() async {
+    return await _getToken();
+  }
+
+  @override
+  Future<void> initialize() async {
+    final token = await _getToken();
+    if (token != null && token.isNotEmpty) {
+      _setState(AuthState.authenticated);
+    } else {
+      _setState(AuthState.unauthenticated);
+    }
+  }
+
+  Future<String?> _getToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('auth_token');
+  }
+
+  Future<void> _saveUser(Map<String, dynamic>? user) async {
+    if (user == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('current_user', user.toString());
+  }
+
+  Future<Map<String, dynamic>?> _loadUser() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userString = prefs.getString('current_user');
+      if (userString != null) {
+        return null;
+      }
+    } catch (e) {
+      print('Load user error: $e');
+    }
+    return null;
+  }
+
+  Future<void> _clearUser() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('current_user');
   }
 }

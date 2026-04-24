@@ -1,16 +1,16 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'web_extension/screens/extension_login_screen.dart';
+import 'platform/web/screens/extension_login_screen.dart';
 
-import 'web_extension/screens/extension_home_screen.dart';
-import 'mobile_app/services/websocket_service.dart' as unified_ws;
+import 'platform/web/screens/extension_home_screen.dart';
 import 'core/entities/app_theme.dart';
 import 'core/services/auth_service.dart';
 import 'core/services/theme_service.dart';
 import 'presentation/widgets/auth_guard.dart';
+import 'presentation/state/app_providers.dart';
 
 void main() {
   // 1. Run App Immediately (Don't await anything here to ensure UI shows up)
@@ -120,11 +120,7 @@ class _SafeExtensionLauncherState extends State<SafeExtensionLauncher> {
     }
 
     // Success! Launch the Real App
-    return MultiProvider(
-      providers: [
-        Provider<unified_ws.WebSocketService>(
-            create: (_) => unified_ws.WebSocketService()),
-      ],
+    return ProviderScope(
       child: const ScribeFlowExtensionApp(),
     );
   }

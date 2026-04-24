@@ -1,1 +1,1 @@
-export '../../utils/window_manager_proxy.dart';
+export '../../core/utils/window_manager_proxy.dart';

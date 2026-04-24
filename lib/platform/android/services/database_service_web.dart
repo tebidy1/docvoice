@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import '../models/note_model.dart';
+import '../../../core/entities/note_model.dart';
 
 // Web Implementation: In-memory storage
 // Web Implementation: SharedPreferences storage
@@ -14,7 +14,7 @@ class DatabaseService {
   DatabaseService._internal();
 
   final List<NoteModel> _notes = [];
-  final StreamController<List<NoteModel>> _notesController = 
+  final StreamController<List<NoteModel>> _notesController =
       StreamController<List<NoteModel>>.broadcast();
 
   static const String _storageKey = 'web_notes_storage';
@@ -23,17 +23,17 @@ class DatabaseService {
 
   Future<void> init() async {
     if (_initialized) return;
-    
+
     if (kIsWeb) {
       debugPrint("DatabaseService: Web mode - initializing storage");
       final prefs = await SharedPreferences.getInstance();
       final data = prefs.getString(_storageKey);
-      
+
       if (data != null) {
         try {
           final List<dynamic> jsonList = jsonDecode(data);
           _notes.clear();
-          
+
           // Basic deserialization for Web NoteModel
           for (var item in jsonList) {
             final note = NoteModel();
@@ -42,19 +42,24 @@ class DatabaseService {
             note.title = item['title'] ?? 'Untitled';
             note.content = item['content'] ?? '';
             note.status = NoteStatus.values.firstWhere(
-              (e) => e.toString() == item['status'], 
-              orElse: () => NoteStatus.draft
-            );
-            note.createdAt = DateTime.fromMillisecondsSinceEpoch(item['createdAt']);
-            note.updatedAt = DateTime.fromMillisecondsSinceEpoch(item['updatedAt']);
+                (e) => e.toString() == item['status'],
+                orElse: () => NoteStatus.draft);
+            note.createdAt =
+                DateTime.fromMillisecondsSinceEpoch(item['createdAt']);
+            note.updatedAt =
+                DateTime.fromMillisecondsSinceEpoch(item['updatedAt']);
             note.audioPath = item['audioPath'];
             _notes.add(note);
           }
-          
+
           if (_notes.isNotEmpty) {
-            _nextId = _notes.map((e) => e.id).reduce((max, id) => id > max ? id : max) + 1;
+            _nextId = _notes
+                    .map((e) => e.id)
+                    .reduce((max, id) => id > max ? id : max) +
+                1;
           }
-          debugPrint("DatabaseService: Loaded ${_notes.length} notes from storage.");
+          debugPrint(
+              "DatabaseService: Loaded ${_notes.length} notes from storage.");
         } catch (e) {
           debugPrint("DatabaseService: Error loading notes: $e");
         }
@@ -74,14 +79,14 @@ class DatabaseService {
     } else {
       note.updatedAt = DateTime.now();
     }
-    
+
     final index = _notes.indexWhere((n) => n.id == note.id);
     if (index >= 0) {
       _notes[index] = note;
     } else {
       _notes.add(note);
     }
-    
+
     await _persist();
     _notifyListeners();
   }
@@ -94,10 +99,10 @@ class DatabaseService {
   }
 
   Stream<List<NoteModel>> watchNotes() {
-    // Ensure initialized before emitting? 
+    // Ensure initialized before emitting?
     // For now, emit current and make sure init is called at app start
-    if (!_initialized) init(); 
-    
+    if (!_initialized) init();
+
     Future.microtask(() => _notifyListeners());
     return _notesController.stream;
   }
@@ -110,17 +115,19 @@ class DatabaseService {
 
   Future<void> _persist() async {
     final prefs = await SharedPreferences.getInstance();
-    final data = jsonEncode(_notes.map((n) => {
-      'id': n.id,
-      'uuid': n.uuid,
-      'title': n.title,
-      'content': n.content,
-      'status': n.status.toString(),
-      'createdAt': n.createdAt.millisecondsSinceEpoch,
-      'updatedAt': n.updatedAt.millisecondsSinceEpoch,
-      'audioPath': n.audioPath,
-    }).toList());
-    
+    final data = jsonEncode(_notes
+        .map((n) => {
+              'id': n.id,
+              'uuid': n.uuid,
+              'title': n.title,
+              'content': n.content,
+              'status': n.status.toString(),
+              'createdAt': n.createdAt.millisecondsSinceEpoch,
+              'updatedAt': n.updatedAt.millisecondsSinceEpoch,
+              'audioPath': n.audioPath,
+            })
+        .toList());
+
     await prefs.setString(_storageKey, data);
   }
 
@@ -134,9 +141,3 @@ class DatabaseService {
     _notesController.close();
   }
 }
-
-
-
-
-
-

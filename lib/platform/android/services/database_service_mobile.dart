@@ -1,6 +1,6 @@
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
-import '../models/note_model_mobile.dart';
+import '../../../mobile_app/models/note_model_mobile.dart';
 
 // Mobile Implementation: Isar database
 class DatabaseService {
@@ -24,9 +24,12 @@ class DatabaseService {
   Future<List<NoteModel>> getAllNotes() async {
     return await _isar.noteModels.where().sortByCreatedAtDesc().findAll();
   }
-  
+
   Stream<List<NoteModel>> watchNotes() {
-    return _isar.noteModels.where().sortByCreatedAtDesc().watch(fireImmediately: true);
+    return _isar.noteModels
+        .where()
+        .sortByCreatedAtDesc()
+        .watch(fireImmediately: true);
   }
 
   Future<void> deleteNote(int id) async {
@@ -35,9 +38,3 @@ class DatabaseService {
     });
   }
 }
-
-
-
-
-
-
