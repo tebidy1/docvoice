@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../core/brand/brand_colors.dart';
+import 'package:soutnote/core/brand/brand_colors.dart';
 import '../auth/login_screen.dart';
 
 /// 4-screen onboarding flow (Arabic + English, RTL aware).

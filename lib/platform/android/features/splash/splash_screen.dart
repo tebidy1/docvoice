@@ -6,8 +6,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 
-import '../../../core/brand/brand_colors.dart';
-import '../../../../core/services/auth_service.dart';
+import 'package:soutnote/core/brand/brand_colors.dart';
+import 'package:soutnote/core/repositories/i_auth_service.dart';
+import 'package:soutnote/core/di/service_locator.dart';
 import '../../../../platform/desktop/desktop_app.dart'
     if (dart.library.html) '../../../../platform/desktop/desktop_app_stub.dart';
 
@@ -58,7 +59,7 @@ class _SplashScreenState extends State<SplashScreen>
     _ctrl.forward();
 
     final prefsFuture = SharedPreferences.getInstance();
-    final authFuture = AuthService().isAuthenticated().timeout(
+    final authFuture = ServiceLocator.get<IAuthService>().isAuthenticated().timeout(
           const Duration(milliseconds: 2500),
           onTimeout: () =>
               false, // fallback to login screen if network is too slow

@@ -7,7 +7,7 @@ import '../../core/services/windows_injector.dart';
 import '../../core/services/inbox_service.dart';
 import 'inbox_note_detail_view.dart';
 import '../../platform/android/core/theme.dart';
-import '../../core/ai/text_processing_service.dart';
+import 'package:soutnote/core/ai/text_processing_service.dart';
 
 class InboxCard extends StatelessWidget {
   final NoteModel note;

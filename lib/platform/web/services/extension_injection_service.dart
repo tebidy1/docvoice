@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import '../../core/ai/text_processing_service.dart';
+import 'package:soutnote/core/ai/text_processing_service.dart';
 import 'smart_inject_stub.dart' if (dart.library.js_interop) 'smart_inject_web.dart';
 
 enum InjectionStatus {

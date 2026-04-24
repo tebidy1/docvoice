@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../core/services/admin_service.dart';
+import '../../core/di/service_locator.dart';
+import '../../core/repositories/i_auth_service.dart';
 import '../../core/utils/window_manager_helper.dart';
-import '../../core/services/auth_service.dart';
+import '../../core/services/admin_service.dart';
 import '../widgets/window_title_bar.dart';
 import 'companies_list_screen.dart';
 import 'users_list_screen.dart';
@@ -17,7 +18,7 @@ class AdminDashboardScreen extends StatefulWidget {
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final AdminService _adminService = AdminService();
-  final AuthService _authService = AuthService();
+  final IAuthService _authService = ServiceLocator.get<IAuthService>();
   Map<String, dynamic>? _statistics;
   bool _isLoading = true;
   String? _error;
@@ -440,8 +441,4 @@ class _StatRow extends StatelessWidget {
               fontWeight: FontWeight.bold,
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
+                                      

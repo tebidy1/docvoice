@@ -1,4 +1,4 @@
-import '../../../core/repositories/dto_mapper.dart';
+import 'package:soutnote/data/models/dto_mapper.dart';
 import 'package:soutnote/core/entities/macro.dart';
 import 'enhanced_dto_mapper.dart';
 import 'mapping_utils.dart';

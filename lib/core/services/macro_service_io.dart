@@ -1,258 +1,180 @@
-import 'package:isar/isar.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../entities/macro.dart';
-import 'database_service.dart';
-import 'dart:async';
 import 'dart:convert';
 import '../ai/ai_prompt_constants.dart';
 
 class MacroService {
-  // Singleton pattern
   static final MacroService _instance = MacroService._internal();
   factory MacroService() => _instance;
   MacroService._internal();
 
-  final DatabaseService _dbService = DatabaseService();
+  static const _macrosKey = 'local_macros';
   bool _isInitialized = false;
 
   Future<void> init() async {
-    if (_isInitialized) {
-      print("MacroService: Already initialized");
-      return;
-    }
-
-    print("MacroService: Starting initialization...");
-    await _dbService.init();
-    _isInitialized = true;
-    print("MacroService: Database ready");
-
-    // Check and seed default macros
+    if (_isInitialized) return;
     await _seedDefaultMacrosIfNeeded();
+    _isInitialized = true;
   }
 
-  /// Seeds default macros if the database is empty
+  Future<List<Macro>> _loadFromPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonString = prefs.getString(_macrosKey);
+    if (jsonString == null) return [];
+    final decoded = jsonDecode(jsonString) as List;
+    return decoded.map((json) => Macro.fromJson(json as Map<String, dynamic>)).toList();
+  }
+
+  Future<void> _saveToPrefs(List<Macro> macros) async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonList = macros.map((m) => m.toJson()).toList();
+    await prefs.setString(_macrosKey, jsonEncode(jsonList));
+  }
+
   Future<void> _seedDefaultMacrosIfNeeded() async {
     try {
-      final isar = await _dbService.isar;
-      final count = await isar.macros.count();
-      print("MacroService: Current macro count: $count");
+      final macros = await _loadFromPrefs();
+      final count = macros.length;
+      final hasMarkdown = macros.any((m) => m.content.contains('**'));
 
-      final firstMacro = await isar.macros.where().findFirst();
-      final hasMarkdown = firstMacro?.content.contains('**') ?? false;
-
-      // Force update: wipe old macros and seed the new CBAHI ones
       if (count != 6 || hasMarkdown) {
-        print(
-            "MacroService: DB state needs update (count: $count, hasMarkdown: $hasMarkdown). Clearing and re-seeding...");
-        await isar.writeTxn(() async {
-          await isar.macros.clear();
-        });
+        await _saveToPrefs([]);
         await seedDefaultMacros();
-      } else {
-        print(
-            "MacroService: Database already contains $count macros (CBAHI templates confirmed).");
       }
     } catch (e) {
       print("MacroService: Error checking/seeding macros: $e");
     }
   }
 
-  /// Force seed default macros (can be called manually to reset)
   Future<void> seedDefaultMacros() async {
     try {
-      print("MacroService: Seeding default macros...");
+      final macros = <Macro>[];
 
-      // 1. Classic Clinic SOAP Note
-      await addMacro("📝 Classic SOAP", AIPromptConstants.templateClassicSoap,
-          category: "General");
-      print("MacroService: ✓ Added 'Classic SOAP'");
+      void addSeed(String trigger, String content, {String category = 'General'}) {
+        final m = Macro()
+          ..trigger = trigger
+          ..content = content
+          ..category = category
+          ..isAiMacro = false;
+        m.id = macros.length + 1;
+        macros.add(m);
+      }
 
-      // 2. ER SOAP Note
-      await addMacro("🚨 ER SOAP", AIPromptConstants.templateErSoap,
-          category: "Emergency");
-      print("MacroService: ✓ Added 'ER SOAP'");
+      addSeed("📝 Classic SOAP", AIPromptConstants.templateClassicSoap, category: "General");
+      addSeed("🚨 ER SOAP", AIPromptConstants.templateErSoap, category: "Emergency");
+      addSeed("📞 SBAR Consult", AIPromptConstants.templateSbar, category: "Referral");
+      addSeed("📄 ER Discharge", AIPromptConstants.templateDischarge, category: "Emergency");
+      addSeed("🤒 Sick Leave", AIPromptConstants.templateSickLeave, category: "Admin");
+      addSeed("✨ Free Note", AIPromptConstants.templateFreeNote, category: "General");
 
-      // 3. SBAR Consultation
-      await addMacro("📞 SBAR Consult", AIPromptConstants.templateSbar,
-          category: "Referral");
-      print("MacroService: ✓ Added 'SBAR Consult'");
-
-      // 4. ER Discharge Summary
-      await addMacro("📄 ER Discharge", AIPromptConstants.templateDischarge,
-          category: "Emergency");
-      print("MacroService: ✓ Added 'ER Discharge'");
-
-      // 5. Sick Leave
-      await addMacro("🤒 Sick Leave", AIPromptConstants.templateSickLeave,
-          category: "Admin");
-      print("MacroService: ✓ Added 'Sick Leave'");
-
-      // 6. Free Note
-      await addMacro("✨ Free Note", AIPromptConstants.templateFreeNote,
-          category: "General");
-      print("MacroService: ✓ Added 'Free Note'");
-
-      final isar = await _dbService.isar;
-      final finalCount = await isar.macros.count();
-      print("MacroService: ✅ Successfully seeded $finalCount default macros");
+      await _saveToPrefs(macros);
+      print("MacroService: Seeded ${macros.length} default macros");
     } catch (e) {
-      print("MacroService: ❌ Error seeding default macros: $e");
+      print("MacroService: Error seeding default macros: $e");
       rethrow;
     }
   }
 
   Future<void> addMacro(String trigger, String content,
-      {bool isAiMacro = false,
-      String? aiInstruction,
-      String category = 'General'}) async {
-    await init(); // Ensure initialized
-    try {
-      final isar = await _dbService.isar;
-      final macro = Macro()
-        ..trigger = trigger
-        ..content = content
-        ..isAiMacro = isAiMacro
-        ..aiInstruction = aiInstruction
-        ..category = category;
-
-      await isar.writeTxn(() async {
-        await isar.macros.put(macro);
-      });
-
-      print("MacroService: Added macro '$trigger' in category '$category'");
-    } catch (e) {
-      print("MacroService: Error adding macro '$trigger': $e");
-      rethrow;
-    }
+      {bool isAiMacro = false, String? aiInstruction, String category = 'General'}) async {
+    await init();
+    final macros = await _loadFromPrefs();
+    final macro = Macro()
+      ..trigger = trigger
+      ..content = content
+      ..isAiMacro = isAiMacro
+      ..aiInstruction = aiInstruction
+      ..category = category;
+    macro.id = macros.isEmpty ? 1 : (macros.map((m) => m.id).reduce((a, b) => a > b ? a : b) + 1);
+    macros.add(macro);
+    await _saveToPrefs(macros);
   }
 
   Future<void> deleteMacro(int id) async {
     await init();
-    final isar = await _dbService.isar;
-    await isar.writeTxn(() async {
-      await isar.macros.delete(id);
-    });
+    final macros = await _loadFromPrefs();
+    macros.removeWhere((m) => m.id == id);
+    await _saveToPrefs(macros);
   }
 
   Future<void> updateMacro(int id, String trigger, String content,
       {bool? isAiMacro, String? aiInstruction, String? category}) async {
     await init();
-    try {
-      final isar = await _dbService.isar;
-      await isar.writeTxn(() async {
-        final macro = await isar.macros.get(id);
-        if (macro != null) {
-          macro.trigger = trigger;
-          macro.content = content;
-          if (isAiMacro != null) macro.isAiMacro = isAiMacro;
-          if (aiInstruction != null) macro.aiInstruction = aiInstruction;
-          if (category != null) macro.category = category;
-          await isar.macros.put(macro);
-        }
-      });
-
-      print("MacroService: Updated macro '$trigger'");
-    } catch (e) {
-      print("MacroService: Error updating macro: $e");
-      rethrow;
+    final macros = await _loadFromPrefs();
+    final index = macros.indexWhere((m) => m.id == id);
+    if (index != -1) {
+      macros[index].trigger = trigger;
+      macros[index].content = content;
+      if (isAiMacro != null) macros[index].isAiMacro = isAiMacro;
+      if (aiInstruction != null) macros[index].aiInstruction = aiInstruction;
+      if (category != null) macros[index].category = category;
+      await _saveToPrefs(macros);
     }
   }
 
   Future<void> toggleFavorite(int id) async {
     await init();
-    final isar = await _dbService.isar;
-    await isar.writeTxn(() async {
-      final macro = await isar.macros.get(id);
-      if (macro != null) {
-        macro.isFavorite = !macro.isFavorite;
-        await isar.macros.put(macro);
-      }
-    });
+    final macros = await _loadFromPrefs();
+    final index = macros.indexWhere((m) => m.id == id);
+    if (index != -1) {
+      macros[index].isFavorite = !macros[index].isFavorite;
+      await _saveToPrefs(macros);
+    }
   }
 
   Future<List<Macro>> getAllMacros() async {
     await init();
-    final isar = await _dbService.isar;
-    return await isar.macros.where().findAll();
+    return _loadFromPrefs();
   }
 
-  /// Alias for getAllMacros() - used by cross-platform widgets
   Future<List<Macro>> getMacros() => getAllMacros();
 
-  /// Get macros by category
   Future<List<Macro>> getMacrosByCategory(String category) async {
-    await init();
-    final isar = await _dbService.isar;
-    return await isar.macros
-        .filter()
-        .categoryEqualTo(category)
-        .sortByTrigger()
-        .findAll();
+    final macros = await getAllMacros();
+    return macros.where((m) => m.category == category).toList()
+      ..sort((a, b) => a.trigger.compareTo(b.trigger));
   }
 
-  /// Get most used macros
   Future<List<Macro>> getMostUsed({int limit = 10}) async {
-    await init();
-    final isar = await _dbService.isar;
-    return await isar.macros
-        .where()
-        .sortByUsageCountDesc()
-        .limit(limit)
-        .findAll();
+    final macros = await getAllMacros();
+    macros.sort((a, b) => b.usageCount.compareTo(a.usageCount));
+    return macros.take(limit).toList();
   }
 
-  /// Get all unique categories
   Future<List<String>> getCategories() async {
-    await init();
-    final isar = await _dbService.isar;
-    final macros = await isar.macros.where().findAll();
+    final macros = await getAllMacros();
     final categories = macros.map((m) => m.category).toSet().toList();
     categories.sort();
     return categories;
   }
 
-  /// Get favorite macros
   Future<List<Macro>> getFavorites() async {
-    await init();
-    final isar = await _dbService.isar;
-    return await isar.macros
-        .filter()
-        .isFavoriteEqualTo(true)
-        .sortByTrigger()
-        .findAll();
+    final macros = await getAllMacros();
+    return macros.where((m) => m.isFavorite).toList()
+      ..sort((a, b) => a.trigger.compareTo(b.trigger));
   }
 
-  /// Checks if the [text] contains any macro trigger.
-  /// Returns the content of the matched macro, or null if none found.
   Future<String?> findExpansion(String text) async {
     final macros = await getAllMacros();
-
-    // Sort by length descending to match longest phrases first
-    // e.g. match "Normal Cardio Exam" before "Normal Cardio"
     macros.sort((a, b) => b.trigger.length.compareTo(a.trigger.length));
-
     final normalizedText = text.toLowerCase();
-
     for (var macro in macros) {
       if (normalizedText.contains(macro.trigger.toLowerCase())) {
         return macro.content;
       }
     }
-
     return null;
   }
 
-  /// Returns macros as JSON string (for ConnectivityServer)
   Future<String> getMacrosAsJson() async {
     try {
       final macros = await getAllMacros();
-      final List<Map<String, dynamic>> jsonList = macros
-          .map((m) => {
-                'id': m.id,
-                'trigger': m.trigger,
-                'content': m.content,
-                'category': m.category,
-              })
-          .toList();
+      final jsonList = macros.map((m) => {
+        'id': m.id,
+        'trigger': m.trigger,
+        'content': m.content,
+        'category': m.category,
+      }).toList();
       return jsonEncode(jsonList);
     } catch (e) {
       print('Error getting macros as JSON: $e');

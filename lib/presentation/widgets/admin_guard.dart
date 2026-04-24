@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../core/services/auth_service.dart';
+import '../../core/di/service_locator.dart';
+import '../../core/repositories/i_auth_service.dart';
 
 class AdminGuard extends StatefulWidget {
   final Widget child;
@@ -17,7 +18,7 @@ class AdminGuard extends StatefulWidget {
 class _AdminGuardState extends State<AdminGuard> {
   @override
   Widget build(BuildContext context) {
-    final authService = AuthService();
+    final authService = ServiceLocator.get<IAuthService>();
 
     return FutureBuilder<Map<String, dynamic>?>(
       future: authService.getCurrentUser(),

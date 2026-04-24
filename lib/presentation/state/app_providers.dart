@@ -2,7 +2,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:soutnote/core/di/service_locator.dart';
 import 'package:soutnote/core/network/api_client.dart';
 import 'package:soutnote/core/repositories/i_auth_service.dart';
-import 'package:soutnote/core/services/auth_service.dart';
 import 'package:soutnote/core/services/theme_service.dart';
 import 'package:soutnote/core/usecases/auth_state_usecase.dart';
 import 'package:soutnote/core/usecases/get_inbox_notes_usecase.dart';
@@ -15,9 +14,6 @@ import '../../platform/android/services/websocket_service.dart' as unified_ws;
 
 final apiClientProvider =
     Provider<ApiClient>((ref) => ServiceLocator.get<ApiClient>());
-
-final authServiceProvider =
-    Provider<AuthService>((ref) => ServiceLocator.get<AuthService>());
 
 final iAuthProvider =
     Provider<IAuthService>((ref) => ServiceLocator.get<IAuthService>());

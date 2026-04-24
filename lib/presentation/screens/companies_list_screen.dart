@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../core/entities/company.dart';
+import '../../core/di/service_locator.dart';
+import '../../core/repositories/i_auth_service.dart';
 import '../../core/services/admin_service.dart';
-import '../../core/services/auth_service.dart';
 import '../widgets/create_company_dialog.dart';
 import '../widgets/create_company_dialog.dart';
 import '../widgets/window_title_bar.dart';
@@ -18,7 +19,7 @@ class CompaniesListScreen extends StatefulWidget {
 
 class _CompaniesListScreenState extends State<CompaniesListScreen> {
   final AdminService _adminService = AdminService();
-  final AuthService _authService = AuthService();
+  final IAuthService _authService = ServiceLocator.get<IAuthService>();
   List<Company> _companies = [];
   bool _isLoading = true;
   String? _error;
@@ -454,8 +455,4 @@ class _CompanyCard extends StatelessWidget {
             ),
           ],
         ),
-        onTap: onTap,
-      ),
-    );
-  }
-}
+        onTap: onTa                              

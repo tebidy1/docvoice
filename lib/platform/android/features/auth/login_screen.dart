@@ -2,9 +2,9 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../../core/brand/brand_colors.dart';
-import '../../../../core/services/auth_service.dart';
-import '../../features/home/home_screen.dart';
+import 'package:soutnote/core/brand/brand_colors.dart';
+import 'package:soutnote/core/repositories/i_auth_service.dart';
+import 'package:soutnote/core/di/service_locator.dart';import '../../features/home/home_screen.dart';
 
 /// Redesigned login screen – white background, brand blue accents,
 /// static logo at top (continues splash's visual identity).
@@ -60,7 +60,7 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> _checkAuth() async {
-    if (await AuthService().isAuthenticated() && mounted) {
+    if (await ServiceLocator.get<IAuthService>().isAuthenticated() && mounted) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const HomeScreen()),
@@ -86,7 +86,7 @@ class _LoginScreenState extends State<LoginScreen>
     }
 
     try {
-      final ok = await AuthService()
+      final ok = await ServiceLocator.get<IAuthService>()
           .login(email, password, deviceName: 'Mobile Device');
       if (ok && mounted) {
         Navigator.pushReplacement(
@@ -417,7 +417,7 @@ class _LoginScreenState extends State<LoginScreen>
               if (code.length == 6) {
                 Navigator.pop(context);
                 setState(() => _isLoading = true);
-                final ok = await AuthService().claimPairing(code,
+                final ok = await ServiceLocator.get<IAuthService>().claimPairing(code,
                     deviceName:
                         'Mobile (${DateTime.now().hour}:${DateTime.now().minute})');
                 if (mounted) {

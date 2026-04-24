@@ -13,7 +13,7 @@ import '../../../../core/services/theme_service.dart';
 import '../auth/qr_scanner_screen.dart';
 import 'company_settings_screen.dart';
 import 'macro_manager_screen.dart';
-import '../../../core/medical_departments.dart';
+import 'package:soutnote/core/medical_departments.dart';
 import '../../../../core/services/department_service.dart';
 import '../../../../core/services/medical_department_service.dart';
 
@@ -125,7 +125,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     // Try to load from company settings first
     try {
-      final companySettings = await AuthService().getCompanySettings();
+      final companySettings = await ServiceLocator.get<IAuthService>().getCompanySettings();
       if (companySettings != null) {
         if (companySettings.containsKey('groq_api_key')) {
           await prefs.setString(

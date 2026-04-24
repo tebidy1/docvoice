@@ -21,11 +21,11 @@ import '../../services/whisper_local_stub.dart'
 
 import '../../../../core/network/api_client.dart';
 import '../../services/groq_service.dart'; // Direct Groq for faster Web transcription
-import '../../../core/ai/ai_regex_patterns.dart';
-import '../../../core/ai/text_processing_service.dart';
+import 'package:soutnote/core/ai/ai_regex_patterns.dart';
+import 'package:soutnote/core/ai/text_processing_service.dart';
 import '../../../../core/services/ai/ai_processing_service.dart';
-import '../../../../../core/medical_departments.dart';
-import '../../../../../core/services/department_service.dart';
+import 'package:soutnote/core/medical_departments.dart';
+import 'package:soutnote/core/services/department_service.dart';
 import '../../../../platform/web/services/extension_injection_service.dart';
 import '../../../../core/services/multimodal_ai/multimodal_ai_service.dart';
 import '../../../../core/services/multimodal_ai/ai_studio_multimodal_service.dart';
@@ -1852,5 +1852,4 @@ class _EditorScreenState extends State<EditorScreen> {
         }).toList(),
       ),
     );
-  }
-}
+        

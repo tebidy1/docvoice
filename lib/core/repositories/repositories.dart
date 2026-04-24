@@ -1,8 +1,3 @@
-/// Repository interfaces and core services for the ScribeFlow application
-/// 
-/// This module provides abstract definitions of the repository pattern
-/// and core service interfaces for data access abstraction.
-
 export 'abstract_repository.dart';
 export 'base_repository.dart';
 export 'inbox_note_repository.dart';
@@ -10,6 +5,7 @@ export 'macro_repository.dart';
 export 'settings_repository.dart';
 export 'user_repository.dart';
 export 'audio_repository.dart';
+export 'audio_transcription_repository.dart';
 export 'cache_strategy.dart';
 export 'dto_mapper.dart';
 export 'audio_service.dart';

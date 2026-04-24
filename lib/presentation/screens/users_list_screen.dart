@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../core/di/service_locator.dart';
 import '../../core/entities/user.dart';
 import '../../core/mappers/user_mapper.dart';
+import '../../core/repositories/i_auth_service.dart';
 import '../../core/services/admin_service.dart';
-import '../../core/services/auth_service.dart';
 import '../widgets/create_user_dialog.dart';
 import '../widgets/window_title_bar.dart';
 import 'user_detail_screen.dart';
@@ -21,7 +22,7 @@ class UsersListScreen extends StatefulWidget {
 
 class _UsersListScreenState extends State<UsersListScreen> {
   final AdminService _adminService = AdminService();
-  final AuthService _authService = AuthService();
+  final IAuthService _authService = ServiceLocator.get<IAuthService>();
   List<User> _users = [];
   bool _isLoading = true;
   String? _error;

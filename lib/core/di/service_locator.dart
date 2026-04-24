@@ -1,23 +1,27 @@
 import 'package:get_it/get_it.dart';
-import 'package:soutnote/core/repositories/repositories.dart';
 import 'package:soutnote/core/repositories/i_auth_service.dart';
+import 'package:soutnote/core/repositories/audio_transcription_repository.dart';
+import 'package:soutnote/core/repositories/macro_repository.dart';
+import 'package:soutnote/core/repositories/inbox_note_repository.dart';
+import 'package:soutnote/core/services/audio_service_interface.dart';
 import 'package:soutnote/core/network/api_client.dart';
-import 'package:soutnote/core/services/auth_service.dart';
-import 'package:soutnote/core/services/audio_service_impl.dart';
+import 'package:soutnote/data/services/auth_service.dart';
+import 'package:soutnote/data/services/audio_service_impl.dart';
+import 'package:soutnote/data/cache_strategy.dart';
 import 'package:soutnote/core/usecases/usecases.dart';
-import 'package:soutnote/data/repositories/repositories.dart';
+import 'package:soutnote/data/repositories/api_macro_repository.dart';
+import 'package:soutnote/data/repositories/local_macro_repository.dart';
+import 'package:soutnote/data/repositories/cached_macro_repository.dart';
+import 'package:soutnote/data/repositories/api_inbox_note_repository.dart';
+import 'package:soutnote/data/repositories/api_audio_transcription_repository.dart';
 
-/// Service locator for dependency injection
 class ServiceLocator {
   static final GetIt _getIt = GetIt.instance;
 
-  /// Get service instance
   static T get<T extends Object>() => _getIt.get<T>();
 
-  /// Check if service is registered
   static bool isRegistered<T extends Object>() => _getIt.isRegistered<T>();
 
-  /// Initialize all services
   static Future<void> initialize() async {
     _getIt.registerSingleton<ApiClient>(ApiClient());
     _getIt.registerSingleton<AuthService>(AuthService());
@@ -48,52 +52,50 @@ class ServiceLocator {
 
     _getIt.registerLazySingleton<AudioService>(() => AudioServiceImpl());
 
+    _getIt.registerLazySingleton<AudioTranscriptionRepository>(
+        () => ApiAudioTranscriptionRepository(
+              apiClient: _getIt.get<ApiClient>(),
+            ));
+
     _getIt.registerLazySingleton<LoginUseCase>(
-        () => LoginUseCase(_getIt.get<AuthService>()));
+        () => LoginUseCase(_getIt.get<IAuthService>()));
     _getIt.registerLazySingleton<RegisterUseCase>(
-        () => RegisterUseCase(_getIt.get<AuthService>()));
+        () => RegisterUseCase(_getIt.get<IAuthService>()));
     _getIt.registerLazySingleton<AuthStateUseCase>(
-        () => AuthStateUseCase(_getIt.get<AuthService>()));
+        () => AuthStateUseCase(_getIt.get<IAuthService>()));
     _getIt.registerLazySingleton<GetMacrosUseCase>(
         () => GetMacrosUseCase(_getIt.get<MacroRepository>()));
     _getIt.registerLazySingleton<GetInboxNotesUseCase>(
         () => GetInboxNotesUseCase(_getIt.get<InboxNoteRepository>()));
     _getIt.registerLazySingleton<UploadAudioUseCase>(
-        () => UploadAudioUseCase(_getIt.get<ApiClient>()));
+        () => UploadAudioUseCase(_getIt.get<AudioTranscriptionRepository>()));
 
     await _getIt.get<ApiClient>().init();
     await _getIt.get<AudioService>().initialize();
     await _getIt.get<IAuthService>().initialize();
   }
 
-  /// Reset all services (for testing)
   static Future<void> reset() async {
     await _getIt.reset();
   }
 
-  /// Register service
   static void registerSingleton<T extends Object>(T instance) {
     _getIt.registerSingleton<T>(instance);
   }
 
-  /// Register lazy singleton
   static void registerLazySingleton<T extends Object>(T Function() factory) {
     _getIt.registerLazySingleton<T>(factory);
   }
 
-  /// Register factory
   static void registerFactory<T extends Object>(T Function() factory) {
     _getIt.registerFactory<T>(factory);
   }
 
-  /// Unregister service
   static Future<void> unregister<T extends Object>() async {
     await _getIt.unregister<T>();
   }
 }
 
-/// Extension for easy access to services
 extension ServiceLocatorExtension on Object {
-  /// Get service from locator
   T getService<T extends Object>() => ServiceLocator.get<T>();
 }

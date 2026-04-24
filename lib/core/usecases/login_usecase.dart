@@ -1,8 +1,7 @@
 import '../repositories/i_auth_service.dart';
-import '../services/auth_service.dart';
 
 class LoginUseCase {
-  final AuthService _authService;
+  final IAuthService _authService;
 
   LoginUseCase(this._authService);
 

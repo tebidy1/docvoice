@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:soutnote/core/repositories/macro_repository.dart';
-import 'package:soutnote/core/repositories/cache_strategy.dart';
+import 'package:soutnote/data/cache_strategy.dart';
 import 'package:soutnote/core/entities/macro.dart';
 import 'api_macro_repository.dart';
 import 'local_macro_repository.dart';

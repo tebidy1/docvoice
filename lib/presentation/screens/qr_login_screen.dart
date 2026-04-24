@@ -6,8 +6,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../features/auth/pairing/presentation/providers/pairing_provider.dart';
+import '../../core/di/service_locator.dart';
 import '../../core/network/api_client.dart';
-import '../../core/services/auth_service.dart';
+import '../../core/repositories/i_auth_service.dart';
 
 class QrLoginScreen extends ConsumerStatefulWidget {
   const QrLoginScreen({super.key});
@@ -17,7 +18,7 @@ class QrLoginScreen extends ConsumerStatefulWidget {
 }
 
 class _QrLoginScreenState extends ConsumerState<QrLoginScreen> {
-  final AuthService _authService = AuthService();
+  final IAuthService _authService = ServiceLocator.get<IAuthService>();
   Timer? _pollingTimer;
 
   @override

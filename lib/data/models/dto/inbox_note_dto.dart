@@ -1,5 +1,5 @@
 import 'dart:convert';
-import '../../../core/repositories/dto_mapper.dart';
+import 'package:soutnote/data/models/dto_mapper.dart';
 import 'package:soutnote/core/entities/inbox_note.dart';
 import 'enhanced_dto_mapper.dart';
 import 'mapping_utils.dart';

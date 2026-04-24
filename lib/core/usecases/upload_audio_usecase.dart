@@ -1,9 +1,9 @@
-import '../network/api_client.dart';
+import '../repositories/audio_transcription_repository.dart';
 
 class UploadAudioUseCase {
-  final ApiClient _apiClient;
+  final AudioTranscriptionRepository _audioTranscriptionRepository;
 
-  UploadAudioUseCase(this._apiClient);
+  UploadAudioUseCase(this._audioTranscriptionRepository);
 
   Future<Map<String, dynamic>> execute({
     required List<int> audioBytes,
@@ -11,14 +11,11 @@ class UploadAudioUseCase {
     String? model,
     String? language,
   }) async {
-    return await _apiClient.multipartPost(
-      '/audio/transcribe',
-      fileBytes: audioBytes,
+    return await _audioTranscriptionRepository.transcribeAudio(
+      audioBytes: audioBytes,
       filename: filename,
-      fields: {
-        if (model != null) 'model': model,
-        if (language != null) 'language': language,
-      },
+      model: model,
+      language: language,
     );
   }
 }

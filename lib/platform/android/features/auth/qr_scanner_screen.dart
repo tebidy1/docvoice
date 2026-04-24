@@ -5,8 +5,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import '../../../features/auth/pairing/presentation/providers/pairing_provider.dart';
-import '../../../../core/services/auth_service.dart';
+import '../../../../../features/auth/pairing/presentation/providers/pairing_provider.dart';
+import '../../../../core/repositories/i_auth_service.dart';
+import '../../../../core/di/service_locator.dart';
 import '../home/home_screen.dart';
 
 class QrScannerScreen extends ConsumerStatefulWidget {
@@ -118,7 +119,7 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen>
       print(
           '📱 Calling claimPairing via Legacy AuthService (Refactoring Pending)...');
       // For now, keep using AuthService for claim as it affects local state significantly
-      final authService = AuthService();
+      final authService = ServiceLocator.get<IAuthService>();
       success = await authService.claimPairing(
         idOrCode,
         deviceName:

@@ -2,7 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
-import '../../core/services/auth_service.dart';
+import '../../core/di/service_locator.dart';
+import '../../core/repositories/i_auth_service.dart';
 import '../../core/utils/window_manager_helper.dart';
 
 class UserProfileHeader extends StatefulWidget {
@@ -13,7 +14,7 @@ class UserProfileHeader extends StatefulWidget {
 }
 
 class _UserProfileHeaderState extends State<UserProfileHeader> {
-  final AuthService _authService = AuthService();
+  final IAuthService _authService = ServiceLocator.get<IAuthService>();
   Map<String, dynamic>? _user;
   bool _isLoading = true;
   bool _isMenuOpen = false;

@@ -5,9 +5,9 @@ import 'package:window_manager/window_manager.dart';
 
 import '../../platform/desktop/qr_pairing_dialog.dart';
 
+import '../../core/di/service_locator.dart';
 import '../../core/entities/app_theme.dart';
-import '../../core/network/api_client.dart';
-import '../../core/services/auth_service.dart';
+import '../../core/repositories/i_auth_service.dart';
 import '../../core/services/connectivity_server.dart';
 import '../../core/services/theme_service.dart';
 import '../../core/utils/window_manager_helper.dart';
@@ -56,8 +56,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
     if (mounted) setState(() {});
   }
 
-  final ApiClient _ApiClient = ApiClient();
-  final AuthService _authService = AuthService();
+  final IAuthService _authService = ServiceLocator.get<IAuthService>();
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();

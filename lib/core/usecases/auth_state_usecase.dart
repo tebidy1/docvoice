@@ -1,7 +1,7 @@
-import '../services/auth_service.dart';
+import '../repositories/i_auth_service.dart';
 
 class AuthStateUseCase {
-  final AuthService _authService;
+  final IAuthService _authService;
 
   AuthStateUseCase(this._authService);
 

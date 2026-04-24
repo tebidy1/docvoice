@@ -14,8 +14,8 @@ import '../../android/services/groq_service.dart';
 import '../../../core/network/api_client.dart';
 import '../../../presentation/widgets/pattern_highlight_controller.dart';
 import '../../../presentation/widgets/processing_overlay.dart';
-import '../../core/ai/ai_regex_patterns.dart';
-import '../../core/ai/text_processing_service.dart';
+import 'package:soutnote/core/ai/ai_regex_patterns.dart';
+import 'package:soutnote/core/ai/text_processing_service.dart';
 import '../../../core/services/ai/ai_processing_service.dart';
 import '../services/extension_injection_service.dart';
 import '../../../core/entities/generated_output.dart'; // import GeneratedOutput
@@ -23,8 +23,8 @@ import '../../../core/entities/generated_output.dart'; // import GeneratedOutput
 import '../../../core/services/multimodal_ai/multimodal_ai_service.dart';
 import '../../../core/services/multimodal_ai/ai_studio_multimodal_service.dart';
 import '../../../core/services/multimodal_ai/gemini_transcription_helper.dart';
-import '../../core/ai/ai_prompt_constants.dart';
-import '../../core/medical_departments.dart';
+import 'package:soutnote/core/ai/ai_prompt_constants.dart';
+import 'package:soutnote/core/medical_departments.dart';
 import '../../../core/services/department_service.dart';
 
 class ExtensionEditorScreen extends StatefulWidget {

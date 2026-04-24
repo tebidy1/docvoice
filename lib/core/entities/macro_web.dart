@@ -1,38 +1,17 @@
-// import 'package:isar/isar.dart';  // Disabled for web compatibility
-
-// part 'macro.g.dart';  // Disabled for web compatibility
-
-// @collection  // Disabled for web compatibility
 class Macro {
-  // Id id = Isar.autoIncrement;  // Disabled for web compatibility
-  int id = 0; // Simple ID for web compatibility
-
-  late String trigger; // The phrase to say, e.g., "Normal Cardio"
-
-  late String content; // The text to insert
-
+  int id = 0;
+  late String trigger;
+  late String content;
   bool isFavorite = false;
-
   int usageCount = 0;
-
   DateTime? lastUsed;
-
   DateTime createdAt = DateTime.now();
-
   bool isAiMacro = false;
+  String? aiInstruction;
+  String category = 'General';
 
-  String? aiInstruction; // Custom instruction for Gemini
-
-  String category = 'General'; // Category: Cardiology, Pediatrics, etc.
-
-  // Default constructor
   Macro();
 
-  // ============================================
-  // JSON Serialization
-  // ============================================
-
-  /// Convert from JSON (API response)
   factory Macro.fromJson(Map<String, dynamic> json) {
     final macro = Macro();
     macro.id =
@@ -52,7 +31,6 @@ class Macro {
     return macro;
   }
 
-  /// Convert to JSON (for API requests)
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -68,9 +46,3 @@ class Macro {
     };
   }
 }
-
-
-
-
-
-

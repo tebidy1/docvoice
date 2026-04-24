@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../core/services/auth_service.dart';
+import '../../core/di/service_locator.dart';
+import '../../core/repositories/i_auth_service.dart';
 
 class AuthGuard extends StatefulWidget {
   final Widget child;
@@ -16,7 +17,7 @@ class AuthGuard extends StatefulWidget {
 class _AuthGuardState extends State<AuthGuard> {
   @override
   Widget build(BuildContext context) {
-    final authService = AuthService();
+    final authService = ServiceLocator.get<IAuthService>();
 
     return FutureBuilder<bool>(
       future: authService.isAuthenticated(),

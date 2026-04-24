@@ -10,8 +10,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/auth/pairing/domain/entities/pairing_session.dart';
 import '../../features/auth/pairing/presentation/providers/pairing_provider.dart';
+import '../../core/di/service_locator.dart';
 import '../../core/network/api_client.dart';
-import '../../core/services/auth_service.dart';
+import '../../core/repositories/i_auth_service.dart';
 import '../../core/utils/window_manager_proxy.dart';
 
 /// Desktop login screen — shows credentials form + QR code side by side.
@@ -27,7 +28,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _authService = AuthService();
+  final IAuthService _authService = ServiceLocator.get<IAuthService>();
 
   bool _isLoading = false;
   bool _rememberMe = false;
@@ -74,7 +75,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           final token = result['token'];
           if (token != null) {
             _stopPolling();
-            final apiClient = ApiClient();
+            final apiClient = ServiceLocator.get<ApiClient>();
             await apiClient.setToken(token);
             if (mounted) {
               Navigator.of(context).pushReplacementNamed('/');

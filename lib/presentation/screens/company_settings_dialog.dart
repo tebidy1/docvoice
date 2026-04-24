@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../../core/di/service_locator.dart';
 import '../../core/entities/app_theme.dart';
-import '../../core/services/auth_service.dart';
+import '../../core/repositories/i_auth_service.dart';
 import '../../core/services/theme_service.dart';
 import '../../core/utils/window_manager_helper.dart';
 
@@ -45,7 +46,7 @@ class _CompanySettingsDialogState extends State<CompanySettingsDialog> {
     final prefs = await SharedPreferences.getInstance();
 
     try {
-      final companySettings = await AuthService().getCompanySettings();
+      final companySettings = await ServiceLocator.get<IAuthService>().getCompanySettings();
       if (companySettings != null) {
         _groqKeyController.text = companySettings['groq_api_key'] ?? '';
         _geminiKeyController.text = companySettings['gemini_api_key'] ?? '';
@@ -80,7 +81,7 @@ class _CompanySettingsDialogState extends State<CompanySettingsDialog> {
 
     // Save to backend
     try {
-      final success = await AuthService().updateCompanySettings({
+      final success = await ServiceLocator.get<IAuthService>().updateCompanySettings({
         'groq_api_key': _groqKeyController.text,
         'gemini_api_key': _geminiKeyController.text,
         'groq_model_pref': _groqModel,

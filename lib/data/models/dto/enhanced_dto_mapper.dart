@@ -1,5 +1,5 @@
 import '../../../core/error/app_error.dart';
-import '../../../core/repositories/dto_mapper.dart';
+import 'package:soutnote/data/models/dto_mapper.dart';
 import 'mapping_utils.dart';
 import 'mapping_error_reporter.dart';
 

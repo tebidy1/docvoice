@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import '../../core/ai/text_processing_service.dart';
+import 'package:soutnote/core/ai/text_processing_service.dart';
 
 enum InjectionStatus {
   success,
