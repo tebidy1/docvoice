@@ -6,10 +6,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 // Models & Services
-import '../../mobile_app/models/note_model.dart';
-import '../../mobile_app/services/macro_service.dart';
-import '../../mobile_app/services/inbox_service.dart';
-import '../../mobile_app/services/groq_service.dart';
+import '../../android/models/note_model.dart';
+import '../../android/services/macro_service.dart';
+import '../../android/services/inbox_service.dart';
+import '../../android/services/groq_service.dart';
 import '../../../core/network/api_client.dart';
 import '../../../presentation/widgets/pattern_highlight_controller.dart';
 import '../../../presentation/widgets/processing_overlay.dart';
@@ -17,7 +17,7 @@ import '../../core/ai/ai_regex_patterns.dart';
 import '../../core/ai/text_processing_service.dart';
 import '../../../core/services/ai/ai_processing_service.dart';
 import '../services/extension_injection_service.dart';
-import '../../mobile_app/models/generated_output.dart'; // import GeneratedOutput
+import '../../android/models/generated_output.dart'; // import GeneratedOutput
 // ⚡ Gemini One-Shot AI
 import '../../../core/services/multimodal_ai/multimodal_ai_service.dart';
 import '../../../core/services/multimodal_ai/ai_studio_multimodal_service.dart';

@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/entities/inbox_note.dart';
-import '../../mobile_app/models/generated_output.dart';
+import '../../platform/android/models/generated_output.dart';
 import '../../core/entities/macro.dart';
 import '../../core/entities/smart_suggestion.dart';
 import '../../core/services/inbox_service.dart';

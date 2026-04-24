@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
-import '../mobile_app/models/note_model_base.dart';
-import '../mobile_app/models/generated_output.dart';
+import '../../platform/android/models/note_model.dart';
+import '../../platform/android/models/note_model_base.dart';
+import '../../platform/android/models/generated_output.dart';
 import 'inbox_note_api_service.dart';
 
 /// Service for managing notes with multiple templates (outputs)
@@ -11,7 +12,7 @@ import 'inbox_note_api_service.dart';
 /// Usage:
 /// ```dart
 /// final service = NoteWithTemplatesService();
-/// 
+///
 /// // Create a note with multiple templates
 /// await service.saveNoteWithTemplates(
 ///   note: myNote,
@@ -25,12 +26,12 @@ class NoteWithTemplatesService {
   final InboxNoteApiClient _ApiClient = InboxNoteApiClient();
 
   /// Save a note with multiple template outputs
-  /// 
+  ///
   /// This method:
   /// 1. First saves the note (creates or updates)
   /// 2. Then fetches existing outputs from the server
   /// 3. Performs upsert based on macro_id + inbox_note_id
-  /// 
+  ///
   /// [note] - The note to save
   /// [outputs] - List of template outputs to save
   /// [isNewNote] - Set to true if creating a new note (default: based on note.id)
@@ -42,7 +43,7 @@ class NoteWithTemplatesService {
     try {
       // Determine if this is a new note
       final bool isNew = isNewNote ?? (note.id == 0);
-      
+
       // Step 1: Save the note first
       NoteModel savedNote;
       if (isNew) {
@@ -54,26 +55,26 @@ class NoteWithTemplatesService {
         // Update note without outputs first
         savedNote = await _ApiClient.updateNote(note.id.toString(), note);
         debugPrint('✅ Updated note ID: ${savedNote.id}');
-        
+
         // Step 2: Fetch existing outputs from server
         final existingNote = await _ApiClient.fetchNoteById(note.id.toString());
         final existingOutputs = existingNote.generatedOutputs;
-        
+
         // Step 3: Perform upsert based on macro_id + inbox_note_id
         final updatedOutputs = _performUpsert(
           noteId: savedNote.id,
           newOutputs: outputs,
           existingOutputs: existingOutputs,
         );
-        
+
         // Step 4: Save the updated outputs
         savedNote.generatedOutputs = updatedOutputs;
         savedNote = await _ApiClient.updateNote(
-          savedNote.id.toString(), 
+          savedNote.id.toString(),
           savedNote,
         );
       }
-      
+
       return savedNote;
     } catch (e) {
       debugPrint('❌ Error saving note with templates: $e');
@@ -131,7 +132,8 @@ class NoteWithTemplatesService {
 
     // Add existing outputs that are NOT in new outputs (keep them)
     for (final existing in existingOutputs) {
-      if (existing.macroId != null && !processedMacroIds.contains(existing.macroId)) {
+      if (existing.macroId != null &&
+          !processedMacroIds.contains(existing.macroId)) {
         // This output was in existing but not in new - keep it
         result.add(GeneratedOutput(
           id: existing.id,
@@ -155,11 +157,11 @@ class NoteWithTemplatesService {
   }) async {
     // Fetch existing note with outputs
     final existingNote = await _ApiClient.fetchNoteById(noteId.toString());
-    
+
     // Check if this macro already exists
-    final existingOutputIndex = existingNote.generatedOutputs
-        .indexWhere((o) => o.macroId == macroId);
-    
+    final existingOutputIndex =
+        existingNote.generatedOutputs.indexWhere((o) => o.macroId == macroId);
+
     if (existingOutputIndex >= 0) {
       // Update existing
       existingNote.generatedOutputs[existingOutputIndex] = GeneratedOutput(
@@ -178,7 +180,7 @@ class NoteWithTemplatesService {
         orderIndex: existingNote.generatedOutputs.length,
       ));
     }
-    
+
     return await _ApiClient.updateNote(noteId.toString(), existingNote);
   }
 
@@ -189,15 +191,15 @@ class NoteWithTemplatesService {
   }) async {
     // Fetch existing note with outputs
     final existingNote = await _ApiClient.fetchNoteById(noteId.toString());
-    
+
     // Remove the output with matching macro_id
     existingNote.generatedOutputs.removeWhere((o) => o.macroId == macroId);
-    
+
     // Re-index order
     for (int i = 0; i < existingNote.generatedOutputs.length; i++) {
       existingNote.generatedOutputs[i].orderIndex = i;
     }
-    
+
     return await _ApiClient.updateNote(noteId.toString(), existingNote);
   }
 
@@ -214,9 +216,3 @@ class NoteWithTemplatesService {
     }
   }
 }
-
-
-
-
-
-

@@ -13,7 +13,7 @@ export 'entities/app_theme.dart';
 export 'entities/smart_suggestion.dart';
 
 // Network (API Client)
-export 'network/api_client.dart';
+export 'network/api_client.dart' hide ApiException;
 
 // Services
 export 'services/auth_service.dart';

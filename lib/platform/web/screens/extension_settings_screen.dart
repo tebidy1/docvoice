@@ -5,14 +5,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 // Screens
 import '../../../presentation/screens/admin_dashboard_screen.dart';
 import '../../../presentation/screens/secure_pairing_screen.dart';
-import '../../mobile_app/features/settings/company_settings_screen.dart';
-import '../../mobile_app/features/settings/macro_manager_screen.dart';
+import '../../android/features/settings/company_settings_screen.dart';
+import '../../android/features/settings/macro_manager_screen.dart';
 
 // Services & Core
 import '../../../core/services/auth_service.dart';
-import '../../mobile_app/core/theme.dart';
-import '../../mobile_app/services/macro_service.dart';
-import '../../mobile_app/services/websocket_service.dart';
+import '../../android/core/theme.dart';
+import '../../android/services/macro_service.dart';
+import '../../android/services/websocket_service.dart';
 import '../../../core/medical_departments.dart';
 import '../../../core/services/department_service.dart';
 import '../../../core/services/medical_department_service.dart';

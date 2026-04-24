@@ -1,7 +1,7 @@
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/macro.dart';
-import '../mobile_app/models/note_model_mobile.dart';
+import '../../platform/android/models/note_model_mobile.dart';
 
 /// Centralized database service to manage Isar instance
 /// This prevents schema conflicts between MacroService and InboxService
@@ -58,9 +58,3 @@ class DatabaseService {
     }
   }
 }
-
-
-
-
-
-

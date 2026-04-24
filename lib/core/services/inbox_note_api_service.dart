@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import '../mobile_app/models/note_model.dart';
+import '../../platform/android/models/note_model.dart';
 import 'base_api_service.dart';
 
 /// API Service for Inbox Notes
@@ -72,8 +72,9 @@ class InboxNoteApiClient extends BaseApiClient {
   /// Update an existing note
   Future<NoteModel> updateNote(String id, NoteModel note) async {
     final payload = note.toJson();
-    payload.remove('uuid'); // Prevent Laravel "uuid has already been taken" validation error
-    
+    payload.remove(
+        'uuid'); // Prevent Laravel "uuid has already been taken" validation error
+
     return await update<NoteModel>(
       id: id,
       data: payload,
@@ -148,9 +149,3 @@ class InboxNoteApiClient extends BaseApiClient {
     return successCount;
   }
 }
-
-
-
-
-
-

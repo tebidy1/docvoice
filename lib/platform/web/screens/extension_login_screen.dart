@@ -7,7 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../core/config/api_config.dart';
-import '../../mobile_app/services/websocket_service.dart' as unified_ws;
+import '../../android/services/websocket_service.dart' as unified_ws;
 import '../../../core/network/api_client.dart';
 import '../../../core/services/auth_service.dart';
 import 'extension_home_screen.dart';

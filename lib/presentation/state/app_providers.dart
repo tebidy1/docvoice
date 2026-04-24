@@ -11,7 +11,7 @@ import 'package:soutnote/core/usecases/login_usecase.dart';
 import 'package:soutnote/core/usecases/register_usecase.dart';
 import 'package:soutnote/core/usecases/upload_audio_usecase.dart';
 import 'package:soutnote/core/entities/app_theme.dart';
-import '../../mobile_app/services/websocket_service.dart' as unified_ws;
+import '../../platform/android/services/websocket_service.dart' as unified_ws;
 
 final apiClientProvider =
     Provider<ApiClient>((ref) => ServiceLocator.get<ApiClient>());

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../mobile_app/core/theme.dart';
+import '../../platform/android/core/theme.dart';
 import '../../core/services/admin_service.dart';
 
 class AdminCompanySettingsScreen extends StatefulWidget {

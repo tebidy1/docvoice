@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import '../mobile_app/models/note_model.dart';
-import '../mobile_app/models/generated_output.dart';
+import '../../platform/android/models/note_model.dart';
+import '../../platform/android/models/generated_output.dart';
 import 'inbox_note_api_service.dart';
 import 'sync_manager.dart';
 import 'cache_manager.dart';
@@ -47,9 +47,12 @@ class InboxService {
     note.formattedText = formattedText ?? '';
     note.audioPath = audioPath; // Added audio path map
     if (generatedOutputs != null) {
-      note.generatedOutputs = generatedOutputs.map((e) => GeneratedOutput.fromJson(e)).toList();
+      note.generatedOutputs =
+          generatedOutputs.map((e) => GeneratedOutput.fromJson(e)).toList();
     }
-    note.content = note.formattedText.isNotEmpty ? note.formattedText : note.originalText; // Fix LateInitializationError
+    note.content = note.formattedText.isNotEmpty
+        ? note.formattedText
+        : note.originalText; // Fix LateInitializationError
     note.status =
         note.formattedText.isNotEmpty ? NoteStatus.processed : NoteStatus.draft;
     note.createdAt = DateTime.now();
@@ -96,7 +99,8 @@ class InboxService {
     print('🔄 [InboxService] updateNote called for ID: $noteId');
     final existing = await getNoteById(noteId);
     if (existing == null) {
-      print('❌ [InboxService] updateNote failed: existing note is null for ID $noteId');
+      print(
+          '❌ [InboxService] updateNote failed: existing note is null for ID $noteId');
       return null;
     }
 
@@ -106,7 +110,8 @@ class InboxService {
     if (summary != null) existing.summary = summary;
     if (suggestedMacroId != null) existing.suggestedMacroId = suggestedMacroId;
     if (generatedOutputs != null) {
-      existing.generatedOutputs = generatedOutputs.map((e) => GeneratedOutput.fromJson(e)).toList();
+      existing.generatedOutputs =
+          generatedOutputs.map((e) => GeneratedOutput.fromJson(e)).toList();
     }
 
     if (formattedText != null && formattedText.isNotEmpty) {
@@ -121,8 +126,7 @@ class InboxService {
     await init();
 
     try {
-      final updatedNote =
-          await _ApiClient.updateNote(note.id.toString(), note);
+      final updatedNote = await _ApiClient.updateNote(note.id.toString(), note);
       _invalidateCache();
       return updatedNote;
     } catch (e) {
@@ -266,7 +270,7 @@ class InboxService {
 
     // 2. Fetch Fresh Data
     _refreshPendingNotes();
-    
+
     // 3. Start Polling
     _pollingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _refreshPendingNotes();
@@ -274,12 +278,12 @@ class InboxService {
   }
 
   Future<void> _refreshPendingNotes() async {
-     try {
-       final notes = await getPendingNotes(forceRefresh: true);
-       _pendingNotesController.add(notes);
-     } catch (e) {
-       debugPrint('Error refreshing pending notes: $e');
-     }
+    try {
+      final notes = await getPendingNotes(forceRefresh: true);
+      _pendingNotesController.add(notes);
+    } catch (e) {
+      debugPrint('Error refreshing pending notes: $e');
+    }
   }
 
   /// Manually trigger an update (e.g. after adding a note)
@@ -310,9 +314,3 @@ class InboxService {
     _cacheManager.remove('archived_notes');
   }
 }
-
-
-
-
-
-

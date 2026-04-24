@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../mobile_app/services/macro_service.dart';
+import '../../platform/android/services/macro_service.dart';
 import '../../core/medical_departments.dart';
 
 class AdminTemplatesScreen extends StatefulWidget {

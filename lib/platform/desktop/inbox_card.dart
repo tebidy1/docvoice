@@ -6,7 +6,7 @@ import '../../core/entities/macro.dart';
 import '../../core/services/windows_injector.dart';
 import '../../core/services/inbox_service.dart';
 import 'inbox_note_detail_view.dart';
-import '../../mobile_app/core/theme.dart';
+import '../../platform/android/core/theme.dart';
 import '../../core/ai/text_processing_service.dart';
 
 class InboxCard extends StatelessWidget {

@@ -12,9 +12,9 @@ import 'platform/desktop/desktop_app.dart'
     if (dart.library.html) 'platform/desktop/desktop_app_stub.dart';
 import 'presentation/landing_page/landing_page.dart';
 import 'presentation/landing_page/theme/app_theme.dart';
-import 'mobile_app/features/auth/login_screen.dart' as unified_login;
-import 'mobile_app/features/home/home_screen.dart' as unified_mobile;
-import 'mobile_app/features/splash/splash_screen.dart' as unified_splash;
+import 'platform/android/features/auth/login_screen.dart' as unified_login;
+import 'platform/android/features/home/home_screen.dart' as unified_mobile;
+import 'platform/android/features/splash/splash_screen.dart' as unified_splash;
 import 'core/entities/app_theme.dart';
 import 'presentation/screens/admin_dashboard_screen.dart'
     if (dart.library.html) 'platform/desktop/desktop_app_stub.dart'

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../mobile_app/models/note_model.dart';
-import '../../mobile_app/services/inbox_service.dart';
-import '../../mobile_app/services/macro_service.dart';
+import '../../android/models/note_model.dart';
+import '../../android/services/inbox_service.dart';
+import '../../android/services/macro_service.dart';
 import 'extension_editor_screen.dart'; // Correct Import
-import '../../mobile_app/features/inbox/archive_screen.dart'; // Reuse Mobile Archive
-import '../../mobile_app/core/utils/date_helper.dart';
+import '../../android/features/inbox/archive_screen.dart'; // Reuse Mobile Archive
+import '../../android/core/utils/date_helper.dart';
 import '../services/extension_injection_service.dart';
 
 class ExtensionInboxScreen extends StatefulWidget {
@@ -28,11 +28,24 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
     _loadMacros();
     // Initial Mock Data (Same as before)
     _notes.addAll([
-      NoteModel()..title="Patient H.M."..content="History of amnesia..."..status=NoteStatus.processed..createdAt=DateTime.now().subtract(const Duration(minutes: 5)),
-      NoteModel()..title="Follow-up: Sarah J."..content="Prescription renewal..."..status=NoteStatus.ready..createdAt=DateTime.now().subtract(const Duration(hours: 1)),
-      NoteModel()..title="Dr. Notes"..content="Staff meeting at 5 PM"..status=NoteStatus.draft..createdAt=DateTime.now().subtract(const Duration(days: 1)),
+      NoteModel()
+        ..title = "Patient H.M."
+        ..content = "History of amnesia..."
+        ..status = NoteStatus.processed
+        ..createdAt = DateTime.now().subtract(const Duration(minutes: 5)),
+      NoteModel()
+        ..title = "Follow-up: Sarah J."
+        ..content = "Prescription renewal..."
+        ..status = NoteStatus.ready
+        ..createdAt = DateTime.now().subtract(const Duration(hours: 1)),
+      NoteModel()
+        ..title = "Dr. Notes"
+        ..content = "Staff meeting at 5 PM"
+        ..status = NoteStatus.draft
+        ..createdAt = DateTime.now().subtract(const Duration(days: 1)),
     ]);
   }
+
   Future<void> _loadMacros() async {
     final all = await _macroService.getMacros();
     if (mounted) setState(() => _allMacros = all);
@@ -40,21 +53,22 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
 
   void addNote(NoteModel note) {
     _notes.insert(0, note);
-    _listKey.currentState?.insertItem(0, duration: const Duration(milliseconds: 600));
+    _listKey.currentState
+        ?.insertItem(0, duration: const Duration(milliseconds: 600));
   }
 
   Future<void> _copyAndMarkCopied(NoteModel note) async {
-    final rawText = note.formattedText.isNotEmpty ? note.formattedText : note.content;
-    
+    final rawText =
+        note.formattedText.isNotEmpty ? note.formattedText : note.content;
+
     final result = await ExtensionInjectionService.smartCopyAndInject(rawText);
 
     if (result.status == InjectionStatus.failed) {
-        if (mounted) {
-           ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(result.message), backgroundColor: Colors.red)
-           );
-        }
-        return;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(result.message), backgroundColor: Colors.red));
+      }
+      return;
     }
 
     // Update Status to COPIED
@@ -66,13 +80,13 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
 
     // Feedback
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result.message), 
-          duration: const Duration(seconds: 2),
-          backgroundColor: result.status == InjectionStatus.success ? Colors.green : Colors.blue,
-        )
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(result.message),
+        duration: const Duration(seconds: 2),
+        backgroundColor: result.status == InjectionStatus.success
+            ? Colors.green
+            : Colors.blue,
+      ));
     }
   }
 
@@ -86,11 +100,8 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ArchiveScreen(
-          archivedNotes: _archivedNotes, 
-          onClearAll: _clearArchive
-        )
-      ),
+          builder: (_) => ArchiveScreen(
+              archivedNotes: _archivedNotes, onClearAll: _clearArchive)),
     );
   }
 
@@ -104,9 +115,17 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("Inbox", style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold)),
+              Text("Inbox",
+                  style: Theme.of(context)
+                      .textTheme
+                      .headlineMedium
+                      ?.copyWith(fontWeight: FontWeight.bold)),
               IconButton(
-                icon: Icon(Icons.inventory_2_outlined, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
+                icon: Icon(Icons.inventory_2_outlined,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.7)),
                 tooltip: 'View Archive',
                 onPressed: _openArchive,
               )
@@ -115,75 +134,89 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
           const SizedBox(height: 16),
           Expanded(
             child: StreamBuilder<List<NoteModel>>(
-              stream: InboxService().watchPendingNotes(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting && _archivedNotes.isEmpty) { 
-                   return const Center(child: CircularProgressIndicator()); 
-                }
-                
-                if (snapshot.hasError) {
-                  return Center(child: Text("Error fetching notes: ${snapshot.error}", style: const TextStyle(color: Colors.red)));
-                }
+                stream: InboxService().watchPendingNotes(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting &&
+                      _archivedNotes.isEmpty) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
 
-                final notes = snapshot.data ?? [];
-                
-                if (notes.isEmpty) {
-                   return Center(child: Text("All caught up! 🎉", style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3))));
-                }
+                  if (snapshot.hasError) {
+                    return Center(
+                        child: Text("Error fetching notes: ${snapshot.error}",
+                            style: const TextStyle(color: Colors.red)));
+                  }
 
-                return AnimatedList(
-                  key: _listKey,
-                  initialItemCount: notes.length,
-                  itemBuilder: (context, index, animation) {
-                     // Simple list builder logic from mobile
-                     
-                    bool showHeader = true;
-                    if (index > 0) {
-                       final current = notes[index];
-                       final prev = notes[index - 1];
-                       if (DateHelper.isSameDay(prev.createdAt, current.createdAt)) {
-                         showHeader = false;
-                       }
-                    }
+                  final notes = snapshot.data ?? [];
 
-                    final header = showHeader 
-                      ? Padding(
-                          padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
-                          child: Text(
-                            DateHelper.formatGroupingDate(notes[index].createdAt).toUpperCase(),
-                            style: TextStyle(
-                               color: Theme.of(context).colorScheme.primary, 
-                               fontWeight: FontWeight.bold, 
-                               fontSize: 12,
-                               letterSpacing: 1.2
-                             ),
-                          ),
-                        )
-                      : const SizedBox.shrink();
+                  if (notes.isEmpty) {
+                    return Center(
+                        child: Text("All caught up! 🎉",
+                            style: GoogleFonts.inter(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withValues(alpha: 0.3))));
+                  }
 
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        header,
-                        _buildNoteCard(context, notes[index], index: index, noteNumber: notes.length - index), 
-                      ],
-                    );
-                  },
-                );
-              }
-            ),
+                  return AnimatedList(
+                    key: _listKey,
+                    initialItemCount: notes.length,
+                    itemBuilder: (context, index, animation) {
+                      // Simple list builder logic from mobile
+
+                      bool showHeader = true;
+                      if (index > 0) {
+                        final current = notes[index];
+                        final prev = notes[index - 1];
+                        if (DateHelper.isSameDay(
+                            prev.createdAt, current.createdAt)) {
+                          showHeader = false;
+                        }
+                      }
+
+                      final header = showHeader
+                          ? Padding(
+                              padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
+                              child: Text(
+                                DateHelper.formatGroupingDate(
+                                        notes[index].createdAt)
+                                    .toUpperCase(),
+                                style: TextStyle(
+                                    color:
+                                        Theme.of(context).colorScheme.primary,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    letterSpacing: 1.2),
+                              ),
+                            )
+                          : const SizedBox.shrink();
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          header,
+                          _buildNoteCard(context, notes[index],
+                              index: index, noteNumber: notes.length - index),
+                        ],
+                      );
+                    },
+                  );
+                }),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildNoteCard(BuildContext context, NoteModel note, {int? index, int noteNumber = 0}) {
+  Widget _buildNoteCard(BuildContext context, NoteModel note,
+      {int? index, int noteNumber = 0}) {
     final bool isDraft = note.formattedText.isEmpty;
 
     // Find applied template name
     String? templateName = note.summary;
-    if ((templateName == null || templateName.isEmpty) && _allMacros.isNotEmpty) {
+    if ((templateName == null || templateName.isEmpty) &&
+        _allMacros.isNotEmpty) {
       final macroId = note.appliedMacroId ?? note.suggestedMacroId;
       if (macroId != null) {
         final macro = _allMacros.where((m) => m.id == macroId).firstOrNull;
@@ -198,7 +231,9 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
     } else if (note.status == NoteStatus.copied) {
       badgeLabel = 'Copied';
     } else if (note.formattedText.isNotEmpty) {
-      badgeLabel = (templateName != null && templateName.isNotEmpty) ? templateName : 'Processed';
+      badgeLabel = (templateName != null && templateName.isNotEmpty)
+          ? templateName
+          : 'Processed';
     } else {
       badgeLabel = 'Draft';
     }
@@ -213,7 +248,7 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
         break;
       case NoteStatus.copied:
         statusColor = Colors.blue;
-        statusIcon = Icons.copy_all; 
+        statusIcon = Icons.copy_all;
         break;
       case NoteStatus.processed:
       case NoteStatus.draft:
@@ -225,7 +260,7 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      elevation: isDraft ? 2 : 4, 
+      elevation: isDraft ? 2 : 4,
       shadowColor: Colors.black45,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -233,7 +268,9 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
           // NAVIGATE TO EXTENSION EDITOR
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => ExtensionEditorScreen(draftNote: note, noteNumber: noteNumber)),
+            MaterialPageRoute(
+                builder: (_) => ExtensionEditorScreen(
+                    draftNote: note, noteNumber: noteNumber)),
           );
         },
         child: IntrinsicHeight(
@@ -247,16 +284,18 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
               ),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                           CircleAvatar(
+                          CircleAvatar(
                             radius: 16,
                             backgroundColor: statusColor.withValues(alpha: 0.2),
-                            child: Icon(statusIcon, color: statusColor, size: 18),
+                            child:
+                                Icon(statusIcon, color: statusColor, size: 18),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -264,46 +303,92 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
                               // Show Note Number or Patient Name
                               noteNumber > 0 ? 'NO-$noteNumber' : 'Draft Note',
                               style: TextStyle(
-                                fontWeight: isDraft ? FontWeight.w500 : FontWeight.w600, 
-                                color: isDraft ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.54) : Theme.of(context).colorScheme.onSurface, 
+                                fontWeight:
+                                    isDraft ? FontWeight.w500 : FontWeight.w600,
+                                color: isDraft
+                                    ? Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withValues(alpha: 0.54)
+                                    : Theme.of(context).colorScheme.onSurface,
                                 fontSize: 16,
-                                fontStyle: isDraft ? FontStyle.italic : FontStyle.normal,
+                                fontStyle: isDraft
+                                    ? FontStyle.italic
+                                    : FontStyle.normal,
                               ),
                             ),
                           ),
-                          if (index != null) 
+                          if (index != null)
                             IconButton(
-                              icon: Icon(Icons.subdirectory_arrow_left, 
-                                color: isDraft ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3) : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7), 
-                                size: 20),
-                              tooltip: isDraft ? 'Select a template first' : 'Copy & Inject',
-                              onPressed: isDraft ? null : () => _copyAndMarkCopied(note),
+                              icon: Icon(Icons.subdirectory_arrow_left,
+                                  color: isDraft
+                                      ? Theme.of(context)
+                                          .colorScheme
+                                          .onSurface
+                                          .withValues(alpha: 0.3)
+                                      : Theme.of(context)
+                                          .colorScheme
+                                          .onSurface
+                                          .withValues(alpha: 0.7),
+                                  size: 20),
+                              tooltip: isDraft
+                                  ? 'Select a template first'
+                                  : 'Copy & Inject',
+                              onPressed: isDraft
+                                  ? null
+                                  : () => _copyAndMarkCopied(note),
                             )
                         ],
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        note.formattedText.isNotEmpty ? note.formattedText : note.content,
-                        maxLines: 2, overflow: TextOverflow.ellipsis, 
-                        style: TextStyle(color: isDraft ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.54) : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7), height: 1.4),
+                        note.formattedText.isNotEmpty
+                            ? note.formattedText
+                            : note.content,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: isDraft
+                                ? Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withValues(alpha: 0.54)
+                                : Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withValues(alpha: 0.7),
+                            height: 1.4),
                       ),
                       const SizedBox(height: 12),
                       Row(
                         children: [
-                          Icon(Icons.access_time, size: 12, color: isDraft ? Colors.grey.withValues(alpha: 0.5) : Colors.grey),
+                          Icon(Icons.access_time,
+                              size: 12,
+                              color: isDraft
+                                  ? Colors.grey.withValues(alpha: 0.5)
+                                  : Colors.grey),
                           const SizedBox(width: 4),
                           Text(
                             "${note.createdAt.hour}:${note.createdAt.minute.toString().padLeft(2, '0')}",
-                            style: TextStyle(color: isDraft ? Colors.grey.withValues(alpha: 0.5) : Colors.grey, fontSize: 12),
+                            style: TextStyle(
+                                color: isDraft
+                                    ? Colors.grey.withValues(alpha: 0.5)
+                                    : Colors.grey,
+                                fontSize: 12),
                           ),
                           const Spacer(),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
                               color: statusColor.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(10),
                             ),
-                            child: Text(badgeLabel, style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold)),
+                            child: Text(badgeLabel,
+                                style: TextStyle(
+                                    color: statusColor,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold)),
                           ),
                         ],
                       ),
@@ -318,9 +403,3 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
     );
   }
 }
-
-
-
-
-
-

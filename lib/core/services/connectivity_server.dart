@@ -8,7 +8,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../utils/wav_utils.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/inbox_note.dart';
-import '../mobile_app/models/note_model.dart';
+import '../../platform/android/models/note_model.dart';
 import 'macro_service.dart';
 import 'inbox_service.dart';
 import 'api_service.dart';
@@ -164,9 +164,9 @@ class ConnectivityServer {
 
       // 🚀 SEND TO MOBILE CLIENT
       if (client != null) {
-         client.sink.add("TRANSCRIPT:$rawText");
+        client.sink.add("TRANSCRIPT:$rawText");
       } else {
-         for (var c in _clients) c.sink.add("TRANSCRIPT:$rawText");
+        for (var c in _clients) c.sink.add("TRANSCRIPT:$rawText");
       }
 
       // Clear buffer
@@ -188,18 +188,17 @@ class ConnectivityServer {
       String filename = 'recording.wav';
 
       if (_audioBuffer.length > 12 &&
-          _audioBuffer[4] == 0x66 && 
-          _audioBuffer[5] == 0x74 && 
-          _audioBuffer[6] == 0x79 && 
+          _audioBuffer[4] == 0x66 &&
+          _audioBuffer[5] == 0x74 &&
+          _audioBuffer[6] == 0x79 &&
           _audioBuffer[7] == 0x70) {
         print("M4A/AAC Header detected.");
         audioData = Uint8List.fromList(_audioBuffer);
         filename = 'recording.m4a';
-      }
-      else if (_audioBuffer.length > 44 &&
-          _audioBuffer[0] == 0x52 && 
-          _audioBuffer[1] == 0x49 && 
-          _audioBuffer[2] == 0x46 && 
+      } else if (_audioBuffer.length > 44 &&
+          _audioBuffer[0] == 0x52 &&
+          _audioBuffer[1] == 0x49 &&
+          _audioBuffer[2] == 0x46 &&
           _audioBuffer[3] == 0x46) {
         print("WAV Header detected.");
         audioData = Uint8List.fromList(_audioBuffer);
@@ -264,9 +263,3 @@ class ConnectivityServer {
     }
   }
 }
-
-
-
-
-
-
