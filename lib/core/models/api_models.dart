@@ -4,6 +4,9 @@
 /// including response wrappers, error models, and authentication results.
 
 import '../entities/user.dart';
+import '../mappers/user_mapper.dart';
+
+final _userMapper = UserMapper();
 
 /// Generic API response wrapper
 class ApiResponse<T> {
@@ -136,7 +139,7 @@ class AuthResult {
   factory AuthResult.fromJson(Map<String, dynamic> json) {
     return AuthResult(
       success: json['success'] ?? false,
-      user: json['user'] != null ? User.fromJson(json['user']) : null,
+      user: json['user'] != null ? _userMapper.fromJson(json['user']) : null,
       token: json['token']?.toString(),
       refreshToken: json['refresh_token']?.toString(),
       message: json['message']?.toString(),
@@ -151,7 +154,7 @@ class AuthResult {
   Map<String, dynamic> toJson() {
     return {
       'success': success,
-      'user': user?.toJson(),
+      'user': user != null ? _userMapper.toJson(user!) : null,
       'token': token,
       'refresh_token': refreshToken,
       'message': message,

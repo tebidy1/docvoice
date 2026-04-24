@@ -132,7 +132,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<AppTheme>(
+    return ValueListenableBuilder<ThemePreset>(
         valueListenable: ThemeService(),
         builder: (context, currentTheme, child) {
           return Center(
@@ -366,7 +366,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                               label: "Dark Onyx",
                               isSelected: currentTheme.id == 'dark_onyx',
                               onTap: () {
-                                ThemeService().setTheme(AppTheme.darkOnyx);
+                                ThemeService().setTheme(ThemePreset.darkOnyx);
                               },
                               theme: currentTheme,
                             ),
@@ -377,7 +377,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                               label: "Slate Dark",
                               isSelected: currentTheme.id == 'slate_dark',
                               onTap: () {
-                                ThemeService().setTheme(AppTheme.slateDark);
+                                ThemeService().setTheme(ThemePreset.slateDark);
                               },
                               theme: currentTheme,
                             ),
@@ -388,7 +388,8 @@ class _SettingsDialogState extends State<SettingsDialog> {
                               label: "Native Light",
                               isSelected: currentTheme.id == 'light_native',
                               onTap: () {
-                                ThemeService().setTheme(AppTheme.lightNative);
+                                ThemeService()
+                                    .setTheme(ThemePreset.lightNative);
                               },
                               theme: currentTheme,
                             ),
@@ -443,7 +444,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
         });
   }
 
-  Widget _buildSectionHeader(String title, AppTheme theme) {
+  Widget _buildSectionHeader(String title, ThemePreset theme) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8, left: 4),
       child: Text(
@@ -463,7 +464,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
     required String label,
     String? subtitle,
     required VoidCallback onTap,
-    required AppTheme theme,
+    required ThemePreset theme,
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -529,7 +530,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
     required String label,
     required bool isSelected,
     required VoidCallback onTap,
-    required AppTheme theme,
+    required ThemePreset theme,
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -587,7 +588,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
     required String title,
     String? subtitle,
     required String value,
-    required AppTheme theme,
+    required ThemePreset theme,
   }) {
     final isSelected = _sttEnginePref == value;
     final primaryColor = value == 'offline_whisper'
@@ -633,7 +634,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
     );
   }
 
-  void _showDepartmentPicker(AppTheme theme) {
+  void _showDepartmentPicker(ThemePreset theme) {
     String searchQuery = '';
 
     // Ensure departments are loaded from API

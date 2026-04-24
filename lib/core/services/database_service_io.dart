@@ -1,6 +1,6 @@
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
-import '../models/macro.dart';
+import '../entities/macro.dart';
 import '../../platform/android/models/note_model_mobile.dart';
 
 /// Centralized database service to manage Isar instance

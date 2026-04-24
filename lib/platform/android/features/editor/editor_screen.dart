@@ -15,6 +15,7 @@ import 'package:soutnote/core/entities/note_model.dart';
 import 'package:soutnote/core/entities/generated_output.dart';
 import '../../services/inbox_service.dart';
 import '../../services/macro_service.dart';
+import '../../../../core/entities/macro.dart';
 import '../../services/whisper_local_stub.dart'
     if (dart.library.io) '../../services/whisper_local_service.dart';
 
@@ -22,7 +23,7 @@ import '../../../../core/network/api_client.dart';
 import '../../services/groq_service.dart'; // Direct Groq for faster Web transcription
 import '../../../core/ai/ai_regex_patterns.dart';
 import '../../../core/ai/text_processing_service.dart';
-import '../../../services/ai/ai_processing_service.dart';
+import '../../../../core/services/ai/ai_processing_service.dart';
 import '../../../../../core/medical_departments.dart';
 import '../../../../../core/services/department_service.dart';
 import '../../../../platform/web/services/extension_injection_service.dart';
@@ -53,8 +54,8 @@ class _EditorScreenState extends State<EditorScreen> {
   late TextEditingController _sourceController; // Top: Raw Transcript
   late TextEditingController _finalController; // Bottom: Final Note
 
-  List<MacroModel> _macros = [];
-  MacroModel? _selectedMacro; // Track selected template
+  List<Macro> _macros = [];
+  Macro? _selectedMacro; // Track selected template
   StreamSubscription? _wsSubscription;
   late bool _isLoading; // Set dynamically in initState
   bool _isProcessing = false; // For AI generation
@@ -270,7 +271,7 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   /// ⚡ Gemini One-Shot: read audio file bytes → processAudioNote → display result
-  Future<void> _applyOneShotAI(MacroModel macro) async {
+  Future<void> _applyOneShotAI(Macro macro) async {
     final audioPath = widget.oneShotAudioPath ?? widget.draftNote?.audioPath;
     if (audioPath == null || audioPath.isEmpty) {
       if (mounted) {
@@ -345,22 +346,22 @@ class _EditorScreenState extends State<EditorScreen> {
           if (_currentNoteId == null) {
             try {
               final inboxService = InboxService();
-              final noteId = await inboxService.addNote(
+              final createdNote = await inboxService.addNote(
                 result.formattedNote,
                 patientName: macro.trigger,
                 audioPath: widget.oneShotAudioPath,
               );
-              setState(() => _currentNoteId = noteId);
+              setState(() => _currentNoteId = createdNote.id);
 
               await inboxService.updateNote(
-                noteId,
+                createdNote.id,
                 rawText: result.formattedNote,
                 formattedText: _generatedOutputs.isNotEmpty
                     ? _generatedOutputs.last.content ?? ''
                     : '',
                 generatedOutputs:
                     _generatedOutputs.map((e) => e.toJson()).toList(),
-                suggestedMacroId: int.tryParse(macro.id.toString()) ?? 0,
+                suggestedMacroId: macro.id,
                 summary: macro.trigger,
                 patientName: macro.trigger,
               );
@@ -507,7 +508,7 @@ class _EditorScreenState extends State<EditorScreen> {
       });
 
       // Restore selected macro from draft and move to front
-      MacroModel? restoredMacro;
+      Macro? restoredMacro;
       if (widget.draftNote != null &&
           widget.draftNote!.appliedMacroId != null) {
         try {
@@ -541,11 +542,11 @@ class _EditorScreenState extends State<EditorScreen> {
             // AUTO-SAVE: Create draft immediately after transcription
             try {
               final inboxService = InboxService();
-              final noteId = await inboxService.addNote(
+              final createdNote = await inboxService.addNote(
                 cleanText,
                 patientName: "Draft Note",
               );
-              setState(() => _currentNoteId = noteId);
+              setState(() => _currentNoteId = createdNote.id);
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                   content: Text("📝 Draft saved to cloud"),
@@ -723,12 +724,12 @@ class _EditorScreenState extends State<EditorScreen> {
               // AUTO-SAVE: Create draft immediately after transcription
               try {
                 final inboxService = InboxService();
-                final noteId = await inboxService.addNote(
+                final createdNote = await inboxService.addNote(
                   cleanText,
                   patientName: "Draft Note",
                 );
 
-                setState(() => _currentNoteId = noteId);
+                setState(() => _currentNoteId = createdNote.id);
 
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -758,7 +759,7 @@ class _EditorScreenState extends State<EditorScreen> {
     }
   }
 
-  Future<void> _applyMacroWithAI(MacroModel macro) async {
+  Future<void> _applyMacroWithAI(Macro macro) async {
     setState(() {
       _selectedMacro = macro;
       _isProcessing = true;
@@ -825,7 +826,7 @@ class _EditorScreenState extends State<EditorScreen> {
                         Navigator.pop(context);
                       },
                       child: const Text("OK",
-                          style: TextStyle(color: AppTheme.accent)),
+                          style: TextStyle(color: MobileAppTheme.accent)),
                     )
                   ],
                 ));
@@ -869,7 +870,7 @@ class _EditorScreenState extends State<EditorScreen> {
                     : '',
                 generatedOutputs:
                     _generatedOutputs.map((e) => e.toJson()).toList(),
-                suggestedMacroId: int.tryParse(macro.id.toString()) ?? 0,
+                suggestedMacroId: macro.id,
                 summary:
                     macro.trigger, // Changed to summary for template name badge
                 patientName: macro.trigger,
@@ -883,23 +884,23 @@ class _EditorScreenState extends State<EditorScreen> {
                 );
               }
             } else {
-              final noteId = await inboxService.addNote(
+              final createdNote = await inboxService.addNote(
                 _sourceController.text,
                 formattedText: _generatedOutputs.isNotEmpty
                     ? _generatedOutputs.last.content
                     : '',
                 generatedOutputs:
                     _generatedOutputs.map((e) => e.toJson()).toList(),
-                suggestedMacroId: int.tryParse(macro.id.toString()) ?? 0,
+                suggestedMacroId: macro.id,
                 summary:
                     macro.trigger, // Changed to summary for template name badge
                 patientName: macro.trigger,
               );
-              setState(() => _currentNoteId = noteId);
+              setState(() => _currentNoteId = createdNote.id);
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                      content: Text("✅ New note created (#$noteId)"),
+                      content: Text("✅ New note created (#${createdNote.id})"),
                       backgroundColor: Colors.green),
                 );
               }
@@ -981,7 +982,7 @@ class _EditorScreenState extends State<EditorScreen> {
                     TextButton(
                       onPressed: () => Navigator.pop(context),
                       child: const Text('Close',
-                          style: TextStyle(color: AppTheme.accent)),
+                          style: TextStyle(color: MobileAppTheme.accent)),
                     ),
                   ],
                 ),
@@ -998,14 +999,13 @@ class _EditorScreenState extends State<EditorScreen> {
   Future<void> _applyInsuranceTemplate() async {
     final insuranceMacro = _macros
         .firstWhere((m) => m.trigger.toUpperCase() == 'INSURANCE', orElse: () {
-      return MacroModel(
-        id: '7',
-        trigger: 'INSURANCE',
-        category: 'Admin',
-        content:
-            'Rewrite the note to emphasize medical necessity, making it suitable for insurance approval. Ensure justification for any tests, procedures, and medications is clearly documented and aligned with the reported symptoms and diagnosis.',
-        isAiMacro: true,
-      );
+      return Macro()
+        ..id = 7
+        ..trigger = 'INSURANCE'
+        ..category = 'Admin'
+        ..content =
+            'Rewrite the note to emphasize medical necessity, making it suitable for insurance approval. Ensure justification for any tests, procedures, and medications is clearly documented and aligned with the reported symptoms and diagnosis.'
+        ..isAiMacro = true;
     });
 
     setState(() {
@@ -1047,8 +1047,7 @@ class _EditorScreenState extends State<EditorScreen> {
                     : '',
                 generatedOutputs:
                     _generatedOutputs.map((e) => e.toJson()).toList(),
-                suggestedMacroId:
-                    int.tryParse(insuranceMacro.id.toString()) ?? 0,
+                suggestedMacroId: insuranceMacro.id,
                 summary: insuranceMacro.trigger,
                 patientName: insuranceMacro.trigger,
               );

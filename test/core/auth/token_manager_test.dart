@@ -3,7 +3,7 @@
 /// Tests secure token storage, retrieval, validation, and management functionality.
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scribeflow/core/core.dart';
+import 'package:soutnote/core/core.dart';
 
 void main() {
   group('TokenManager', () {
@@ -62,7 +62,7 @@ void main() {
       test('should store and retrieve user information', () async {
         const accessToken = 'test-access-token';
         final user = User(
-          id: '1',
+          id: 1,
           name: 'Test User',
           email: 'test@example.com',
           createdAt: DateTime.now(),
@@ -227,7 +227,7 @@ void main() {
       test('should update user information', () async {
         const accessToken = 'test-access-token';
         final initialUser = User(
-          id: '1',
+          id: 1,
           name: 'Initial User',
           email: 'initial@example.com',
           createdAt: DateTime.now(),
@@ -266,7 +266,7 @@ void main() {
         const accessToken = 'test-access-token';
         const refreshToken = 'test-refresh-token';
         final user = User(
-          id: '1',
+          id: 1,
           name: 'Test User',
           email: 'test@example.com',
           createdAt: DateTime.now(),
@@ -301,7 +301,7 @@ void main() {
         const refreshToken = 'test-refresh-token';
         final expiresAt = DateTime.now().add(const Duration(hours: 1));
         final user = User(
-          id: '1',
+          id: 1,
           name: 'Test User',
           email: 'test@example.com',
           createdAt: DateTime.now(),

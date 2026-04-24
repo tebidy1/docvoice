@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../platform/android/services/macro_service.dart';
+import '../../core/entities/macro.dart';
 import '../../core/medical_departments.dart';
 
 class AdminTemplatesScreen extends StatefulWidget {
@@ -11,7 +12,7 @@ class AdminTemplatesScreen extends StatefulWidget {
 
 class _AdminTemplatesScreenState extends State<AdminTemplatesScreen> {
   final MacroService _macroService = MacroService();
-  List<MacroModel> _allMacros = [];
+  List<Macro> _allMacros = [];
   bool _isLoading = true;
   MedicalDepartment? _selectedDepartment;
 
@@ -53,7 +54,7 @@ class _AdminTemplatesScreenState extends State<AdminTemplatesScreen> {
   }
 
   // Helper to parse categories CSV
-  List<String> _getCategories(MacroModel macro) {
+  List<String> _getCategories(Macro macro) {
     if (macro.category.isEmpty) return [];
     return macro.category
         .split(',')
@@ -62,7 +63,7 @@ class _AdminTemplatesScreenState extends State<AdminTemplatesScreen> {
         .toList();
   }
 
-  bool _isAssignedToSelected(MacroModel macro) {
+  bool _isAssignedToSelected(Macro macro) {
     if (_selectedDepartment == null) return false;
     final cats = _getCategories(macro);
     // If it's literally assigned to this department ID
@@ -72,7 +73,7 @@ class _AdminTemplatesScreenState extends State<AdminTemplatesScreen> {
     return false;
   }
 
-  Future<void> _toggleAssignment(MacroModel macro, bool assign) async {
+  Future<void> _toggleAssignment(Macro macro, bool assign) async {
     if (_selectedDepartment == null) return;
 
     // Optimistic UI update
@@ -91,7 +92,10 @@ class _AdminTemplatesScreenState extends State<AdminTemplatesScreen> {
     });
 
     try {
-      await _macroService.updateMacro(macro);
+      await _macroService.updateMacro(macro.id, macro.trigger, macro.content,
+          isAiMacro: macro.isAiMacro,
+          aiInstruction: macro.aiInstruction,
+          category: macro.category);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -115,11 +119,9 @@ class _AdminTemplatesScreenState extends State<AdminTemplatesScreen> {
           Navigator.pop(
               context); // Close dialog briefly to reload, or update in place
           try {
-            if (macro.id != null) {
-              await _macroService.deleteMacro(macro.id!);
-              await _loadData();
-              if (mounted) _openManageAllMacros(); // Reopen
-            }
+            await _macroService.deleteMacro(macro.id);
+            await _loadData();
+            if (mounted) _openManageAllMacros();
           } catch (e) {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -159,8 +161,8 @@ class _AdminTemplatesScreenState extends State<AdminTemplatesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    List<MacroModel> availableMacros = [];
-    List<MacroModel> assignedMacros = [];
+    List<Macro> availableMacros = [];
+    List<Macro> assignedMacros = [];
 
     if (_selectedDepartment != null) {
       for (var m in _allMacros) {
@@ -353,9 +355,9 @@ class _AdminTemplatesScreenState extends State<AdminTemplatesScreen> {
 
   Widget _buildMacroColumn({
     required String title,
-    required List<MacroModel> macros,
+    required List<Macro> macros,
     required bool isAssigned,
-    required Function(MacroModel) onTap,
+    required Function(Macro) onTap,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -457,9 +459,9 @@ class _AdminTemplatesScreenState extends State<AdminTemplatesScreen> {
 // =========================================================================
 
 class _ManageAllMacrosDialog extends StatefulWidget {
-  final List<MacroModel> macros;
-  final Function(MacroModel) onMacroDeleted;
-  final Function(MacroModel) onMacroEdited;
+  final List<Macro> macros;
+  final Function(Macro) onMacroDeleted;
+  final Function(Macro) onMacroEdited;
   final VoidCallback onMacroAdded;
 
   const _ManageAllMacrosDialog({
@@ -585,7 +587,7 @@ class _ManageAllMacrosDialogState extends State<_ManageAllMacrosDialog> {
     );
   }
 
-  void _confirmDelete(MacroModel macro) async {
+  void _confirmDelete(Macro macro) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -617,7 +619,7 @@ class _ManageAllMacrosDialogState extends State<_ManageAllMacrosDialog> {
 // =========================================================================
 
 class _TemplateEditDialog extends StatefulWidget {
-  final MacroModel? macro;
+  final Macro? macro;
   const _TemplateEditDialog({this.macro});
 
   @override
@@ -652,22 +654,21 @@ class _TemplateEditDialogState extends State<_TemplateEditDialog> {
     final macroService = MacroService();
 
     try {
-      final macro = MacroModel(
-        id: widget.macro?.id,
-        trigger: _titleController.text.trim(),
-        content: _contentController.text.trim(),
-        // Keep existing category (the CV string) if editing, otherwise empty string means assigned to no department initially
-        category: widget.macro?.category ?? '',
-        isAiMacro: true,
-        isFavorite: widget.macro?.isFavorite ?? false,
-        usageCount: widget.macro?.usageCount ?? 0,
-      );
-
       if (widget.macro == null) {
-        await macroService
-            .addMacro(macro); // Let service generate ID or hit API
+        await macroService.addMacro(
+          _titleController.text.trim(),
+          _contentController.text.trim(),
+          isAiMacro: true,
+          category: widget.macro?.category ?? '',
+        );
       } else {
-        await macroService.updateMacro(macro);
+        await macroService.updateMacro(
+          widget.macro!.id,
+          _titleController.text.trim(),
+          _contentController.text.trim(),
+          isAiMacro: true,
+          category: widget.macro?.category ?? '',
+        );
       }
 
       if (mounted) {

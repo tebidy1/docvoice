@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import '../../platform/android/models/note_model.dart';
-import '../../platform/android/models/generated_output.dart';
+import '../entities/note_model.dart';
+import '../entities/generated_output.dart';
 import 'inbox_note_api_service.dart';
 import 'sync_manager.dart';
 import 'cache_manager.dart';

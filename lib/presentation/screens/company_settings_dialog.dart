@@ -111,7 +111,7 @@ class _CompanySettingsDialogState extends State<CompanySettingsDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<AppTheme>(
+    return ValueListenableBuilder<ThemePreset>(
       valueListenable: ThemeService(),
       builder: (context, currentTheme, child) {
         return Center(
@@ -234,7 +234,7 @@ class _CompanySettingsDialogState extends State<CompanySettingsDialog> {
     );
   }
 
-  Widget _buildSectionHeader(String title, AppTheme theme) {
+  Widget _buildSectionHeader(String title, ThemePreset theme) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8, left: 4),
       child: Text(
@@ -252,7 +252,7 @@ class _CompanySettingsDialogState extends State<CompanySettingsDialog> {
   Widget _buildTextField({
     required String label,
     required TextEditingController controller,
-    required AppTheme theme,
+    required ThemePreset theme,
     bool obscure = false,
     int maxLines = 1,
   }) {
@@ -291,7 +291,7 @@ class _CompanySettingsDialogState extends State<CompanySettingsDialog> {
     );
   }
 
-  Widget _buildModelSelector(AppTheme theme) {
+  Widget _buildModelSelector(ThemePreset theme) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

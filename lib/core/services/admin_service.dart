@@ -1,6 +1,7 @@
 import '../network/api_client.dart';
 import '../entities/company.dart';
 import '../entities/user.dart';
+import '../mappers/user_mapper.dart';
 
 class AdminService {
   static final AdminService _instance = AdminService._internal();
@@ -8,6 +9,7 @@ class AdminService {
   AdminService._internal();
 
   final ApiClient _ApiClient = ApiClient();
+  final _userMapper = UserMapper();
 
   // Dashboard Statistics
   Future<Map<String, dynamic>> getStatistics() async {
@@ -188,7 +190,7 @@ class AdminService {
 
   Future<User> getUser(int id) async {
     final response = await _ApiClient.get('/admin/users/$id');
-    return User.fromJson(response['payload'] as Map<String, dynamic>);
+    return _userMapper.fromJson(response['payload'] as Map<String, dynamic>);
   }
 
   Future<User> createUser({
@@ -209,7 +211,7 @@ class AdminService {
       if (status != null) 'status': status,
       if (phone != null) 'phone': phone,
     });
-    return User.fromJson(response['payload'] as Map<String, dynamic>);
+    return _userMapper.fromJson(response['payload'] as Map<String, dynamic>);
   }
 
   Future<User> updateUser(
@@ -232,7 +234,7 @@ class AdminService {
     if (phone != null) body['phone'] = phone;
 
     final response = await _ApiClient.put('/admin/users/$id', body: body);
-    return User.fromJson(response['payload'] as Map<String, dynamic>);
+    return _userMapper.fromJson(response['payload'] as Map<String, dynamic>);
   }
 
   Future<void> deleteUser(int id) async {
@@ -243,7 +245,7 @@ class AdminService {
     final response = await _ApiClient.patch('/admin/users/$id/role', body: {
       'role': role,
     });
-    return User.fromJson(response['payload'] as Map<String, dynamic>);
+    return _userMapper.fromJson(response['payload'] as Map<String, dynamic>);
   }
 
   Future<User> resetUserPassword(int id, String newPassword) async {
@@ -251,6 +253,6 @@ class AdminService {
         await _ApiClient.post('/admin/users/$id/reset-password', body: {
       'password': newPassword,
     });
-    return User.fromJson(response['payload'] as Map<String, dynamic>);
+    return _userMapper.fromJson(response['payload'] as Map<String, dynamic>);
   }
 }

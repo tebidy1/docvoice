@@ -3,7 +3,7 @@ import '../../android/services/audio_recording_service.dart';
 import 'extension_settings_screen.dart';
 import 'extension_inbox_screen.dart'; // New Extension Inbox
 import 'extension_editor_screen.dart';
-import '../../android/models/note_model.dart';
+import '../../../core/entities/note_model.dart';
 import 'package:uuid/uuid.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:web/web.dart' as web;

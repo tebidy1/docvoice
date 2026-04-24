@@ -1,9 +1,9 @@
 import 'package:isar/isar.dart';
-import '../models/macro.dart';
+import '../entities/macro.dart';
 import 'database_service.dart';
 import 'dart:async';
 import 'dart:convert';
-import '../../ai/ai_prompt_constants.dart';
+import '../ai/ai_prompt_constants.dart';
 
 class MacroService {
   // Singleton pattern

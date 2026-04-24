@@ -72,7 +72,7 @@ class InboxCard extends StatelessWidget {
 
     switch (note.status) {
       case NoteStatus.ready:
-        statusColor = AppTheme.success;
+        statusColor = MobileAppTheme.success;
         statusIcon = Icons.check_circle;
         statusText = "Ready";
         break;

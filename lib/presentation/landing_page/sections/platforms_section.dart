@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../core/utils/platform_utils.dart' as platform_utils;
+import '../../../core/utils/platform_utils.dart' as platform_utils;
 import '../theme/app_colors.dart';
 
 class PlatformsSection extends StatelessWidget {

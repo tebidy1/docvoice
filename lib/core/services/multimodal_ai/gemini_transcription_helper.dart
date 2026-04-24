@@ -25,14 +25,15 @@ import 'dart:io' show File, Platform;
 
 import 'multimodal_ai_service.dart';
 import 'ai_studio_multimodal_service.dart';
-import '../../core/ai/ai_prompt_constants.dart';
+import '../../ai/ai_prompt_constants.dart';
 
 /// Unified helper for Step 1 of the 2-Step Architecture.
 /// Handles audio loading, MIME detection, and Gemini transcription
 /// in a single, platform-aware call.
 class GeminiTranscriptionHelper {
   // Singleton
-  static final GeminiTranscriptionHelper _instance = GeminiTranscriptionHelper._internal();
+  static final GeminiTranscriptionHelper _instance =
+      GeminiTranscriptionHelper._internal();
   factory GeminiTranscriptionHelper() => _instance;
   GeminiTranscriptionHelper._internal();
 
@@ -48,13 +49,15 @@ class GeminiTranscriptionHelper {
     try {
       final bytes = await _loadAudioBytes(audioPath);
       if (bytes == null) {
-        debugPrint('GeminiTranscriptionHelper: Failed to load audio bytes from: $audioPath');
+        debugPrint(
+            'GeminiTranscriptionHelper: Failed to load audio bytes from: $audioPath');
         return null;
       }
       final mimeType = detectMimeType(audioPath);
       return await _transcribe(bytes, mimeType);
     } catch (e) {
-      debugPrint('GeminiTranscriptionHelper: Exception in transcribeFromPath: $e');
+      debugPrint(
+          'GeminiTranscriptionHelper: Exception in transcribeFromPath: $e');
       return null;
     }
   }
@@ -68,7 +71,8 @@ class GeminiTranscriptionHelper {
     try {
       return await _transcribe(bytes, mimeType);
     } catch (e) {
-      debugPrint('GeminiTranscriptionHelper: Exception in transcribeFromBytes: $e');
+      debugPrint(
+          'GeminiTranscriptionHelper: Exception in transcribeFromBytes: $e');
       return null;
     }
   }
@@ -91,7 +95,8 @@ class GeminiTranscriptionHelper {
       return result.formattedNote;
     }
 
-    debugPrint('⚠️ GeminiTranscriptionHelper: Transcription failed — ${result.errorMessage}');
+    debugPrint(
+        '⚠️ GeminiTranscriptionHelper: Transcription failed — ${result.errorMessage}');
     return null;
   }
 
@@ -104,7 +109,8 @@ class GeminiTranscriptionHelper {
         if (response.statusCode == 200) {
           return response.bodyBytes;
         }
-        debugPrint('GeminiTranscriptionHelper: HTTP ${response.statusCode} loading blob');
+        debugPrint(
+            'GeminiTranscriptionHelper: HTTP ${response.statusCode} loading blob');
         return null;
       } catch (e) {
         debugPrint('GeminiTranscriptionHelper: Error fetching blob: $e');
@@ -131,20 +137,14 @@ class GeminiTranscriptionHelper {
   static String detectMimeType(String path) {
     final ext = path.split('.').last.toLowerCase();
     return switch (ext) {
-      'm4a'  => 'audio/m4a',
-      'mp4'  => 'audio/mp4',
+      'm4a' => 'audio/m4a',
+      'mp4' => 'audio/mp4',
       'webm' => 'audio/webm',
-      'ogg'  => 'audio/ogg',
-      'aac'  => 'audio/aac',
-      'wav'  => 'audio/wav',
-      'mp3'  => 'audio/mp3',
-      _      => kIsWeb ? 'audio/webm' : 'audio/wav',
+      'ogg' => 'audio/ogg',
+      'aac' => 'audio/aac',
+      'wav' => 'audio/wav',
+      'mp3' => 'audio/mp3',
+      _ => kIsWeb ? 'audio/webm' : 'audio/wav',
     };
   }
 }
-
-
-
-
-
-

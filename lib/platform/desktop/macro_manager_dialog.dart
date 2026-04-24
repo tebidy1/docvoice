@@ -419,7 +419,7 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
   // ══════════════════════════════════════════════════════════════════════
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<AppTheme>(
+    return ValueListenableBuilder<ThemePreset>(
       valueListenable: ThemeService(),
       builder: (context, currentTheme, _) {
         return Center(
@@ -453,7 +453,7 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
   }
 
   // ── Header ────────────────────────────────────────────────────────────
-  Widget _buildHeader(BuildContext context, AppTheme theme) {
+  Widget _buildHeader(BuildContext context, ThemePreset theme) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
@@ -509,7 +509,7 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
   }
 
   // ── Sidebar ───────────────────────────────────────────────────────────
-  Widget _buildSidebar(AppTheme theme) {
+  Widget _buildSidebar(ThemePreset theme) {
     final deptId = _userDeptId;
     final userDept = deptId != null ? MedicalDepartments.getById(deptId) : null;
 
@@ -588,7 +588,7 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
   }
 
   Widget _sidebarItem(
-      String emoji, String name, IconData icon, AppTheme theme) {
+      String emoji, String name, IconData icon, ThemePreset theme) {
     final isSelected = _selectedCategory == name;
     return InkWell(
       onTap: () {
@@ -628,7 +628,7 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
     );
   }
 
-  Widget _sidebarDeptItem(MedicalDepartment dept, AppTheme theme) {
+  Widget _sidebarDeptItem(MedicalDepartment dept, ThemePreset theme) {
     final isSelected = _selectedCategory == dept.nameEn;
     return InkWell(
       onTap: () {
@@ -672,7 +672,7 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
   }
 
   // ── Main Panel ────────────────────────────────────────────────────────
-  Widget _buildMainPanel(AppTheme theme) {
+  Widget _buildMainPanel(ThemePreset theme) {
     return Container(
       color: theme.backgroundColor,
       child: Column(children: [
@@ -723,7 +723,7 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
     );
   }
 
-  Widget _emptyState(AppTheme theme) {
+  Widget _emptyState(ThemePreset theme) {
     return Center(
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
       Icon(Icons.search_off,
@@ -736,7 +736,7 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
   }
 
   // ── Grouped list — mirrors MacroManagerScreen ─────────────────────────
-  Widget _buildGroupedList(AppTheme theme) {
+  Widget _buildGroupedList(ThemePreset theme) {
     final groups = _grouped;
     final sortedKeys = groups.keys.toList()
       ..sort((a, b) {
@@ -776,7 +776,7 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
   }
 
   // ── Macro card ────────────────────────────────────────────────────────
-  Widget _buildMacroCard(Macro macro, AppTheme theme) {
+  Widget _buildMacroCard(Macro macro, ThemePreset theme) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(

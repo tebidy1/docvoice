@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-class AppTheme {
+class ThemePreset {
   final String id;
   final String name;
   final bool isDark;
-  
+
   // Container Styles
   final Color backgroundColor;
   final Color borderColor;
@@ -27,7 +27,7 @@ class AppTheme {
   // Drag Handle
   final Color dragHandleColor;
 
-  const AppTheme({
+  const ThemePreset({
     required this.id,
     required this.name,
     required this.isDark,
@@ -48,7 +48,7 @@ class AppTheme {
   });
 
   // Presets
-  static final AppTheme lightNative = AppTheme(
+  static final ThemePreset lightNative = ThemePreset(
     id: 'light_native',
     name: 'Native Light',
     isDark: false,
@@ -66,15 +66,17 @@ class AppTheme {
     hoverColor: const Color(0xFFF4F6F9), // Light grayish-blue for hover
     dividerColor: const Color(0xFFE2E8F0),
     micIdleBackground: const Color(0xFFFFFFFF),
-    micIdleIcon: const Color(0xFF00A5FE), // Bright primary blue (Login Button Color)
+    micIdleIcon:
+        const Color(0xFF00A5FE), // Bright primary blue (Login Button Color)
     micIdleBorder: const Color(0xFFE2E8F0),
     micRecordingBackground: const Color(0xFFFF453A),
     micRecordingIcon: Colors.white,
     micRecordingBorder: const Color(0xFFFF453A),
-    dragHandleColor: const Color(0xFF8A94A6), // Muted grey for subtle icons/handles
+    dragHandleColor:
+        const Color(0xFF8A94A6), // Muted grey for subtle icons/handles
   );
 
-  static final AppTheme slateDark = AppTheme(
+  static final ThemePreset slateDark = ThemePreset(
     id: 'slate_dark',
     name: 'Slate Dark',
     isDark: true,
@@ -100,7 +102,7 @@ class AppTheme {
     dragHandleColor: const Color(0xFF94A3B8), // Slate 400
   );
 
-  static final AppTheme darkOnyx = AppTheme(
+  static final ThemePreset darkOnyx = ThemePreset(
     id: 'dark_onyx',
     name: 'Dark Onyx',
     isDark: true,
@@ -126,9 +128,3 @@ class AppTheme {
     dragHandleColor: const Color(0xFF808080),
   );
 }
-
-
-
-
-
-

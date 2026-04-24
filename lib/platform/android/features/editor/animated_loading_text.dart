@@ -43,29 +43,31 @@ class _AnimatedLoadingTextState extends State<AnimatedLoadingText> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: AppTheme.accent, strokeWidth: 2.5)),
+        const SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(
+                color: MobileAppTheme.accent, strokeWidth: 2.5)),
         const SizedBox(height: 12),
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 500),
           transitionBuilder: (Widget child, Animation<double> animation) {
-            return FadeTransition(opacity: animation, child: SlideTransition(
-              position: Tween<Offset>(begin: const Offset(0.0, 0.5), end: Offset.zero).animate(animation),
-              child: child
-            ));
+            return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                    position: Tween<Offset>(
+                            begin: const Offset(0.0, 0.5), end: Offset.zero)
+                        .animate(animation),
+                    child: child));
           },
           child: Text(
             _states[_index],
             key: ValueKey<String>(_states[_index]),
-            style: GoogleFonts.inter(color: Colors.white38, fontSize: 13, letterSpacing: 0.5),
+            style: GoogleFonts.inter(
+                color: Colors.white38, fontSize: 13, letterSpacing: 0.5),
           ),
         ),
       ],
     );
   }
 }
-
-
-
-
-
-

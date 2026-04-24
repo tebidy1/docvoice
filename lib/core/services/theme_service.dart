@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../entities/app_theme.dart';
 
-class ThemeService extends ValueNotifier<AppTheme> {
+class ThemeService extends ValueNotifier<ThemePreset> {
   // Singleton instance
   static final ThemeService _instance = ThemeService._internal();
 
@@ -10,7 +10,7 @@ class ThemeService extends ValueNotifier<AppTheme> {
     return _instance;
   }
 
-  ThemeService._internal() : super(AppTheme.slateDark) {
+  ThemeService._internal() : super(ThemePreset.slateDark) {
     _loadTheme();
   }
 
@@ -21,12 +21,12 @@ class ThemeService extends ValueNotifier<AppTheme> {
       final prefs = await SharedPreferences.getInstance();
       final themeId = prefs.getString(_themePrefKey);
       if (themeId != null) {
-        if (themeId == AppTheme.lightNative.id) {
-          value = AppTheme.lightNative;
-        } else if (themeId == AppTheme.slateDark.id) {
-          value = AppTheme.slateDark;
-        } else if (themeId == AppTheme.darkOnyx.id) {
-          value = AppTheme.darkOnyx;
+        if (themeId == ThemePreset.lightNative.id) {
+          value = ThemePreset.lightNative;
+        } else if (themeId == ThemePreset.slateDark.id) {
+          value = ThemePreset.slateDark;
+        } else if (themeId == ThemePreset.darkOnyx.id) {
+          value = ThemePreset.darkOnyx;
         }
       }
     } catch (e) {
@@ -34,7 +34,7 @@ class ThemeService extends ValueNotifier<AppTheme> {
     }
   }
 
-  Future<void> setTheme(AppTheme theme) async {
+  Future<void> setTheme(ThemePreset theme) async {
     value = theme;
     try {
       final prefs = await SharedPreferences.getInstance();

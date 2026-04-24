@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
-import '../../core/utils/pwa/pwa_manager.dart';
+import '../../../core/utils/pwa/pwa_manager.dart';
 import '../theme/app_colors.dart';
 
 class PwaInstallBanner extends StatefulWidget {

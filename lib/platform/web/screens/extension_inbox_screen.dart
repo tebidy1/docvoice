@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../android/models/note_model.dart';
+import '../../../core/entities/note_model.dart';
 import '../../android/services/inbox_service.dart';
 import '../../android/services/macro_service.dart';
+import '../../../core/entities/macro.dart';
 import 'extension_editor_screen.dart'; // Correct Import
 import '../../android/features/inbox/archive_screen.dart'; // Reuse Mobile Archive
 import '../../android/core/utils/date_helper.dart';
@@ -20,7 +21,7 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
   final List<NoteModel> _notes = []; // Active Notes
   final List<NoteModel> _archivedNotes = []; // Archived Notes
   final _macroService = MacroService();
-  List<MacroModel> _allMacros = [];
+  List<Macro> _allMacros = [];
 
   @override
   void initState() {

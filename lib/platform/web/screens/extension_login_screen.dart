@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
-import '../../core/config/api_config.dart';
+import '../../../core/config/api_config.dart';
 import '../../android/services/websocket_service.dart' as unified_ws;
 import '../../../core/network/api_client.dart';
 import '../../../core/services/auth_service.dart';

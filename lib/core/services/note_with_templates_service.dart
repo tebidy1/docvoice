@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
-import '../../platform/android/models/note_model.dart';
-import '../../platform/android/models/note_model_base.dart';
-import '../../platform/android/models/generated_output.dart';
+import '../entities/note_model.dart';
+import '../entities/generated_output.dart';
 import 'inbox_note_api_service.dart';
 
 /// Service for managing notes with multiple templates (outputs)
@@ -36,7 +35,7 @@ class NoteWithTemplatesService {
   /// [outputs] - List of template outputs to save
   /// [isNewNote] - Set to true if creating a new note (default: based on note.id)
   Future<NoteModel> saveNoteWithTemplates({
-    required NoteModelBase note,
+    required NoteModel note,
     required List<GeneratedOutput> outputs,
     bool? isNewNote,
   }) async {

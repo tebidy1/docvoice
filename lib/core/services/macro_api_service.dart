@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import '../models/macro.dart';
+import '../entities/macro.dart';
 import 'base_api_service.dart';
 
 /// API Service for Macros
@@ -190,9 +190,3 @@ class MacroApiClient extends BaseApiClient {
     }).toList();
   }
 }
-
-
-
-
-
-

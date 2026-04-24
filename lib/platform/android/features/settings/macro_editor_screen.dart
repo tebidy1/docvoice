@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:uuid/uuid.dart';
 import '../../core/theme.dart';
 import '../../services/macro_service.dart';
+import '../../../../core/entities/macro.dart';
 import '../../../../presentation/widgets/pattern_highlight_controller.dart';
 
 class MacroEditorScreen extends StatefulWidget {
-  final MacroModel? macro; // If null, we are creating a new one
+  final Macro? macro; // If null, we are creating a new one
 
   const MacroEditorScreen({super.key, this.macro});
 
@@ -66,21 +66,21 @@ class _MacroEditorScreenState extends State<MacroEditorScreen> {
     try {
       if (widget.macro != null) {
         // Edit Mode
-        widget.macro!.trigger = _triggerCtrl.text;
-        widget.macro!.content = _contentCtrl.text;
-        widget.macro!.category = _categoryCtrl.text;
-        widget.macro!.isFavorite = _isFavorite;
-        await _macroService.updateMacro(widget.macro!);
+        await _macroService.updateMacro(
+          widget.macro!.id,
+          _triggerCtrl.text,
+          _contentCtrl.text,
+          isAiMacro: widget.macro!.isAiMacro,
+          aiInstruction: widget.macro!.aiInstruction,
+          category: _categoryCtrl.text,
+        );
       } else {
         // Create Mode
-        final newMacro = MacroModel(
-          id: const Uuid().v4(),
-          trigger: _triggerCtrl.text,
-          content: _contentCtrl.text,
+        await _macroService.addMacro(
+          _triggerCtrl.text,
+          _contentCtrl.text,
           category: _categoryCtrl.text,
-          isFavorite: _isFavorite,
         );
-        await _macroService.addMacro(newMacro);
       }
 
       if (mounted)
@@ -100,12 +100,12 @@ class _MacroEditorScreenState extends State<MacroEditorScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: MobileAppTheme.background,
       appBar: AppBar(
         title: Text(widget.macro == null ? "New Macro" : "Edit Macro",
             style:
                 GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 18)),
-        backgroundColor: AppTheme.background,
+        backgroundColor: MobileAppTheme.background,
         elevation: 0,
         leading: const BackButton(color: Colors.white),
         actions: [
@@ -125,11 +125,11 @@ class _MacroEditorScreenState extends State<MacroEditorScreen> {
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2, color: AppTheme.accent))
+                        strokeWidth: 2, color: MobileAppTheme.accent))
                 : TextButton(
                     onPressed: _save,
                     style: TextButton.styleFrom(
-                        backgroundColor: AppTheme.accent,
+                        backgroundColor: MobileAppTheme.accent,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(20)),
@@ -170,14 +170,14 @@ class _MacroEditorScreenState extends State<MacroEditorScreen> {
                           hintText: "e.g., ⚡ SOAP",
                           hintStyle: TextStyle(color: Colors.white24),
                           filled: true,
-                          fillColor: AppTheme.surface,
+                          fillColor: MobileAppTheme.surface,
                           border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                               borderSide: BorderSide.none),
                           contentPadding: const EdgeInsets.symmetric(
                               horizontal: 16, vertical: 14),
                           prefixIcon: const Icon(Icons.flash_on,
-                              color: AppTheme.accent, size: 20),
+                              color: MobileAppTheme.accent, size: 20),
                         ),
                       ),
                     ],
@@ -203,7 +203,7 @@ class _MacroEditorScreenState extends State<MacroEditorScreen> {
                           hintText: "General",
                           hintStyle: TextStyle(color: Colors.white24),
                           filled: true,
-                          fillColor: AppTheme.surface,
+                          fillColor: MobileAppTheme.surface,
                           border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                               borderSide: BorderSide.none),
@@ -228,7 +228,7 @@ class _MacroEditorScreenState extends State<MacroEditorScreen> {
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
-                  color: AppTheme.surface,
+                  color: MobileAppTheme.surface,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 padding:

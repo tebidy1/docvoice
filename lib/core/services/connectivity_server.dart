@@ -7,11 +7,11 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../utils/wav_utils.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/inbox_note.dart';
-import '../../platform/android/models/note_model.dart';
+import '../entities/inbox_note.dart';
+import '../entities/note_model.dart';
 import 'macro_service.dart';
 import 'inbox_service.dart';
-import 'api_service.dart';
+import '../network/api_client.dart';
 
 class ConnectivityServer {
   HttpServer? _server;

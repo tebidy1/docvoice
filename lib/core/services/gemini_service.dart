@@ -1,5 +1,5 @@
-import 'api_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../network/api_client.dart';
+import '../utils/arabic_scrubber.dart';
 
 class GeminiService {
   final ApiClient _ApiClient = ApiClient();
@@ -10,7 +10,7 @@ class GeminiService {
   Future<Map<String, dynamic>> analyzeNote(String rawText) async {
     try {
       final response = await _ApiClient.post('/audio/analyze', body: {
-        'transcript': rawText,
+        'transcript': ArabicScrubber.anonymizePII(rawText),
       });
 
       if (response['status'] == true) {
@@ -22,20 +22,20 @@ class GeminiService {
 
     return {
       'patientName': 'Unknown Patient',
-      'summary': rawText.substring(0, rawText.length > 50 ? 50 : rawText.length),
+      'summary':
+          rawText.substring(0, rawText.length > 50 ? 50 : rawText.length),
       'suggestedMacroType': 'general'
     };
   }
 
-  Future<String> formatText(String rawText, {
-    String? macroContext, 
-    String? instruction, 
-    String? specialty, 
-    String? globalPrompt
-  }) async {
+  Future<String> formatText(String rawText,
+      {String? macroContext,
+      String? instruction,
+      String? specialty,
+      String? globalPrompt}) async {
     try {
       final response = await _ApiClient.post('/audio/process', body: {
-        'transcript': rawText,
+        'transcript': ArabicScrubber.anonymizePII(rawText),
         'macro_context': macroContext,
         'instruction': instruction,
         'specialty': specialty,
@@ -54,7 +54,7 @@ class GeminiService {
 
   /// Ask a question about the context
   Future<String> askQuestion(String contextText, String question) async {
-    // Note: We don't have a specific askQuestion endpoint on backend yet, 
+    // Note: We don't have a specific askQuestion endpoint on backend yet,
     // but we can use the process endpoint with a custom prompt if needed.
     // For now, return a placeholder or implement in backend.
     return "Question-answering is being migrated to backend.";
@@ -69,7 +69,7 @@ class GeminiService {
   }) async {
     try {
       final response = await _ApiClient.post('/audio/process', body: {
-        'transcript': rawText,
+        'transcript': ArabicScrubber.anonymizePII(rawText),
         'macro_context': macroContext,
         'specialty': specialty,
         'global_prompt': globalPrompt,
@@ -85,9 +85,3 @@ class GeminiService {
     return null;
   }
 }
-
-
-
-
-
-

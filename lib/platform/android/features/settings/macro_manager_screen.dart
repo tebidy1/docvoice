@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme.dart';
 import '../../services/macro_service.dart';
+import '../../../../core/entities/macro.dart';
 import '../../../../../core/medical_departments.dart';
 import '../../../../../core/services/department_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -17,7 +18,7 @@ class MacroManagerScreen extends StatefulWidget {
 
 class _MacroManagerScreenState extends State<MacroManagerScreen> {
   final MacroService _service = MacroService();
-  List<MacroModel> _macros = [];
+  List<Macro> _macros = [];
   bool _isLoading = true;
 
   @override
@@ -27,7 +28,7 @@ class _MacroManagerScreenState extends State<MacroManagerScreen> {
   }
 
   // Helper to parse CSV categories
-  List<String> _getCategories(MacroModel m) {
+  List<String> _getCategories(Macro m) {
     if (m.category.isEmpty) return [];
     return m.category
         .split(',')
@@ -63,7 +64,7 @@ class _MacroManagerScreenState extends State<MacroManagerScreen> {
     });
   }
 
-  Future<void> _navigateToEditor([MacroModel? macro]) async {
+  Future<void> _navigateToEditor([Macro? macro]) async {
     final result = await Navigator.push(context,
         MaterialPageRoute(builder: (_) => MacroEditorScreen(macro: macro)));
 
@@ -73,9 +74,12 @@ class _MacroManagerScreenState extends State<MacroManagerScreen> {
     }
   }
 
-  Future<void> _toggleFavorite(MacroModel macro) async {
+  Future<void> _toggleFavorite(Macro macro) async {
     macro.isFavorite = !macro.isFavorite;
-    await _service.updateMacro(macro);
+    await _service.updateMacro(macro.id, macro.trigger, macro.content,
+        isAiMacro: macro.isAiMacro,
+        aiInstruction: macro.aiInstruction,
+        category: macro.category);
     _loadMacros();
   }
 
@@ -83,7 +87,7 @@ class _MacroManagerScreenState extends State<MacroManagerScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.surface,
+        backgroundColor: MobileAppTheme.surface,
         title:
             const Text("Reset Macros?", style: TextStyle(color: Colors.white)),
         content: const Text(
@@ -106,7 +110,7 @@ class _MacroManagerScreenState extends State<MacroManagerScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text("Restored KSA Default Macros 🇸🇦 ✅"),
-            backgroundColor: AppTheme.successGreen));
+            backgroundColor: MobileAppTheme.successGreen));
       }
     }
   }
@@ -114,7 +118,7 @@ class _MacroManagerScreenState extends State<MacroManagerScreen> {
   @override
   Widget build(BuildContext context) {
     // 1. Group Macros
-    final Map<String, List<MacroModel>> grouped = {};
+    final Map<String, List<Macro>> grouped = {};
 
     // Always add Favorites section first if there are any
     final favorites = _macros.where((m) => m.isFavorite == true).toList();
@@ -157,11 +161,11 @@ class _MacroManagerScreenState extends State<MacroManagerScreen> {
       });
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: MobileAppTheme.background,
       appBar: AppBar(
         title: Text("Macro Manager",
             style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-        backgroundColor: AppTheme.background,
+        backgroundColor: MobileAppTheme.background,
         elevation: 0,
         leading: const BackButton(color: Colors.white),
         actions: [
@@ -174,7 +178,7 @@ class _MacroManagerScreenState extends State<MacroManagerScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _navigateToEditor(),
-        backgroundColor: AppTheme.accent,
+        backgroundColor: MobileAppTheme.accent,
         child: const Icon(Icons.add, color: Colors.white),
       ),
       body: _isLoading
@@ -203,11 +207,11 @@ class _MacroManagerScreenState extends State<MacroManagerScreen> {
                                       ? Icons.star
                                       : Icons.folder_open,
                                   size: 16,
-                                  color: AppTheme.accent),
+                                  color: MobileAppTheme.accent),
                               const SizedBox(width: 8),
                               Text(category.toUpperCase(),
                                   style: GoogleFonts.inter(
-                                      color: AppTheme.accent,
+                                      color: MobileAppTheme.accent,
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
                                       letterSpacing: 1.0)),
@@ -220,13 +224,12 @@ class _MacroManagerScreenState extends State<MacroManagerScreen> {
                         // Macros in this section
                         ...macrosInSection.map((m) {
                           return Dismissible(
-                            key: Key(
-                                "${m.id}_$category"), // Unique key if item repeated? Favorites wraps same instance.
+                            key: Key("${m.id}_$category"),
                             direction: DismissDirection.endToStart,
                             background: Container(
                               alignment: Alignment.centerRight,
                               padding: const EdgeInsets.only(right: 20),
-                              color: AppTheme.recordRed,
+                              color: MobileAppTheme.recordRed,
                               child:
                                   const Icon(Icons.delete, color: Colors.white),
                             ),
@@ -234,7 +237,7 @@ class _MacroManagerScreenState extends State<MacroManagerScreen> {
                               return await showDialog(
                                   context: context,
                                   builder: (ctx) => AlertDialog(
-                                        backgroundColor: AppTheme.surface,
+                                        backgroundColor: MobileAppTheme.surface,
                                         title: const Text("Delete Macro?",
                                             style:
                                                 TextStyle(color: Colors.white)),
@@ -263,31 +266,29 @@ class _MacroManagerScreenState extends State<MacroManagerScreen> {
                             child: Card(
                               margin: const EdgeInsets.symmetric(
                                   horizontal: 16, vertical: 4),
-                              color: AppTheme.surface,
+                              color: MobileAppTheme.surface,
                               child: ListTile(
                                 leading: IconButton(
                                   icon: Icon(
-                                      m.isFavorite == true
+                                      m.isFavorite
                                           ? Icons.star
                                           : Icons.star_border,
-                                      color: m.isFavorite == true
+                                      color: m.isFavorite
                                           ? Colors.amber
                                           : Colors.white30),
                                   onPressed: () async {
-                                    // Optimistically toggle locally for instant feedback
                                     setState(() {
-                                      m.isFavorite = !(m.isFavorite ?? false);
+                                      m.isFavorite = !m.isFavorite;
                                     });
                                     await _service.toggleFavorite(m.id);
-                                    _loadMacros(); // Reload to confirm state
+                                    _loadMacros();
                                   },
                                 ),
-                                title: Text(m.trigger ?? '',
+                                title: Text(m.trigger,
                                     style: const TextStyle(
                                         color: Colors.white,
                                         fontWeight: FontWeight.bold)),
-                                subtitle: Text(
-                                    (m.content ?? '').replaceAll('\n', ' '),
+                                subtitle: Text(m.content.replaceAll('\n', ' '),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style:

@@ -91,7 +91,7 @@ class _AdminCompanySettingsScreenState
             content: Text(success
                 ? "Settings Saved Successfully"
                 : "Failed to Save Settings"),
-            backgroundColor: success ? AppTheme.success : Colors.red,
+            backgroundColor: success ? MobileAppTheme.success : Colors.red,
           ),
         );
       }
@@ -163,7 +163,7 @@ class _AdminCompanySettingsScreenState
                                   groupValue: _groqModel,
                                   onChanged: (val) =>
                                       setState(() => _groqModel = val!),
-                                  activeColor: AppTheme.accent,
+                                  activeColor: MobileAppTheme.accent,
                                   dense: true,
                                 ),
                                 RadioListTile<String>(
@@ -176,7 +176,7 @@ class _AdminCompanySettingsScreenState
                                   groupValue: _groqModel,
                                   onChanged: (val) =>
                                       setState(() => _groqModel = val!),
-                                  activeColor: AppTheme.accent,
+                                  activeColor: MobileAppTheme.accent,
                                   dense: true,
                                 ),
                               ],
@@ -220,7 +220,7 @@ class _AdminCompanySettingsScreenState
                               icon: const Icon(Icons.save),
                               label: const Text("Save Configuration"),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: AppTheme.accent,
+                                backgroundColor: MobileAppTheme.accent,
                                 foregroundColor: Colors.white,
                                 padding:
                                     const EdgeInsets.symmetric(vertical: 12),

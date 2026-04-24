@@ -10,27 +10,27 @@ class ScribeFlowGenerators {
   static Generator<Macro> macro() {
     return MacroGenerator();
   }
-  
+
   /// Generate InboxNote objects
   static Generator<InboxNote> inboxNote() {
     return InboxNoteGenerator();
   }
-  
+
   /// Generate User objects
   static Generator<User> user() {
     return UserGenerator();
   }
-  
+
   /// Generate audio file metadata
   static Generator<Map<String, dynamic>> audioFileMetadata() {
     return AudioFileMetadataGenerator();
   }
-  
+
   /// Generate WebSocket events
   static Generator<Map<String, dynamic>> webSocketEvent() {
     return WebSocketEventGenerator();
   }
-  
+
   /// Generate settings data
   static Generator<Map<String, dynamic>> settingsData() {
     return SettingsDataGenerator();
@@ -49,12 +49,13 @@ class MacroGenerator extends Generator<Macro> {
     macro.isFavorite = random.nextBool();
     macro.usageCount = random.nextInt(100);
     macro.isAiMacro = random.nextBool();
-    macro.aiInstruction = random.nextBool() ? _generateAiInstruction(random) : null;
+    macro.aiInstruction =
+        random.nextBool() ? _generateAiInstruction(random) : null;
     macro.createdAt = _generateDateTime(random);
     macro.lastUsed = random.nextBool() ? _generateDateTime(random) : null;
     return macro;
   }
-  
+
   String _generateTrigger(Random random) {
     final triggers = [
       'normal cardio',
@@ -70,7 +71,7 @@ class MacroGenerator extends Generator<Macro> {
     ];
     return triggers[random.nextInt(triggers.length)];
   }
-  
+
   String _generateContent(Random random) {
     final contents = [
       'Normal cardiovascular examination with regular rate and rhythm.',
@@ -81,12 +82,18 @@ class MacroGenerator extends Generator<Macro> {
     ];
     return contents[random.nextInt(contents.length)];
   }
-  
+
   String _generateCategory(Random random) {
-    final categories = ['Cardiology', 'General', 'Pediatrics', 'Surgery', 'Emergency'];
+    final categories = [
+      'Cardiology',
+      'General',
+      'Pediatrics',
+      'Surgery',
+      'Emergency'
+    ];
     return categories[random.nextInt(categories.length)];
   }
-  
+
   String _generateAiInstruction(Random random) {
     final instructions = [
       'Format as SOAP note',
@@ -96,7 +103,7 @@ class MacroGenerator extends Generator<Macro> {
     ];
     return instructions[random.nextInt(instructions.length)];
   }
-  
+
   DateTime _generateDateTime(Random random) {
     final now = DateTime.now();
     final daysAgo = random.nextInt(365);
@@ -114,21 +121,22 @@ class InboxNoteGenerator extends Generator<InboxNote> {
     note.title = _generateTitle(random);
     note.content = _generateNoteContent(random);
     note.originalText = _generateOriginalText(random);
-    note.formattedText = random.nextBool() ? _generateFormattedText(random) : '';
+    note.formattedText =
+        random.nextBool() ? _generateFormattedText(random) : '';
     note.summary = random.nextBool() ? _generateSummary(random) : null;
     note.audioPath = random.nextBool() ? _generateAudioPath(random) : null;
     note.status = _generateStatus(random);
     note.createdAt = _generateDateTime(random);
     note.updatedAt = _generateDateTime(random);
-    note.appliedMacroId = random.nextBool() ? random.nextInt(100).toString() : null;
+    note.appliedMacroId = random.nextBool() ? random.nextInt(100) : null;
     note.suggestedMacroId = random.nextBool() ? random.nextInt(100) : null;
     return note;
   }
-  
+
   String _generateUuid(Random random) {
     return '${random.nextInt(100000)}-${random.nextInt(100000)}-${random.nextInt(100000)}';
   }
-  
+
   String _generateTitle(Random random) {
     final titles = [
       'Patient Consultation',
@@ -139,7 +147,7 @@ class InboxNoteGenerator extends Generator<InboxNote> {
     ];
     return titles[random.nextInt(titles.length)];
   }
-  
+
   String _generateNoteContent(Random random) {
     final contents = [
       'Patient presents with symptoms requiring evaluation.',
@@ -149,7 +157,7 @@ class InboxNoteGenerator extends Generator<InboxNote> {
     ];
     return contents[random.nextInt(contents.length)];
   }
-  
+
   String _generateOriginalText(Random random) {
     final texts = [
       'Patient came in today complaining of chest pain',
@@ -159,11 +167,11 @@ class InboxNoteGenerator extends Generator<InboxNote> {
     ];
     return texts[random.nextInt(texts.length)];
   }
-  
+
   String _generateFormattedText(Random random) {
     return 'FORMATTED: ${_generateOriginalText(random)}';
   }
-  
+
   String _generateSummary(Random random) {
     final summaries = [
       'Chest pain evaluation',
@@ -173,16 +181,16 @@ class InboxNoteGenerator extends Generator<InboxNote> {
     ];
     return summaries[random.nextInt(summaries.length)];
   }
-  
+
   String _generateAudioPath(Random random) {
     return '/audio/recording_${random.nextInt(1000)}.m4a';
   }
-  
+
   NoteStatus _generateStatus(Random random) {
     final statuses = NoteStatus.values;
     return statuses[random.nextInt(statuses.length)];
   }
-  
+
   DateTime _generateDateTime(Random random) {
     final now = DateTime.now();
     final daysAgo = random.nextInt(30);
@@ -210,42 +218,54 @@ class UserGenerator extends Generator<User> {
       updatedAt: _generateDateTime(random),
     );
   }
-  
+
   String _generateName(Random random) {
     final firstNames = ['John', 'Jane', 'Michael', 'Sarah', 'David', 'Emily'];
-    final lastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia'];
+    final lastNames = [
+      'Smith',
+      'Johnson',
+      'Williams',
+      'Brown',
+      'Jones',
+      'Garcia'
+    ];
     return '${firstNames[random.nextInt(firstNames.length)]} ${lastNames[random.nextInt(lastNames.length)]}';
   }
-  
+
   String _generateEmail(Random random) {
     final domains = ['example.com', 'test.com', 'demo.org'];
     final name = _generateName(random).toLowerCase().replaceAll(' ', '.');
     return '$name@${domains[random.nextInt(domains.length)]}';
   }
-  
+
   String _generatePhone(Random random) {
     return '+1${random.nextInt(900) + 100}${random.nextInt(900) + 100}${random.nextInt(9000) + 1000}';
   }
-  
+
   String _generateCompanyName(Random random) {
-    final companies = ['Medical Center', 'Health Clinic', 'Hospital System', 'Care Group'];
+    final companies = [
+      'Medical Center',
+      'Health Clinic',
+      'Hospital System',
+      'Care Group'
+    ];
     return companies[random.nextInt(companies.length)];
   }
-  
+
   String _generateRole(Random random) {
     final roles = ['admin', 'company_manager', 'member'];
     return roles[random.nextInt(roles.length)];
   }
-  
+
   String _generateStatus(Random random) {
     final statuses = ['active', 'inactive', 'pending'];
     return statuses[random.nextInt(statuses.length)];
   }
-  
+
   String _generateImageUrl(Random random) {
     return 'https://example.com/avatar/${random.nextInt(1000)}.jpg';
   }
-  
+
   DateTime _generateDateTime(Random random) {
     final now = DateTime.now();
     final daysAgo = random.nextInt(365);
@@ -259,7 +279,7 @@ class AudioFileMetadataGenerator extends Generator<Map<String, dynamic>> {
   Map<String, dynamic> generate(Random random) {
     final formats = ['mp3', 'wav', 'm4a', 'flac'];
     final format = formats[random.nextInt(formats.length)];
-    
+
     return {
       'filename': 'recording_${random.nextInt(1000)}.$format',
       'format': format,
@@ -283,14 +303,14 @@ class WebSocketEventGenerator extends Generator<Map<String, dynamic>> {
       'user_offline',
       'notification',
     ];
-    
+
     final channels = [
       'user.123',
       'transcription.456',
       'notifications',
       'presence',
     ];
-    
+
     return {
       'type': eventTypes[random.nextInt(eventTypes.length)],
       'channel': channels[random.nextInt(channels.length)],
@@ -299,7 +319,7 @@ class WebSocketEventGenerator extends Generator<Map<String, dynamic>> {
       'user_id': random.nextBool() ? random.nextInt(1000).toString() : null,
     };
   }
-  
+
   Map<String, dynamic> _generateEventData(Random random) {
     return {
       'id': random.nextInt(10000),
@@ -328,8 +348,3 @@ class SettingsDataGenerator extends Generator<Map<String, dynamic>> {
     };
   }
 }
-
-
-
-
-

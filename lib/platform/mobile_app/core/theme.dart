@@ -1,1 +1,1 @@
-export '../../../mobile_app/core/theme.dart';
+export '../../android/core/theme.dart';

@@ -56,7 +56,7 @@ class SoutNoteMobileApp extends StatelessWidget {
     return MaterialApp(
       title: 'SoutNote Mobile',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.darkTheme,
+      theme: MobileAppTheme.darkTheme,
       themeMode: ThemeMode.dark,
       initialRoute: initialRoute,
       routes: {

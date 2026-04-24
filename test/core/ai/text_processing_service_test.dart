@@ -12,7 +12,7 @@
 /// ============================================================
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scribeflow/core/ai/text_processing_service.dart';
+import 'package:soutnote/core/ai/text_processing_service.dart';
 
 void main() {
   group('TextProcessingService.applySmartCopy', () {

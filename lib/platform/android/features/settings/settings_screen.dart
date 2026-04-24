@@ -164,7 +164,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (mounted) {
         setState(() {
           _statusMessage = "Connected";
-          _statusColor = AppTheme.successGreen;
+          _statusColor = MobileAppTheme.successGreen;
           _isLoading = false;
         });
       }
@@ -313,14 +313,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       children: [
                         ListTile(
                           leading: CircleAvatar(
-                            backgroundColor: AppTheme.primary.withOpacity(0.2),
+                            backgroundColor:
+                                MobileAppTheme.primary.withOpacity(0.2),
                             child: Text(
                                 _currentUser?['name'] != null
                                     ? (_currentUser!['name'] as String)[0]
                                         .toUpperCase()
                                     : "?",
                                 style: const TextStyle(
-                                    color: AppTheme.primary,
+                                    color: MobileAppTheme.primary,
                                     fontWeight: FontWeight.bold)),
                           ),
                           title: Text(_currentUser?['name'] ?? "Guest User",
@@ -479,42 +480,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Card(
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8.0),
-                child: ValueListenableBuilder<global_theme.AppTheme>(
+                child: ValueListenableBuilder<global_theme.ThemePreset>(
                   valueListenable: ThemeService(),
                   builder: (context, currentTheme, child) {
                     return Column(
                       children: [
                         RadioListTile<String>(
                           title: const Text("Native Light"),
-                          value: global_theme.AppTheme.lightNative.id,
+                          value: global_theme.ThemePreset.lightNative.id,
                           groupValue: currentTheme.id,
-                          activeColor: AppTheme.accent,
+                          activeColor: MobileAppTheme.accent,
                           onChanged: (val) {
                             if (val != null)
-                              ThemeService()
-                                  .setTheme(global_theme.AppTheme.lightNative);
+                              ThemeService().setTheme(
+                                  global_theme.ThemePreset.lightNative);
                           },
                         ),
                         RadioListTile<String>(
                           title: const Text("Slate Dark"),
-                          value: global_theme.AppTheme.slateDark.id,
+                          value: global_theme.ThemePreset.slateDark.id,
                           groupValue: currentTheme.id,
-                          activeColor: AppTheme.accent,
+                          activeColor: MobileAppTheme.accent,
                           onChanged: (val) {
                             if (val != null)
                               ThemeService()
-                                  .setTheme(global_theme.AppTheme.slateDark);
+                                  .setTheme(global_theme.ThemePreset.slateDark);
                           },
                         ),
                         RadioListTile<String>(
                           title: const Text("Dark Onyx"),
-                          value: global_theme.AppTheme.darkOnyx.id,
+                          value: global_theme.ThemePreset.darkOnyx.id,
                           groupValue: currentTheme.id,
-                          activeColor: AppTheme.accent,
+                          activeColor: MobileAppTheme.accent,
                           onChanged: (val) {
                             if (val != null)
                               ThemeService()
-                                  .setTheme(global_theme.AppTheme.darkOnyx);
+                                  .setTheme(global_theme.ThemePreset.darkOnyx);
                           },
                         ),
                       ],
@@ -558,7 +559,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ? "Connecting..."
                             : "Connect to Desktop"),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.primary,
+                          backgroundColor: MobileAppTheme.primary,
                           foregroundColor: Colors.black,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
@@ -593,7 +594,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           "Lightning-fast processing via cloud servers."),
                       value: 'groq',
                       groupValue: _sttEnginePref,
-                      activeColor: AppTheme.accent,
+                      activeColor: MobileAppTheme.accent,
                       onChanged: (val) async {
                         if (val != null) {
                           setState(() => _sttEnginePref = val);
@@ -608,7 +609,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           'Transcription using a downloaded local AI model. Works offline.'),
                       value: 'whisper_local',
                       groupValue: _sttEnginePref,
-                      activeColor: AppTheme.accent,
+                      activeColor: MobileAppTheme.accent,
                       onChanged: (val) async {
                         if (val != null) {
                           setState(() => _sttEnginePref = val);
@@ -845,9 +846,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 leading: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                      color: AppTheme.accent.withOpacity(0.2),
+                      color: MobileAppTheme.accent.withOpacity(0.2),
                       shape: BoxShape.circle),
-                  child: const Icon(Icons.psychology, color: AppTheme.accent),
+                  child: const Icon(Icons.psychology,
+                      color: MobileAppTheme.accent),
                 ),
                 title: const Text("Macro Manager"),
                 subtitle: const Text("Manage custom templates"),
@@ -946,7 +948,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: Row(
                         children: [
                           const Icon(Icons.local_hospital,
-                              color: AppTheme.accent),
+                              color: MobileAppTheme.accent),
                           const SizedBox(width: 12),
                           Text("Select Department",
                               style: Theme.of(context)
@@ -1009,7 +1011,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   fontWeight: isSelected
                                       ? FontWeight.bold
                                       : FontWeight.w500,
-                                  color: isSelected ? AppTheme.accent : null,
+                                  color:
+                                      isSelected ? MobileAppTheme.accent : null,
                                 )),
                             subtitle: Text(dept.nameAr,
                                 style: TextStyle(
@@ -1020,7 +1023,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 )),
                             trailing: isSelected
                                 ? const Icon(Icons.check_circle,
-                                    color: AppTheme.accent)
+                                    color: MobileAppTheme.accent)
                                 : null,
                             onTap: () {
                               DepartmentService().setDepartment(dept.id);

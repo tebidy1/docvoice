@@ -8,29 +8,13 @@ import 'package:url_strategy/url_strategy.dart';
 
 import 'core/di/service_locator.dart';
 import 'core/repositories/i_auth_service.dart';
-import 'platform/desktop/desktop_app.dart'
-    if (dart.library.html) 'platform/desktop/desktop_app_stub.dart';
-import 'presentation/landing_page/landing_page.dart';
-import 'presentation/landing_page/theme/app_theme.dart';
-import 'platform/android/features/auth/login_screen.dart' as unified_login;
-import 'platform/android/features/home/home_screen.dart' as unified_mobile;
-import 'platform/android/features/splash/splash_screen.dart' as unified_splash;
 import 'core/entities/app_theme.dart';
-import 'presentation/screens/admin_dashboard_screen.dart'
-    if (dart.library.html) 'platform/desktop/desktop_app_stub.dart'
-    as desktop_admin;
-import 'presentation/screens/login_screen.dart'
-    if (dart.library.html) 'mobile_app/features/auth/login_screen.dart'
-    as desktop_login;
-import 'presentation/screens/qr_login_screen.dart';
-import 'presentation/screens/register_screen.dart'
-    if (dart.library.html) 'platform/desktop/desktop_app_stub.dart'
-    as desktop_register;
 import 'core/services/theme_service.dart';
 import 'core/utils/window_manager_proxy.dart';
-import 'presentation/widgets/admin_guard.dart';
-import 'presentation/widgets/auth_guard.dart';
+import 'presentation/landing_page/landing_page.dart';
+import 'presentation/landing_page/theme/app_theme.dart';
 import 'presentation/state/app_providers.dart';
+import 'presentation/router/app_router.dart';
 
 void main() async {
   setPathUrlStrategy();
@@ -84,15 +68,19 @@ class ScribeFlowApp extends ConsumerStatefulWidget {
 }
 
 class _ScribeFlowAppState extends ConsumerState<ScribeFlowApp> {
+  late final AppRouter _router;
+
+  @override
+  void initState() {
+    super.initState();
+    _router = AppRouter(ref.read(authStateUseCaseProvider));
+  }
+
   @override
   Widget build(BuildContext context) {
-    final bool isDesktop =
-        !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
-
     final themeService = ref.watch(themeProvider);
-    final authUseCase = ref.read(authStateUseCaseProvider);
 
-    return ValueListenableBuilder<AppTheme>(
+    return ValueListenableBuilder<ThemePreset>(
       valueListenable: themeService,
       builder: (context, currentTheme, child) {
         return MaterialApp(
@@ -166,70 +154,7 @@ class _ScribeFlowAppState extends ConsumerState<ScribeFlowApp> {
             ),
             useMaterial3: true,
           ),
-          onGenerateRoute: (settings) {
-            if (settings.name == '/' || settings.name == null) {
-              return MaterialPageRoute(
-                builder: (_) => const unified_splash.SplashScreen(),
-              );
-            }
-
-            if (settings.name == '/home') {
-              return MaterialPageRoute(
-                builder: (context) => AuthGuard(
-                  child: isDesktop
-                      ? const DesktopApp()
-                      : const unified_mobile.HomeScreen(),
-                ),
-              );
-            }
-
-            if (settings.name == '/register') {
-              return MaterialPageRoute(
-                  builder: (context) =>
-                      const desktop_register.RegisterScreen());
-            }
-
-            if (settings.name == '/qr-login') {
-              return MaterialPageRoute(
-                  builder: (context) => const QrLoginScreen());
-            }
-
-            if (settings.name == '/admin') {
-              return MaterialPageRoute(
-                  builder: (context) => const AdminGuard(
-                      child: desktop_admin.AdminDashboardScreen()));
-            }
-
-            if (settings.name == '/login') {
-              return MaterialPageRoute(
-                builder: (context) => isDesktop
-                    ? const desktop_login.LoginScreen()
-                    : const unified_login.LoginScreen(),
-              );
-            }
-
-            return MaterialPageRoute(
-              builder: (context) => FutureBuilder<bool>(
-                future: authUseCase.isAuthenticated(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Scaffold(
-                        body: Center(child: CircularProgressIndicator()));
-                  }
-                  final isAuth = snapshot.data ?? false;
-                  if (isAuth) {
-                    return AuthGuard(
-                        child: isDesktop
-                            ? const DesktopApp()
-                            : const unified_mobile.HomeScreen());
-                  }
-                  return isDesktop
-                      ? const desktop_login.LoginScreen()
-                      : const unified_login.LoginScreen();
-                },
-              ),
-            );
-          },
+          onGenerateRoute: _router.onGenerateRoute,
           initialRoute: '/',
         );
       },

@@ -1,6 +1,6 @@
-import '../../platform/android/models/note_model.dart';
+import 'note_model.dart';
 
-export '../../platform/android/models/note_model.dart';
+export 'note_model.dart';
 
 /// Legacy compatibility for Desktop app
 typedef InboxNote = NoteModel;

@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../core/entities/user.dart';
+import '../../core/mappers/user_mapper.dart';
 import '../../core/services/admin_service.dart';
 import '../../core/services/auth_service.dart';
 import '../widgets/create_user_dialog.dart';
 import '../widgets/window_title_bar.dart';
 import 'user_detail_screen.dart';
+
+final _userMapper = UserMapper();
 
 class UsersListScreen extends StatefulWidget {
   final int? companyId;
@@ -61,7 +64,7 @@ class _UsersListScreenState extends State<UsersListScreen> {
 
       setState(() {
         _users = data
-            .map((json) => User.fromJson(json as Map<String, dynamic>))
+            .map((json) => _userMapper.fromJson(json as Map<String, dynamic>))
             .toList();
         _currentPage = meta['current_page'] as int;
         _totalPages = meta['last_page'] as int;

@@ -787,7 +787,7 @@ cQBOFhw1ZkYvxx4A6HSNxyae
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<AppTheme>(
+    return ValueListenableBuilder<ThemePreset>(
         valueListenable: ThemeService(),
         builder: (context, theme, child) {
           return GestureDetector(
@@ -1059,7 +1059,7 @@ cQBOFhw1ZkYvxx4A6HSNxyae
     required String
         tooltip, // kept for backward compatibility if signature used elsewhere
     required Color color,
-    required AppTheme theme,
+    required ThemePreset theme,
   }) {
     return Material(
       color: Colors.transparent,

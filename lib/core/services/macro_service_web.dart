@@ -1,6 +1,6 @@
-import '../models/macro.dart';
+import '../entities/macro.dart';
 import 'dart:async';
-import '../../ai/ai_prompt_constants.dart';
+import '../ai/ai_prompt_constants.dart';
 
 /// Web-compatible stub for MacroService
 /// On web, local database features are not supported

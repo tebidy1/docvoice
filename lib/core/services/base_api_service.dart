@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'api_service.dart';
+import '../network/api_client.dart';
 
 /// Base class for all API services providing common CRUD operations
 ///
@@ -42,11 +42,11 @@ abstract class BaseApiClient {
 
       // Handle different response formats
       final dynamic data = response['data'] ?? response['payload'] ?? [];
-      
+
       if (data is List) {
         return data.map((item) => fromJson(item)).toList();
       }
-      
+
       // Fallback if data is not a list
       return [];
     } catch (e) {
@@ -136,8 +136,7 @@ abstract class BaseApiClient {
     required T Function(dynamic) fromJson,
   }) async {
     try {
-      final response =
-          await _ApiClient.get(endpoint, queryParams: queryParams);
+      final response = await _ApiClient.get(endpoint, queryParams: queryParams);
       final data = response['data'] ?? response['payload'];
       return fromJson(data);
     } catch (e) {
@@ -162,9 +161,3 @@ abstract class BaseApiClient {
     }
   }
 }
-
-
-
-
-
-

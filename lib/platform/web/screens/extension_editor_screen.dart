@@ -6,8 +6,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 // Models & Services
-import '../../android/models/note_model.dart';
+import '../../../core/entities/note_model.dart';
 import '../../android/services/macro_service.dart';
+import '../../../core/entities/macro.dart';
 import '../../android/services/inbox_service.dart';
 import '../../android/services/groq_service.dart';
 import '../../../core/network/api_client.dart';
@@ -17,7 +18,7 @@ import '../../core/ai/ai_regex_patterns.dart';
 import '../../core/ai/text_processing_service.dart';
 import '../../../core/services/ai/ai_processing_service.dart';
 import '../services/extension_injection_service.dart';
-import '../../android/models/generated_output.dart'; // import GeneratedOutput
+import '../../../core/entities/generated_output.dart'; // import GeneratedOutput
 // ⚡ Gemini One-Shot AI
 import '../../../core/services/multimodal_ai/multimodal_ai_service.dart';
 import '../../../core/services/multimodal_ai/ai_studio_multimodal_service.dart';
@@ -67,8 +68,8 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
   List<GeneratedOutput> _generatedOutputs = [];
 
   // State
-  List<MacroModel> _quickMacros = []; // Mobile service returns MacroModel
-  MacroModel? _selectedMacro;
+  List<Macro> _quickMacros = [];
+  Macro? _selectedMacro;
   bool _isGenerating = false;
   bool _isOneShotGenerating = false; // ⚡ One-Shot AI state
   bool _isOneShotMode = false; // ⚡ True when gemini_oneshot engine is selected
@@ -153,7 +154,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
     super.dispose();
   }
 
-  List<String> _getCategories(MacroModel m) {
+  List<String> _getCategories(Macro m) {
     if (m.category.isEmpty) return [];
     return m.category
         .split(',')
@@ -164,7 +165,6 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
 
   Future<void> _loadMacros() async {
     // Reuse Mobile Macro Service
-    // It returns List<MacroModel>
     final allMacros = await _macroService.getMacros();
 
     final prefs = await SharedPreferences.getInstance();
@@ -193,7 +193,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
 
     if (mounted) {
       // Restore selected macro
-      MacroModel? restoredMacro;
+      Macro? restoredMacro;
       if (_selectedMacro == null) {
         if (widget.draftNote.appliedMacroId != null) {
           try {
@@ -340,7 +340,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
   }
 
   /// ⚡ ONE-SHOT AI: Send audio blob + template to Gemini in a single request
-  Future<void> _applyOneShotAI(MacroModel macro) async {
+  Future<void> _applyOneShotAI(Macro macro) async {
     final audioPath = widget.draftNote.audioPath;
     if (audioPath == null || audioPath.isEmpty) {
       _showError(
@@ -433,15 +433,10 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
               : '',
           generatedOutputs: _generatedOutputs.map((e) => e.toJson()).toList(),
           summary: _selectedMacro?.trigger,
-          suggestedMacroId:
-              _selectedMacro?.id is int ? _selectedMacro?.id as int : null,
+          suggestedMacroId: _selectedMacro?.id,
         );
       } else {
-        // Create new if generic ID
-        // Note: ExtensionHomeScreen passing a 'draft' with generic UUID.
-        // We should probably rely on backend ID if possible.
-        // For now, let's use addNote if we don't have a real ID.
-        final newId = await _inboxService.addNote(
+        final newNote = await _inboxService.addNote(
           _sourceController.text,
           formattedText: _generatedOutputs.isNotEmpty
               ? _generatedOutputs.last.content ?? ''
@@ -449,18 +444,17 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
           generatedOutputs: _generatedOutputs.map((e) => e.toJson()).toList(),
           patientName: widget.draftNote.title,
           summary: _selectedMacro?.trigger,
-          suggestedMacroId:
-              _selectedMacro?.id is int ? _selectedMacro?.id as int : null,
+          suggestedMacroId: _selectedMacro?.id,
         );
         // Update local model
-        widget.draftNote.id = newId;
+        widget.draftNote.id = newNote.id;
       }
     } catch (e) {
       print("Auto-save failed: $e");
     }
   }
 
-  Future<void> _applyTemplate(MacroModel macro) async {
+  Future<void> _applyTemplate(Macro macro) async {
     setState(() {
       _isGenerating = true;
       _selectedMacro = macro;

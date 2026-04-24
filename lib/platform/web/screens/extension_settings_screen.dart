@@ -139,7 +139,7 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
       if (mounted) {
         setState(() {
           _statusMessage = "Connected";
-          _statusColor = AppTheme.successGreen;
+          _statusColor = MobileAppTheme.successGreen;
           _isLoading = false;
         });
       }
@@ -214,7 +214,7 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                         ListTile(
                           leading: CircleAvatar(
                             backgroundColor:
-                                AppTheme.primary.withValues(alpha: 0.2),
+                                MobileAppTheme.primary.withValues(alpha: 0.2),
                             child: Text(
                                 _currentUser?['name'] != null
                                     ? (_currentUser!['name'] as String)[0]
@@ -423,7 +423,7 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
               color: Theme.of(context).cardTheme.color,
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8.0),
-                child: ValueListenableBuilder<global_theme.AppTheme>(
+                child: ValueListenableBuilder<global_theme.ThemePreset>(
                   valueListenable: ThemeService(),
                   builder: (context, currentTheme, child) {
                     return Column(
@@ -435,13 +435,13 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                                       .textTheme
                                       .bodyLarge
                                       ?.color)),
-                          value: global_theme.AppTheme.lightNative.id,
+                          value: global_theme.ThemePreset.lightNative.id,
                           groupValue: currentTheme.id,
-                          activeColor: AppTheme.accent,
+                          activeColor: MobileAppTheme.accent,
                           onChanged: (val) {
                             if (val != null)
-                              ThemeService()
-                                  .setTheme(global_theme.AppTheme.lightNative);
+                              ThemeService().setTheme(
+                                  global_theme.ThemePreset.lightNative);
                           },
                         ),
                         RadioListTile<String>(
@@ -451,13 +451,13 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                                       .textTheme
                                       .bodyLarge
                                       ?.color)),
-                          value: global_theme.AppTheme.slateDark.id,
+                          value: global_theme.ThemePreset.slateDark.id,
                           groupValue: currentTheme.id,
-                          activeColor: AppTheme.accent,
+                          activeColor: MobileAppTheme.accent,
                           onChanged: (val) {
                             if (val != null)
                               ThemeService()
-                                  .setTheme(global_theme.AppTheme.slateDark);
+                                  .setTheme(global_theme.ThemePreset.slateDark);
                           },
                         ),
                         RadioListTile<String>(
@@ -467,13 +467,13 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                                       .textTheme
                                       .bodyLarge
                                       ?.color)),
-                          value: global_theme.AppTheme.darkOnyx.id,
+                          value: global_theme.ThemePreset.darkOnyx.id,
                           groupValue: currentTheme.id,
-                          activeColor: AppTheme.accent,
+                          activeColor: MobileAppTheme.accent,
                           onChanged: (val) {
                             if (val != null)
                               ThemeService()
-                                  .setTheme(global_theme.AppTheme.darkOnyx);
+                                  .setTheme(global_theme.ThemePreset.darkOnyx);
                           },
                         ),
                       ],
@@ -545,7 +545,7 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                             ? "Connecting..."
                             : "Connect to Desktop"),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.primary,
+                          backgroundColor: MobileAppTheme.primary,
                           foregroundColor: Colors.black,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
@@ -595,7 +595,7 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                                   ?.withValues(alpha: 0.54))),
                       value: 'groq',
                       groupValue: _sttEnginePref,
-                      activeColor: AppTheme.accent,
+                      activeColor: MobileAppTheme.accent,
                       onChanged: (val) async {
                         if (val != null) {
                           setState(() => _sttEnginePref = val);
@@ -621,7 +621,7 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                                   ?.withValues(alpha: 0.54))),
                       value: 'native',
                       groupValue: _sttEnginePref,
-                      activeColor: AppTheme.accent,
+                      activeColor: MobileAppTheme.accent,
                       onChanged: (val) async {
                         if (val != null) {
                           setState(() => _sttEnginePref = val);
@@ -880,7 +880,7 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
         style: Theme.of(context)
             .textTheme
             .labelSmall
-            ?.copyWith(color: AppTheme.primary, letterSpacing: 1.2),
+            ?.copyWith(color: MobileAppTheme.primary, letterSpacing: 1.2),
       ),
     );
   }
@@ -894,7 +894,7 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppTheme.surface,
+      backgroundColor: MobileAppTheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -934,7 +934,7 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                       child: Row(
                         children: [
                           const Icon(Icons.local_hospital,
-                              color: AppTheme.accent),
+                              color: MobileAppTheme.accent),
                           const SizedBox(width: 12),
                           Text("Select Department",
                               style: Theme.of(context)
@@ -959,7 +959,7 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                           prefixIcon:
                               const Icon(Icons.search, color: Colors.white54),
                           filled: true,
-                          fillColor: AppTheme.background,
+                          fillColor: MobileAppTheme.background,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                             borderSide: BorderSide.none,
@@ -1002,7 +1002,7 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                                       ? FontWeight.bold
                                       : FontWeight.w500,
                                   color: isSelected
-                                      ? AppTheme.accent
+                                      ? MobileAppTheme.accent
                                       : Colors.white,
                                 )),
                             subtitle: Text(dept.nameAr,
@@ -1014,7 +1014,7 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
                                 )),
                             trailing: isSelected
                                 ? const Icon(Icons.check_circle,
-                                    color: AppTheme.accent)
+                                    color: MobileAppTheme.accent)
                                 : null,
                             onTap: () {
                               DepartmentService().setDepartment(dept.id);

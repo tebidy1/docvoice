@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
-import 'api_service.dart';
+import '../network/api_client.dart';
 
 /// Type of sync operation
 enum SyncOperation {
@@ -289,9 +289,3 @@ class SyncManager {
     };
   }
 }
-
-
-
-
-
-

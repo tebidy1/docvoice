@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:soutnote/core/entities/note_model.dart';
 import '../../services/inbox_service.dart';
 import '../../services/macro_service.dart';
+import '../../../../core/entities/macro.dart';
 import '../editor/editor_screen.dart';
 import 'archive_screen.dart';
 import '../../core/utils/date_helper.dart';
@@ -22,7 +23,7 @@ class InboxScreenState extends State<InboxScreen> {
   final List<NoteModel> _notes = []; // Active Notes
   final List<NoteModel> _archivedNotes = []; // Archived Notes
   final _macroService = MacroService();
-  List<MacroModel> _allMacros = [];
+  List<Macro> _allMacros = [];
 
   @override
   void initState() {
@@ -30,9 +31,21 @@ class InboxScreenState extends State<InboxScreen> {
     _loadMacros();
     // Initial Mock Data (Same as before)
     _notes.addAll([
-      NoteModel()..title="Patient H.M."..content="History of amnesia..."..status=NoteStatus.processed..createdAt=DateTime.now().subtract(const Duration(minutes: 5)),
-      NoteModel()..title="Follow-up: Sarah J."..content="Prescription renewal..."..status=NoteStatus.ready..createdAt=DateTime.now().subtract(const Duration(hours: 1)),
-      NoteModel()..title="Dr. Notes"..content="Staff meeting at 5 PM"..status=NoteStatus.draft..createdAt=DateTime.now().subtract(const Duration(days: 1)),
+      NoteModel()
+        ..title = "Patient H.M."
+        ..content = "History of amnesia..."
+        ..status = NoteStatus.processed
+        ..createdAt = DateTime.now().subtract(const Duration(minutes: 5)),
+      NoteModel()
+        ..title = "Follow-up: Sarah J."
+        ..content = "Prescription renewal..."
+        ..status = NoteStatus.ready
+        ..createdAt = DateTime.now().subtract(const Duration(hours: 1)),
+      NoteModel()
+        ..title = "Dr. Notes"
+        ..content = "Staff meeting at 5 PM"
+        ..status = NoteStatus.draft
+        ..createdAt = DateTime.now().subtract(const Duration(days: 1)),
     ]);
   }
 
@@ -43,7 +56,8 @@ class InboxScreenState extends State<InboxScreen> {
 
   void addNote(NoteModel note) {
     _notes.insert(0, note);
-    _listKey.currentState?.insertItem(0, duration: const Duration(milliseconds: 600));
+    _listKey.currentState
+        ?.insertItem(0, duration: const Duration(milliseconds: 600));
   }
 
   Future<void> _copyAndMarkCopied(NoteModel note) async {
@@ -59,17 +73,13 @@ class InboxScreenState extends State<InboxScreen> {
 
     // 3. Feedback
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Copied to Clipboard! ✓"), 
-          duration: Duration(seconds: 1),
-          backgroundColor: Colors.blue,
-        )
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text("Copied to Clipboard! ✓"),
+        duration: Duration(seconds: 1),
+        backgroundColor: Colors.blue,
+      ));
     }
   }
-
-
 
   void _clearArchive() {
     setState(() {
@@ -81,11 +91,8 @@ class InboxScreenState extends State<InboxScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ArchiveScreen(
-          archivedNotes: _archivedNotes, 
-          onClearAll: _clearArchive
-        )
-      ),
+          builder: (_) => ArchiveScreen(
+              archivedNotes: _archivedNotes, onClearAll: _clearArchive)),
     );
   }
 
@@ -168,7 +175,8 @@ class InboxScreenState extends State<InboxScreen> {
                 ],
               ),
               IconButton(
-                icon: Icon(Icons.inventory_2_outlined, color: colorScheme.onSurface.withOpacity(0.7)),
+                icon: Icon(Icons.inventory_2_outlined,
+                    color: colorScheme.onSurface.withOpacity(0.7)),
                 tooltip: 'View Archive',
                 onPressed: _openArchive,
               )
@@ -177,73 +185,84 @@ class InboxScreenState extends State<InboxScreen> {
           const SizedBox(height: 16),
           Expanded(
             child: StreamBuilder<List<NoteModel>>(
-              stream: InboxService().watchPendingNotes(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting && _archivedNotes.isEmpty) { // Changed _notes.isEmpty to _archivedNotes.isEmpty as _notes is no longer a state variable
-                   return const Center(child: CircularProgressIndicator()); 
-                }
-                
-                if (snapshot.hasError) {
-                  return Center(child: Text("Error fetching notes: ${snapshot.error}", style: const TextStyle(color: Colors.red)));
-                }
+                stream: InboxService().watchPendingNotes(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting &&
+                      _archivedNotes.isEmpty) {
+                    // Changed _notes.isEmpty to _archivedNotes.isEmpty as _notes is no longer a state variable
+                    return const Center(child: CircularProgressIndicator());
+                  }
 
-                final notes = snapshot.data ?? [];
-                
-                if (notes.isEmpty) {
-                   return Center(child: Text("All caught up! 🎉", style: GoogleFonts.inter(color: Colors.white30)));
-                }
+                  if (snapshot.hasError) {
+                    return Center(
+                        child: Text("Error fetching notes: ${snapshot.error}",
+                            style: const TextStyle(color: Colors.red)));
+                  }
 
-                return AnimatedList(
-                  key: _listKey, // Note: Key usage with StreamBuilder might be tricky if list changes drastically. 
-                  // For simplicity in this iteration, we use ListView.builder inside the Stream
-                  // or we manually manage diffs. 
-                  // Let's swap to ListView.builder for reliability with Streams, or just populate _notes.
-                  // Real proper AnimatedList with Stream requires DiffUtil.
-                  // Let's use simple ListView for the V1 Cloud Sync to ensure correctness.
-                  
-                  initialItemCount: notes.length,
-                  itemBuilder: (context, index, animation) {
-                     // Since we can't easily animate item insertion from Stream without diffing,
-                     // we will lose the slide animation on load, but gain Real-time Sync.
-                     // A fair trade-off for Phase 9.
-                     
-                    bool showHeader = true;
-                    if (index > 0) {
-                       final current = notes[index];
-                       final prev = notes[index - 1];
-                       if (DateHelper.isSameDay(prev.createdAt, current.createdAt)) {
-                         showHeader = false;
-                       }
-                    }
+                  final notes = snapshot.data ?? [];
 
-                    final header = showHeader 
-                      ? Padding(
-                          padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
-                          child: Text(
-                            DateHelper.formatGroupingDate(notes[index].createdAt).toUpperCase(),
-                            style: TextStyle(
-                              color: colorScheme.primary, 
-                              fontWeight: FontWeight.bold, 
-                              fontSize: 12,
-                              letterSpacing: 1.2
-                            ),
-                          ),
-                        )
-                      : const SizedBox.shrink();
+                  if (notes.isEmpty) {
+                    return Center(
+                        child: Text("All caught up! 🎉",
+                            style: GoogleFonts.inter(color: Colors.white30)));
+                  }
 
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        header,
-                        // The _buildAnimatedItem wrapper is removed as per instruction.
-                        // The _archiveNote call needs to be updated to use the note from the stream.
-                        _buildNoteCard(context, notes[index], index: index, noteNumber: notes.length - index), // Removed animation wrapper for now
-                      ],
-                    );
-                  },
-                );
-              }
-            ),
+                  return AnimatedList(
+                    key:
+                        _listKey, // Note: Key usage with StreamBuilder might be tricky if list changes drastically.
+                    // For simplicity in this iteration, we use ListView.builder inside the Stream
+                    // or we manually manage diffs.
+                    // Let's swap to ListView.builder for reliability with Streams, or just populate _notes.
+                    // Real proper AnimatedList with Stream requires DiffUtil.
+                    // Let's use simple ListView for the V1 Cloud Sync to ensure correctness.
+
+                    initialItemCount: notes.length,
+                    itemBuilder: (context, index, animation) {
+                      // Since we can't easily animate item insertion from Stream without diffing,
+                      // we will lose the slide animation on load, but gain Real-time Sync.
+                      // A fair trade-off for Phase 9.
+
+                      bool showHeader = true;
+                      if (index > 0) {
+                        final current = notes[index];
+                        final prev = notes[index - 1];
+                        if (DateHelper.isSameDay(
+                            prev.createdAt, current.createdAt)) {
+                          showHeader = false;
+                        }
+                      }
+
+                      final header = showHeader
+                          ? Padding(
+                              padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
+                              child: Text(
+                                DateHelper.formatGroupingDate(
+                                        notes[index].createdAt)
+                                    .toUpperCase(),
+                                style: TextStyle(
+                                    color: colorScheme.primary,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    letterSpacing: 1.2),
+                              ),
+                            )
+                          : const SizedBox.shrink();
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          header,
+                          // The _buildAnimatedItem wrapper is removed as per instruction.
+                          // The _archiveNote call needs to be updated to use the note from the stream.
+                          _buildNoteCard(context, notes[index],
+                              index: index,
+                              noteNumber: notes.length -
+                                  index), // Removed animation wrapper for now
+                        ],
+                      );
+                    },
+                  );
+                }),
           ),
         ],
       ),
@@ -251,24 +270,28 @@ class InboxScreenState extends State<InboxScreen> {
   }
 
   // Modified to accept index for Copy action
-  Widget _buildAnimatedItem(BuildContext context, NoteModel note, Animation<double> animation, {int? index}) {
+  Widget _buildAnimatedItem(
+      BuildContext context, NoteModel note, Animation<double> animation,
+      {int? index}) {
     return SizeTransition(
       sizeFactor: animation,
-      axisAlignment: 0.0, 
+      axisAlignment: 0.0,
       child: FadeTransition(
         opacity: animation,
         child: SlideTransition(
           position: Tween<Offset>(
-            begin: const Offset(0, -0.2), 
+            begin: const Offset(0, -0.2),
             end: Offset.zero,
-          ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutBack)),
+          ).animate(
+              CurvedAnimation(parent: animation, curve: Curves.easeOutBack)),
           child: _buildNoteCard(context, note, index: index),
         ),
       ),
     );
   }
 
-  Widget _buildNoteCard(BuildContext context, NoteModel note, {int? index, int noteNumber = 0}) {
+  Widget _buildNoteCard(BuildContext context, NoteModel note,
+      {int? index, int noteNumber = 0}) {
     final colorScheme = Theme.of(context).colorScheme;
     final bool isDraft = note.formattedText.isEmpty;
 
@@ -277,7 +300,8 @@ class InboxScreenState extends State<InboxScreen> {
 
     // Find applied template name
     String? templateName = note.summary;
-    if ((templateName == null || templateName.isEmpty) && _allMacros.isNotEmpty) {
+    if ((templateName == null || templateName.isEmpty) &&
+        _allMacros.isNotEmpty) {
       final macroId = note.appliedMacroId ?? note.suggestedMacroId;
       if (macroId != null) {
         final macro = _allMacros.where((m) => m.id == macroId).firstOrNull;
@@ -292,7 +316,9 @@ class InboxScreenState extends State<InboxScreen> {
     } else if (note.status == NoteStatus.copied) {
       badgeLabel = 'Copied';
     } else if (note.formattedText.isNotEmpty) {
-      badgeLabel = (templateName != null && templateName.isNotEmpty) ? templateName : 'Processed';
+      badgeLabel = (templateName != null && templateName.isNotEmpty)
+          ? templateName
+          : 'Processed';
     } else {
       badgeLabel = 'Draft';
     }
@@ -302,7 +328,7 @@ class InboxScreenState extends State<InboxScreen> {
 
     switch (note.status) {
       case NoteStatus.ready:
-        statusColor = AppTheme.success;
+        statusColor = MobileAppTheme.success;
         statusIcon = Icons.check_circle;
         break;
       case NoteStatus.copied:
@@ -342,7 +368,9 @@ class InboxScreenState extends State<InboxScreen> {
           onTap: () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => EditorScreen(draftNote: note, noteNumber: noteNumber)),
+              MaterialPageRoute(
+                  builder: (_) =>
+                      EditorScreen(draftNote: note, noteNumber: noteNumber)),
             );
           },
           child: IntrinsicHeight(
@@ -380,19 +408,27 @@ class InboxScreenState extends State<InboxScreen> {
                                   width: 1,
                                 ),
                               ),
-                              child: Icon(statusIcon, color: statusColor, size: 18),
+                              child: Icon(statusIcon,
+                                  color: statusColor, size: 18),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
-                                noteNumber > 0 ? 'NO-$noteNumber' : 'Draft Note',
+                                noteNumber > 0
+                                    ? 'NO-$noteNumber'
+                                    : 'Draft Note',
                                 style: TextStyle(
-                                  fontWeight: isDraft ? FontWeight.w500 : FontWeight.w700,
+                                  fontWeight: isDraft
+                                      ? FontWeight.w500
+                                      : FontWeight.w700,
                                   color: isDraft
-                                      ? colorScheme.onSurface.withValues(alpha: 0.45)
+                                      ? colorScheme.onSurface
+                                          .withValues(alpha: 0.45)
                                       : colorScheme.onSurface,
                                   fontSize: 15,
-                                  fontStyle: isDraft ? FontStyle.italic : FontStyle.normal,
+                                  fontStyle: isDraft
+                                      ? FontStyle.italic
+                                      : FontStyle.normal,
                                 ),
                               ),
                             ),
@@ -405,19 +441,27 @@ class InboxScreenState extends State<InboxScreen> {
                                   icon: Icon(
                                     Icons.subdirectory_arrow_left,
                                     color: isDraft
-                                        ? colorScheme.onSurface.withValues(alpha: 0.2)
-                                        : colorScheme.onSurface.withValues(alpha: 0.55),
+                                        ? colorScheme.onSurface
+                                            .withValues(alpha: 0.2)
+                                        : colorScheme.onSurface
+                                            .withValues(alpha: 0.55),
                                     size: 19,
                                   ),
-                                  tooltip: isDraft ? 'Select a template first' : 'Copy & Inject',
-                                  onPressed: isDraft ? null : () => _copyAndMarkCopied(note),
+                                  tooltip: isDraft
+                                      ? 'Select a template first'
+                                      : 'Copy & Inject',
+                                  onPressed: isDraft
+                                      ? null
+                                      : () => _copyAndMarkCopied(note),
                                 ),
                               ),
                           ],
                         ),
                         const SizedBox(height: 9),
                         Text(
-                          note.formattedText.isNotEmpty ? note.formattedText : note.content,
+                          note.formattedText.isNotEmpty
+                              ? note.formattedText
+                              : note.content,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -431,20 +475,24 @@ class InboxScreenState extends State<InboxScreen> {
                         const SizedBox(height: 10),
                         Row(
                           children: [
-                            Icon(Icons.access_time_rounded, size: 12,
-                                color: colorScheme.onSurface.withValues(alpha: 0.38)),
+                            Icon(Icons.access_time_rounded,
+                                size: 12,
+                                color: colorScheme.onSurface
+                                    .withValues(alpha: 0.38)),
                             const SizedBox(width: 4),
                             Text(
                               "${note.createdAt.hour}:${note.createdAt.minute.toString().padLeft(2, '0')}",
                               style: TextStyle(
-                                color: colorScheme.onSurface.withValues(alpha: 0.38),
+                                color: colorScheme.onSurface
+                                    .withValues(alpha: 0.38),
                                 fontSize: 11.5,
                               ),
                             ),
                             const Spacer(),
                             // Badge pill — Windows-style with star icon
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
                                 color: statusColor.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(20),
@@ -491,9 +539,3 @@ class InboxScreenState extends State<InboxScreen> {
     );
   }
 }
-
-
-
-
-
-

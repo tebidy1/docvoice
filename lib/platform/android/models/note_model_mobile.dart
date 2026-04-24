@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:isar/isar.dart';
 import 'note_model_base.dart';
-import 'generated_output.dart';
+import '../../../core/entities/generated_output.dart';
 
 export 'note_model_base.dart';
 
@@ -27,9 +27,11 @@ class NoteModel extends NoteModelBase {
   @override
   List<GeneratedOutput> generatedOutputs = [];
 
-  List<String> get generatedOutputsJson => generatedOutputs.map((e) => jsonEncode(e.toJson())).toList();
+  List<String> get generatedOutputsJson =>
+      generatedOutputs.map((e) => jsonEncode(e.toJson())).toList();
   set generatedOutputsJson(List<String> jsons) {
-    generatedOutputs = jsons.map((e) => GeneratedOutput.fromJson(jsonDecode(e))).toList();
+    generatedOutputs =
+        jsons.map((e) => GeneratedOutput.fromJson(jsonDecode(e))).toList();
   }
 }
 
@@ -57,9 +59,3 @@ extension NoteModelJson on NoteModel {
 
 // Schema export for database service
 final noteModelSchema = NoteModelSchema;
-
-
-
-
-
-

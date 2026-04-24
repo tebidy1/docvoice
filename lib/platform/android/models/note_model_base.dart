@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:isar/isar.dart';
-import 'generated_output.dart';
+import '../../../core/entities/generated_output.dart';
 
 enum NoteStatus {
   draft, // Initial recording or raw text
@@ -35,7 +35,7 @@ class NoteModelBase {
   String originalText = ''; // Raw text from API/Input
   String formattedText = ''; // Processed text from API/AI
   String? summary; // Brief summary of the note
-  
+
   // Smart Tabs Outputs
   @ignore
   List<GeneratedOutput> generatedOutputs = [];
@@ -84,7 +84,7 @@ class NoteModelBase {
     note.appliedMacroId = json['applied_macro_id'] is int
         ? json['applied_macro_id']
         : int.tryParse(json['applied_macro_id']?.toString() ?? '');
-        
+
     note.suggestedMacroId = json['suggested_macro_id'] is int
         ? json['suggested_macro_id']
         : int.tryParse(json['suggested_macro_id']?.toString() ?? '');
@@ -152,9 +152,3 @@ class NoteModelBase {
     }
   }
 }
-
-
-
-
-
-

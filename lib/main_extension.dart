@@ -141,7 +141,7 @@ class _ScribeFlowExtensionAppState extends State<ScribeFlowExtensionApp> {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<AppTheme>(
+    return ValueListenableBuilder<ThemePreset>(
       valueListenable: ThemeService(),
       builder: (context, currentTheme, child) {
         return MaterialApp(
