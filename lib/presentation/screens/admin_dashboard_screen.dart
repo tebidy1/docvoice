@@ -441,4 +441,8 @@ class _StatRow extends StatelessWidget {
               fontWeight: FontWeight.bold,
             ),
           ),
-                                      
+        ],
+      ),
+    );
+  }
+}

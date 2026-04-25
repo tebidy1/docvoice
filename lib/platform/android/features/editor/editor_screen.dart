@@ -30,7 +30,7 @@ import '../../../../platform/web/services/extension_injection_service.dart';
 import '../../../../core/services/multimodal_ai/multimodal_ai_service.dart';
 import '../../../../core/services/multimodal_ai/ai_studio_multimodal_service.dart';
 import '../../../../core/services/multimodal_ai/gemini_transcription_helper.dart';
-import '../../../core/ai/ai_prompt_constants.dart';
+import '../../../../core/ai/ai_prompt_constants.dart';
 
 class EditorScreen extends StatefulWidget {
   final NoteModel? draftNote;
@@ -1192,6 +1192,10 @@ class _EditorScreenState extends State<EditorScreen> {
     setState(() => _suggestions.remove(suggestion));
   }
 
+  void _dismissSuggestion(Map<String, dynamic> suggestion) {
+    setState(() => _suggestions.remove(suggestion));
+  }
+
   // _showAllTemplates() removed to show inline instead
 
   @override
@@ -1583,273 +1587,130 @@ class _EditorScreenState extends State<EditorScreen> {
                       ),
                       showCheckmark: true,
                     );
-                  }).toList(),
-                ),
-              ),
-            ),
-            secondChild: const SizedBox(width: double.infinity, height: 0),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSuggestionsArea() {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E3A8A).withValues(alpha: 0.1),
-        border: Border(
-            top: BorderSide(color: colorScheme.primary.withValues(alpha: 0.2))),
-        borderRadius: const BorderRadius.only(
-            bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.info_outline, color: colorScheme.primary, size: 16),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  "AI Suggestions (${_suggestions.length})",
-                  style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: colorScheme.primary),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _suggestions.map((suggestion) {
-              return ActionChip(
-                label: Text(
-                  suggestion['field_name'] ?? 'Suggestion',
-                  style: GoogleFonts.inter(
-                      fontSize: 11, color: colorScheme.primary),
-                ),
-                backgroundColor: colorScheme.primary.withValues(alpha: 0.1),
-                side: BorderSide(
-                    color: colorScheme.primary.withValues(alpha: 0.3)),
-                onPressed: () => _insertSuggestion(suggestion),
-              );
-            }).toList(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStickyActionDock() {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        border: Border(
-            top: BorderSide(
-                color: colorScheme.outline.withValues(alpha: 0.4), width: 1)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (_activeTabIndex > 0) ...[
-            Align(
-              alignment: Alignment.center,
-              child: ActionChip(
-                label: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.shield, size: 16, color: Colors.white),
-                    SizedBox(width: 6),
-                    Text("INSURANCE k",
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                            color: Colors.white)),
-                  ],
-                ),
-                backgroundColor: Colors.amber[700],
-                onPressed: _finalController.text.isEmpty || _isProcessing
-                    ? null
-                    : _applyInsuranceTemplate,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    side: const BorderSide(color: Colors.transparent)),
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-          ElevatedButton.icon(
-            onPressed: () {
-              _copyCleanText();
-            },
-            icon: const Icon(Icons.content_copy_rounded, size: 18),
-            label: const Text("SMART COPY / INJECT"),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: colorScheme.primary,
-              foregroundColor: Colors.white,
-              minimumSize: const Size(double.infinity, 48),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ✨ NEW: Clean Template Selection UI for Mobile
-  Widget _buildCleanTemplateScreen(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Scaffold(
-      // Ensure the background is solid (Theme's background color)
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: Text(
-          widget.noteNumber > 0 ? 'NO-${widget.noteNumber}' : 'Draft Note',
-          style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
-      body: SafeArea(
-        child: Stack(
-          children: [
-            Column(
-              children: [
-                Expanded(
-                  child: Center(
-                    // Slide up & fade in animation
-                    child: TweenAnimationBuilder<double>(
-                      tween: Tween(begin: 300.0, end: 0.0),
-                      duration: const Duration(milliseconds: 800),
-                      curve: Curves.easeOutCubic,
-                      builder: (context, value, child) {
-                        return Transform.translate(
-                          offset: Offset(0, value),
-                          child: Opacity(
-                            opacity: (1.0 - (value / 300.0)).clamp(0.0, 1.0),
-                            child: child,
-                          ),
-                        );
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.auto_awesome,
-                                size: 48,
-                                color:
-                                    colorScheme.primary.withValues(alpha: 0.8)),
-                            const SizedBox(height: 16),
-                            Text(
-                              "How would you like to format this note?",
-                              textAlign: TextAlign.center,
-                              style: GoogleFonts.inter(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: colorScheme.onSurface,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              "Choose a template to get started.",
-                              textAlign: TextAlign.center,
-                              style: GoogleFonts.inter(
-                                fontSize: 14,
-                                color: colorScheme.onSurface
-                                    .withValues(alpha: 0.5),
-                              ),
-                            ),
-                            const SizedBox(height: 32),
-                            // Wrapping the chips in a constrained box to make them look good on mobile
-                            _buildCleanTemplateChips(theme),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-
-            // Overlays
-            if (_isLoading) const Positioned.fill(child: ProcessingOverlay()),
-
-            if (_isProcessing)
-              const Positioned.fill(
-                child: ProcessingOverlay(
-                  cyclingMessages: [
-                    'Processing Medical Note...',
-                    'Consulting AI Model...',
-                    'Formatting and Structuring...',
-                  ],
-                ),
-              ),
-
-            if (_isOneShotGenerating)
-              const Positioned.fill(
-                child: ProcessingOverlay(
-                  cyclingMessages: [
-                    '⚡ Sending Audio to Gemini...',
-                    '⚡ Analyzing Audio & Template...',
-                    '⚡ Generating Medical Note...',
-                    '⚡ Formatting Final Result...',
-                  ],
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCleanTemplateChips(ThemeData theme) {
-    final colorScheme = theme.colorScheme;
-    return SingleChildScrollView(
-      child: Wrap(
-        spacing: 12.0,
-        runSpacing: 12.0,
-        alignment: WrapAlignment.center,
-        children: _macros.map((macro) {
-          return ActionChip(
-            label: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-              child: Text(macro.trigger),
-            ),
-            onPressed: () {
-              // Immediately dismiss template picker before processing
-              setState(() => _showCleanTemplatePicker = false);
-              _applyMacroWithAI(macro);
-            },
-            backgroundColor: colorScheme.surface,
-            labelStyle: GoogleFonts.inter(
-              fontSize: 15,
-              color: colorScheme.onSurface,
-              fontWeight: FontWeight.w500,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-              side: BorderSide(
-                color: colorScheme.outline.withValues(alpha: 0.3),
-              ),
-            ),
-            elevation: 1,
-          );
         }).toList(),
       ),
     );
-        
+  secondChild: Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: Color(0xFF1E3A8A).withValues(alpha: 0.1),
+      border: Border(
+          top: BorderSide(color: colorScheme.primary.withValues(alpha: 0.2))),
+      borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.info_outline, color: colorScheme.primary, size: 16),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                "AI Suggestions (${_suggestions.length})",
+                style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.primary),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (_suggestions.isNotEmpty) ...[
+          for (final suggestion in _suggestions)
+            Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: colorScheme.surface,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                    color: colorScheme.outline.withValues(alpha: 0.2)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    suggestion['title'] ?? '',
+                    style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: colorScheme.onSurface),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    suggestion['description'] ?? '',
+                    style: GoogleFonts.inter(
+                        fontSize: 12, color: colorScheme.onSurface.withValues(alpha: 0.7)),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      TextButton(
+                        onPressed: () => _insertSuggestion(suggestion),
+                        child: Text(
+                          'Insert',
+                          style: TextStyle(color: colorScheme.primary),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton(
+                        onPressed: () => _dismissSuggestion(suggestion),
+                        child: Text(
+                          'Dismiss',
+                          style: TextStyle(color: colorScheme.onSurface.withValues(alpha: 0.5)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+        ] else ...[
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'No AI suggestions available',
+                style: GoogleFonts.inter(
+                    fontSize: 12, color: colorScheme.onSurface.withValues(alpha: 0.5)),
+              ),
+            ),
+          ),
+        ],
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton(
+                onPressed: _suggestions.isNotEmpty ? _applyAllSuggestions : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: colorScheme.primary,
+                  foregroundColor: colorScheme.onPrimary,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: Text(
+                  'Apply All',
+                  style: GoogleFonts.inter(
+                      fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  ),
+),
+
+      ],
+    ),
+  ),
+        )
+      )
+    }

@@ -186,17 +186,17 @@ class _CompaniesListScreenState extends State<CompaniesListScreen> {
                     builder: (context) => AlertDialog(
                       backgroundColor: const Color(0xFF1E293B),
                       title: const Text(
-                        'تسجيل الخروج',
+                        'Confirm Logout',
                         style: TextStyle(color: Colors.white),
                       ),
                       content: const Text(
-                        'هل أنت متأكد من تسجيل الخروج؟',
+                        'Are you sure you want to log out?',
                         style: TextStyle(color: Colors.white70),
                       ),
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(context, false),
-                          child: const Text('إلغاء',
+                          child: const Text('Cancel',
                               style: TextStyle(color: Colors.grey)),
                         ),
                         ElevatedButton(
@@ -204,7 +204,7 @@ class _CompaniesListScreenState extends State<CompaniesListScreen> {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red,
                           ),
-                          child: const Text('تسجيل الخروج'),
+                          child: const Text('Logout'),
                         ),
                       ],
                     ),
@@ -221,7 +221,7 @@ class _CompaniesListScreenState extends State<CompaniesListScreen> {
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text('خطأ في تسجيل الخروج: $e'),
+                            content: Text('Logout error: $e'),
                             backgroundColor: Colors.red,
                           ),
                         );
@@ -455,4 +455,8 @@ class _CompanyCard extends StatelessWidget {
             ),
           ],
         ),
-        onTap: onTa                              
+        onTap: onTap,
+      ),
+    );
+  }
+}

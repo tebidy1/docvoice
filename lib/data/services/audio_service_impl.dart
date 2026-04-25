@@ -71,7 +71,7 @@ class AudioServiceImpl extends AudioService with ServiceLifecycle {
   }
 
   @override
-  Future<AudioValidationResult> validateAudioFile(File audioFile) async {
+  Future<AudioValidationResult> validateAudioFile(dynamic audioFile) async {
     ensureInitialized();
 
     final errors = <String>[];
@@ -145,7 +145,7 @@ class AudioServiceImpl extends AudioService with ServiceLifecycle {
   }
 
   @override
-  Future<AudioUploadResult> uploadAudio(File audioFile) async {
+  Future<AudioUploadResult> uploadAudio(dynamic audioFile) async {
     ensureInitialized();
 
     // First validate the file

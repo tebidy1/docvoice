@@ -3,7 +3,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../presentation/screens/admin_dashboard_screen.dart';
 import '../../../../presentation/screens/secure_pairing_screen.dart';
-import '../../../../core/services/auth_service.dart';
+import 'package:soutnote/core/repositories/i_auth_service.dart';
+import 'package:soutnote/core/di/service_locator.dart';
+import '../../../../data/services/auth_service.dart';
 import '../../core/theme.dart';
 import '../../services/macro_service.dart';
 import '../../services/model_download_service.dart';
