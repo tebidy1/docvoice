@@ -1587,80 +1587,119 @@ class _EditorScreenState extends State<EditorScreen> {
                       ),
                       showCheckmark: true,
                     );
-        }).toList(),
-      ),
-    );
-  secondChild: Container(
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      color: Color(0xFF1E3A8A).withValues(alpha: 0.1),
-      border: Border(
-          top: BorderSide(color: colorScheme.primary.withValues(alpha: 0.2))),
-      borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12)),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(Icons.info_outline, color: colorScheme.primary, size: 16),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                "AI Suggestions (${_suggestions.length})",
-                style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.primary),
+                  }).toList(),
+                ),
               ),
             ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        if (_suggestions.isNotEmpty) ...[
-          for (final suggestion in _suggestions)
-            Container(
-              margin: const EdgeInsets.only(bottom: 8),
+            secondChild: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: colorScheme.surface,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                    color: colorScheme.outline.withValues(alpha: 0.2)),
+                color: Color(0xFF1E3A8A).withValues(alpha: 0.1),
+                border: Border(
+                    top: BorderSide(color: colorScheme.primary.withValues(alpha: 0.2))),
+                borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    suggestion['title'] ?? '',
-                    style: GoogleFonts.inter(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: colorScheme.onSurface),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    suggestion['description'] ?? '',
-                    style: GoogleFonts.inter(
-                        fontSize: 12, color: colorScheme.onSurface.withValues(alpha: 0.7)),
-                  ),
-                  const SizedBox(height: 8),
                   Row(
                     children: [
-                      TextButton(
-                        onPressed: () => _insertSuggestion(suggestion),
+                      Icon(Icons.info_outline, color: colorScheme.primary, size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(
                         child: Text(
-                          'Insert',
-                          style: TextStyle(color: colorScheme.primary),
+                          "AI Suggestions (${_suggestions.length})",
+                          style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: colorScheme.primary),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      TextButton(
-                        onPressed: () => _dismissSuggestion(suggestion),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  if (_suggestions.isNotEmpty) ...[
+                    for (final suggestion in _suggestions)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surface,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                              color: colorScheme.outline.withValues(alpha: 0.2)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              suggestion['title'] ?? '',
+                              style: GoogleFonts.inter(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: colorScheme.onSurface),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              suggestion['description'] ?? '',
+                              style: GoogleFonts.inter(
+                                  fontSize: 12, color: colorScheme.onSurface.withValues(alpha: 0.7)),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                TextButton(
+                                  onPressed: () => _insertSuggestion(suggestion),
+                                  child: Text(
+                                    'Insert',
+                                    style: TextStyle(color: colorScheme.primary),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                TextButton(
+                                  onPressed: () => _dismissSuggestion(suggestion),
+                                  child: Text(
+                                    'Dismiss',
+                                    style: TextStyle(color: colorScheme.onSurface.withValues(alpha: 0.5)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                  ] else ...[
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
                         child: Text(
-                          'Dismiss',
-                          style: TextStyle(color: colorScheme.onSurface.withValues(alpha: 0.5)),
+                          'No AI suggestions available',
+                          style: GoogleFonts.inter(
+                              fontSize: 12, color: colorScheme.onSurface.withValues(alpha: 0.5)),
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: _suggestions.isNotEmpty ? _applyAllSuggestions : null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: colorScheme.primary,
+                            foregroundColor: colorScheme.onPrimary,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: Text(
+                            'Apply All',
+                            style: GoogleFonts.inter(
+                                fontSize: 14, fontWeight: FontWeight.w600),
+                          ),
                         ),
                       ),
                     ],
@@ -1668,49 +1707,186 @@ class _EditorScreenState extends State<EditorScreen> {
                 ],
               ),
             ),
-        ] else ...[
-          Center(
-            child: Padding(
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCleanTemplateScreen(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Scaffold(
+      backgroundColor: colorScheme.surface,
+      appBar: AppBar(
+        title: Text(
+          'Choose Template',
+          style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: _macros.isEmpty
+          ? const Center(child: CircularProgressIndicator())
+          : GridView.builder(
               padding: const EdgeInsets.all(16),
-              child: Text(
-                'No AI suggestions available',
-                style: GoogleFonts.inter(
-                    fontSize: 12, color: colorScheme.onSurface.withValues(alpha: 0.5)),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 1.5,
+              ),
+              itemCount: _macros.length,
+              itemBuilder: (context, index) {
+                final macro = _macros[index];
+                return InkWell(
+                  onTap: () => _applyMacroWithAI(macro),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: colorScheme.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: colorScheme.outline.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.description_outlined,
+                            size: 32, color: colorScheme.primary),
+                        const SizedBox(height: 8),
+                        Text(
+                          macro.trigger,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.inter(
+                              fontSize: 14, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+    );
+  }
+
+  Widget _buildStickyActionDock() {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        border: Border(
+            top: BorderSide(color: colorScheme.outline.withValues(alpha: 0.2))),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: (_isProcessing || _selectedMacro == null)
+                  ? null
+                  : () => _applyMacroWithAI(_selectedMacro!),
+              icon: const Icon(Icons.auto_awesome, size: 18),
+              label: Text(
+                'Generate',
+                style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+              ),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: FilledButton.icon(
+              onPressed: _isProcessing ? null : _saveDraftUpdate,
+              icon: const Icon(Icons.save, size: 18),
+              label: Text(
+                'Save',
+                style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+              ),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
               ),
             ),
           ),
         ],
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: ElevatedButton(
-                onPressed: _suggestions.isNotEmpty ? _applyAllSuggestions : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: colorScheme.primary,
-                  foregroundColor: colorScheme.onPrimary,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: Text(
-                  'Apply All',
-                  style: GoogleFonts.inter(
-                      fontSize: 14, fontWeight: FontWeight.w600),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    ),
-  ),
-),
+      ),
+    );
+  }
 
-      ],
-    ),
-  ),
-        )
-      )
+  Widget _buildSuggestionsArea() {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colorScheme.primaryContainer.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colorScheme.primary.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.lightbulb_outline,
+                  size: 16, color: colorScheme.primary),
+              const SizedBox(width: 8),
+              Text(
+                'AI Suggestions',
+                style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.primary),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: _suggestions.isNotEmpty ? _applyAllSuggestions : null,
+                child: Text('Apply All',
+                    style: TextStyle(color: colorScheme.primary, fontSize: 12)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ..._suggestions.map((suggestion) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        suggestion['title'] ?? '',
+                        style: GoogleFonts.inter(
+                            fontSize: 12, color: colorScheme.onSurface),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => _insertSuggestion(suggestion),
+                      child: Text('Insert',
+                          style: TextStyle(
+                              color: colorScheme.primary, fontSize: 12)),
+                    ),
+                  ],
+                ),
+              )),
+        ],
+      ),
+    );
+  }
+
+  void _applyAllSuggestions() {
+    for (final suggestion in List<Map<String, dynamic>>.from(_suggestions)) {
+      _insertSuggestion(suggestion);
     }
+  }
+}
