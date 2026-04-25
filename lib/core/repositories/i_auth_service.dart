@@ -1,3 +1,4 @@
+// TODO: Move to core/services/ or core/interfaces/ in next refactor pass
 import 'dart:async';
 
 enum AuthState {

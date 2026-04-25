@@ -1,6 +1,6 @@
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
-import '../../platform/android/models/note_model_mobile.dart';
+import 'package:soutnote/data/models/isar_note_model.dart';
 
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
@@ -24,7 +24,7 @@ class DatabaseService {
       final dir = await getApplicationDocumentsDirectory();
 
       _isar = await Isar.open(
-        [noteModelSchema],
+        [isarNoteModelSchema],
         directory: dir.path,
         name: 'inbox_db',
       );

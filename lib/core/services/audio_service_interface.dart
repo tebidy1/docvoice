@@ -1,4 +1,4 @@
-import '../models/audio_models.dart';
+import 'package:soutnote/data/models/audio_models.dart';
 import 'base_service_interface.dart';
 
 abstract class AudioService extends BaseService {

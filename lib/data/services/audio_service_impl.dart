@@ -12,7 +12,7 @@ import 'package:soutnote/core/config/api_config.dart';
 import 'package:soutnote/core/error/app_error.dart';
 import 'package:soutnote/core/services/audio_service_interface.dart';
 import 'package:soutnote/core/services/base_service_interface.dart';
-import 'package:soutnote/core/models/audio_models.dart';
+import 'package:soutnote/data/models/audio_models.dart';
 
 /// Concrete implementation of AudioService for handling audio upload and transcription
 class AudioServiceImpl extends AudioService with ServiceLifecycle {

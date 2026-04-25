@@ -10,7 +10,7 @@ import '../../../core/entities/note_model.dart';
 import '../../android/services/macro_service.dart';
 import '../../../core/entities/macro.dart';
 import '../../android/services/inbox_service.dart';
-import '../../android/services/groq_service.dart';
+import '../../../data/services/groq_service.dart';
 import '../../../core/network/api_client.dart';
 import '../../../presentation/widgets/pattern_highlight_controller.dart';
 import '../../../presentation/widgets/processing_overlay.dart';

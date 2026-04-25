@@ -10,18 +10,12 @@ import 'package:window_manager/window_manager.dart';
 import '../../core/entities/app_theme.dart';
 import '../../core/entities/inbox_note.dart';
 import '../../presentation/screens/settings_dialog.dart';
-import '../../core/services/audio_recorder_service.dart';
-import '../../core/services/audio_chunker_service.dart';
-import '../../core/services/connectivity_server.dart';
-import '../../core/services/inbox_service.dart';
 import '../../core/services/theme_service.dart';
-import '../../core/services/whisper_asset_service.dart';
-import '../../core/services/whisper_isolate_service.dart';
 import '../../core/utils/window_manager_helper.dart';
+import 'desktop_recording_orchestrator.dart';
 import 'inbox_manager_dialog.dart';
 import 'inbox_note_detail_view.dart'; // Import Detail View for instant open
 import 'macro_manager_dialog.dart';
-import '../../core/services/oracle_live_speech_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class DesktopApp extends StatefulWidget {
@@ -32,32 +26,23 @@ class DesktopApp extends StatefulWidget {
 }
 
 class _DesktopAppState extends State<DesktopApp> {
-  final ConnectivityServer _server = ConnectivityServer();
+  late final DesktopRecordingOrchestrator _orchestrator;
+  StreamSubscription? _resultSubscription;
+  StreamSubscription? _liveTextSubscription;
 
-  final AudioRecorderService _recorder = AudioRecorderService();
-  final InboxService _inboxService = InboxService();
-
-  bool _isRecording = false;
-  bool _isProcessing = false; // Visual feedback for processing
+  bool _isRecordingDialogOpen = false;
   int _lastViewedCount = 0; // For Smart Badge logic
-
-  // Oracle streaming
-  OracleLiveSpeechService? _oracleService;
-  Future<String>? _oracleTranscriptFuture;
-
-  // Gemini One-Shot
-  String? _geminiOneShotPath; // Path to the WAV recorded in gemini_oneshot mode
-
-  // Offline Whisper (Local STT)
-  WhisperIsolateService? _whisperService;
-  AudioChunkerService? _audioChunker;
-  StreamSubscription? _whisperRecordSub;
-  bool _isWhisperModelLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _startServer();
+    _orchestrator = DesktopRecordingOrchestrator();
+    _orchestrator.initialize();
+    _orchestrator.addListener(_onOrchestratorChanged);
+
+    _resultSubscription = _orchestrator.resultStream.listen(_onRecordingResult);
+    _liveTextSubscription = _orchestrator.liveTextStream.listen(_onLiveText);
+
     _listInputDevices();
 
     // Position window after first frame and set appropriate size
@@ -66,11 +51,39 @@ class _DesktopAppState extends State<DesktopApp> {
       await _positionWindowToRightCenter();
 
       // Initialize last viewed count to current count (assume initially read)
-      final notes = await _inboxService.getPendingNotes();
-      setState(() {
-        _lastViewedCount = notes.length;
-      });
+      final tempInboxService = InboxService();
+      final notes = await tempInboxService.getPendingNotes();
+      if (mounted) {
+        setState(() {
+          _lastViewedCount = notes.length;
+        });
+      }
     });
+  }
+
+  void _onOrchestratorChanged() {
+    setState(() {}); // Trigger rebuild when orchestrator state changes
+  }
+
+  void _onRecordingResult(RecordingResult result) {
+    // Handle recording results (show success messages, etc.)
+    if (result.savedNote != null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("📥 Saved Recording"),
+            duration: Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
+  }
+
+  void _onLiveText(String text) {
+    // Handle live text updates if needed for UI feedback
+    debugPrint("Live text update: $text");
   }
 
   Future<void> _setInitialWindowSize() async {
@@ -122,97 +135,122 @@ class _DesktopAppState extends State<DesktopApp> {
     }
   }
 
-  Future<void> _startServer() async {
-    await _server.startServer();
 
-    _server.statusStream.listen((status) {
-      if (status.startsWith("Error")) {
-        setState(() {
-          _isProcessing = false;
-        });
-      }
-    });
-
-    _server.audioStream.listen((audioChunk) {
-      print("Received Audio Chunk: ${audioChunk.length} bytes");
-    });
-
-    _server.textStream.listen((text) async {
-      setState(() => _isProcessing = false); // Stop processing spinner
-
-      if (text.trim().isEmpty) {
-        print("Skipping: Text is empty");
-        return;
-      }
-
-      print("Received transcription: '$text'");
-
-      try {
-        // Save raw text directly without analysis
-        await _inboxService.addNote(
-          text,
-          patientName: 'Untitled', // Will be updated later by Macro
-          summary: null,
-        );
-
-        print("Added to Inbox (Raw)");
-
-        // Show confirmation
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("📥 Saved Recording"),
-              duration: Duration(seconds: 2),
-              behavior: SnackBarBehavior.floating,
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      } catch (e) {
-        print('Error adding valid note to inbox: $e');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text("⚠️ Failed to save: $e"),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-      }
-    });
-  }
 
   bool _isToggling = false;
   bool _isRecordingDialogOpen = false;
   Timer? _amplitudeTimer;
 
   Future<void> _toggleRecording() async {
-    if (_isToggling) return;
-    _isToggling = true;
-    try {
-      print("Mic Button Tapped. Current State: Recording=$_isRecording");
+    if (_orchestrator.isRecording) {
+      // Stop recording - orchestrator handles all the logic
+      await _orchestrator.stopRecording();
 
-      final prefs = await SharedPreferences.getInstance();
-      final sttEngine = prefs.getString('stt_engine_pref') ?? 'oracle_live';
+      // Handle UI-specific concerns for certain STT engines
+      final sttEngine = await _orchestrator.getSttEngine();
+      if (sttEngine == 'oracle_live' && mounted) {
+        // For Oracle, we need to show the detail view immediately
+        await _handleOracleStop();
+      } else if (sttEngine == 'gemini_oneshot' && mounted) {
+        // For Gemini One-Shot, we need to show the template picker
+        await _handleGeminiOneShotStop();
+      } else if (sttEngine == 'offline_whisper' && mounted) {
+        // For Offline Whisper, we need to show the detail view immediately
+        await _handleOfflineWhisperStop();
+      }
+    } else {
+      // Start recording
+      await _orchestrator.startRecording();
+      if (mounted) {
+        _openRecordingDialog();
+      }
+    }
+  }
 
-      if (_isRecording) {
-        // Stop
-        _amplitudeTimer?.cancel();
+  Future<void> _handleOracleStop() async {
+    if (!_orchestrator.isRecording && _orchestrator.isProcessing) {
+      // Create temporary note for Oracle streaming
+      final tempNote = NoteModel()
+        ..id = 0
+        ..uuid = 'temp_${DateTime.now().millisecondsSinceEpoch}'
+        ..content = ''
+        ..rawText = ''
+        ..createdAt = DateTime.now()
+        ..updatedAt = DateTime.now()
+        ..status = NoteStatus.draft
+        ..patientName = 'Untitled';
 
-        print("Stopping recording...");
-        try {
-          if (sttEngine == 'offline_whisper') {
-            // --- OFFLINE WHISPER STOP ---
-            await _stopOfflineWhisperRecording();
-            return;
-          } else if (sttEngine == 'oracle_live') {
-            // --- ORACLE STREAMING STOP ---
-            if (mounted) {
-              setState(() {
-                _isRecording = false;
-                _isProcessing = true;
-              });
-            }
+      final instantTextController = StreamController<String>.broadcast();
+
+      final dialogFuture = showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => InboxNoteDetailView(
+          note: tempNote,
+          pendingTextStream: instantTextController.stream,
+        ),
+      );
+
+      // Listen to live text from orchestrator
+      final sub = _orchestrator.liveTextStream.listen((text) {
+        instantTextController.add(text);
+      });
+
+      await dialogFuture;
+      await sub.cancel();
+      instantTextController.close();
+    }
+  }
+
+  Future<void> _handleGeminiOneShotStop() async {
+    // Wait for the orchestrator to finish saving the note
+    final results = await _orchestrator.resultStream.first;
+    if (results.savedNote != null && results.audioPath != null) {
+      await showDialog(
+        context: context,
+        barrierDismissible: true,
+        builder: (context) => InboxNoteDetailView(
+          note: results.savedNote!,
+          oneShotAudioPath: results.audioPath!,
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleOfflineWhisperStop() async {
+    if (!_orchestrator.isRecording && _orchestrator.isProcessing) {
+      // Create temporary note for offline whisper
+      final tempNote = NoteModel()
+        ..id = 0
+        ..uuid = 'temp_${DateTime.now().millisecondsSinceEpoch}'
+        ..content = ''
+        ..rawText = ''
+        ..createdAt = DateTime.now()
+        ..updatedAt = DateTime.now()
+        ..status = NoteStatus.draft
+        ..patientName = 'Untitled';
+
+      final instantTextController = StreamController<String>.broadcast();
+
+      final dialogFuture = showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => InboxNoteDetailView(
+          note: tempNote,
+          pendingTextStream: instantTextController.stream,
+        ),
+      );
+
+      // Listen to live text from orchestrator
+      final sub = _orchestrator.liveTextStream.listen((text) {
+        instantTextController.add(text);
+      });
+
+      await dialogFuture;
+      await sub.cancel();
+      instantTextController.close();
+    }
+  }
 
             if (_oracleService != null && _oracleTranscriptFuture != null) {
               // 1. Push Detail Viewer IMMEDIATELY so user gets instant visual feedback.
@@ -577,7 +615,7 @@ cQBOFhw1ZkYvxx4A6HSNxyae
       barrierDismissible: false, // Must tap stop manually
       barrierColor: Colors.transparent,
       builder: (context) => InboxManagerDialog(
-        isRecording: _isRecording,
+        isRecording: _orchestrator.isRecording,
         isProcessing: _isProcessing,
         onRecordTap: _toggleRecording,
         recorderService: _recorder,
@@ -590,198 +628,14 @@ cQBOFhw1ZkYvxx4A6HSNxyae
     }
   }
 
-  // ============================================================
-  // OFFLINE WHISPER (Local STT) Methods
-  // ============================================================
 
-  /// Start offline whisper recording: load model → start mic → stream to chunker.
-  Future<void> _startOfflineWhisperRecording() async {
-    try {
-      // 1. Show model loading spinner (blocks UI)
-      if (mounted) {
-        setState(() {
-          _isWhisperModelLoading = true;
-          _isProcessing = true;
-        });
-      }
-
-      // 2. Initialize whisper model in background Isolate
-      _whisperService = WhisperIsolateService();
-      final modelPath = await WhisperAssetService.getModelPath();
-      await _whisperService!.initialize(modelPath);
-
-      print('[OfflineWhisper] Model loaded, starting recording...');
-
-      // 3. Model loaded — update UI and start recording
-      if (mounted) {
-        setState(() {
-          _isWhisperModelLoading = false;
-          _isProcessing = false;
-        });
-      }
-
-      // 4. Create the audio chunker with VAD
-      _audioChunker = AudioChunkerService(
-        whisperService: _whisperService!,
-        onChunkTranscribed: (text) {
-          print('[OfflineWhisper] Chunk: $text');
-        },
-        onError: (error) {
-          print('[OfflineWhisper] Error: $error');
-        },
-      );
-      _audioChunker!.start();
-
-      // 5. Start streaming PCM audio from microphone
-      final audioStream = await _recorder.startRecording();
-      _whisperRecordSub = audioStream.listen((data) {
-        _audioChunker?.feedPcm16(data);
-      });
-
-      if (mounted) {
-        setState(() {
-          _isRecording = true;
-        });
-        _openRecordingDialog();
-      }
-    } catch (e) {
-      print('[OfflineWhisper] Start error: $e');
-      // Clean up on error
-      _whisperRecordSub?.cancel();
-      _whisperRecordSub = null;
-      _audioChunker?.dispose();
-      _audioChunker = null;
-      await _whisperService?.dispose();
-      _whisperService = null;
-
-      if (mounted) {
-        setState(() {
-          _isWhisperModelLoading = false;
-          _isProcessing = false;
-          _isRecording = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Offline Whisper Error: $e'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
-    }
-  }
-
-  /// Stop offline whisper recording and show results.
-  Future<void> _stopOfflineWhisperRecording() async {
-    try {
-      print('[OfflineWhisper] === STOP FLOW STARTED ===');
-
-      // 1. Immediately flip UI state: stop recording
-      if (mounted) {
-        setState(() {
-          _isRecording = false;
-          _isProcessing =
-              false; // Reset mic button — NO MORE SPINNER ON THE MIC
-        });
-      }
-
-      // 2. Stop the microphone
-      print('[OfflineWhisper] Step 1: Stopping microphone...');
-      _whisperRecordSub?.cancel();
-      _whisperRecordSub = null;
-      try {
-        await _recorder
-            .stopRecording()
-            .timeout(const Duration(milliseconds: 500));
-      } catch (e) {
-        print('[OfflineWhisper] Recorder stop error (ignored): $e');
-      }
-      print('[OfflineWhisper] Step 1: Microphone stopped.');
-
-      // 3. Open the Detail View IMMEDIATELY with a loading stream
-      //    The InboxNoteDetailView already has a built-in seconds counter +
-      //    cycling status messages ("Processing Note...", "Consulting AI...", etc.)
-      //    It will show this loading state until we push the transcript into the stream.
-      print(
-          '[OfflineWhisper] Step 2: Opening detail view immediately (loading state)...');
-
-      final instantTextController = StreamController<String>.broadcast();
-      final tempNote = NoteModel()
-        ..id = 0
-        ..uuid = 'temp_${DateTime.now().millisecondsSinceEpoch}'
-        ..content = ''
-        ..rawText = ''
-        ..createdAt = DateTime.now()
-        ..updatedAt = DateTime.now()
-        ..status = NoteStatus.draft
-        ..patientName = 'Untitled';
-
-      final dialogFuture = showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => InboxNoteDetailView(
-          note: tempNote,
-          pendingTextStream: instantTextController.stream,
-        ),
-      );
-
-      // 4. Flush the audio chunker in the background WHILE the loading screen shows
-      print('[OfflineWhisper] Step 3: Flushing audio chunker in background...');
-      try {
-        if (_audioChunker != null) {
-          await _audioChunker!.flush().timeout(const Duration(seconds: 180));
-        }
-      } catch (e) {
-        print('[OfflineWhisper] Flush timeout/error: $e');
-      }
-
-      // 5. Get transcript and push it into the stream → makes the text appear
-      final transcript = _audioChunker?.fullTranscript ?? '';
-      print(
-          '[OfflineWhisper] Step 4: Full transcript: ${transcript.length} chars');
-      if (transcript.isNotEmpty) {
-        print(
-            '[OfflineWhisper] Preview: "${transcript.substring(0, transcript.length > 100 ? 100 : transcript.length)}"');
-      }
-
-      if (transcript.trim().isNotEmpty) {
-        instantTextController.add(transcript);
-        await _inboxService.addNote(transcript,
-            patientName: 'Untitled', summary: null);
-        print('[OfflineWhisper] ✅ Note saved to inbox');
-      } else {
-        print('[OfflineWhisper] ⚠️ No speech detected');
-        instantTextController.addError(Exception('No speech detected.'));
-      }
-      instantTextController.close();
-
-      // 6. Clean up whisper resources without blocking
-      print('[OfflineWhisper] Step 5: Cleaning up...');
-      _audioChunker?.dispose();
-      _audioChunker = null;
-      final serviceToDispose = _whisperService;
-      _whisperService = null;
-      serviceToDispose?.dispose().catchError((e) => print('Dispose error: $e'));
-
-      await dialogFuture;
-      print('[OfflineWhisper] === STOP FLOW COMPLETED ===');
-    } catch (e) {
-      print('[OfflineWhisper] Stop error: $e');
-      _audioChunker?.dispose();
-      _audioChunker = null;
-      final serviceToDispose = _whisperService;
-      _whisperService = null;
-      serviceToDispose?.dispose().catchError((e) => print('Dispose error: $e'));
-      if (mounted) setState(() => _isProcessing = false);
-    }
-  }
 
   @override
   void dispose() {
-    _server.stopServer();
-    _whisperRecordSub?.cancel();
-    _audioChunker?.dispose();
-    _whisperService?.dispose();
+    _orchestrator.removeListener(_onOrchestratorChanged);
+    _orchestrator.dispose();
+    _resultSubscription?.cancel();
+    _liveTextSubscription?.cancel();
     super.dispose();
   }
 
@@ -857,15 +711,15 @@ cQBOFhw1ZkYvxx4A6HSNxyae
                                         width: 40,
                                         height: 40,
                                         decoration: BoxDecoration(
-                                          color: _isRecording
-                                              ? theme.micRecordingBackground
-                                              : theme.micIdleBackground,
+                                           color: _orchestrator.isRecording
+                                               ? theme.micRecordingBackground
+                                               : theme.micIdleBackground,
                                           borderRadius:
                                               BorderRadius.circular(4),
                                           border: Border.all(
-                                              color: _isRecording
-                                                  ? theme.micRecordingBorder
-                                                  : theme.micIdleBorder,
+                                               color: _orchestrator.isRecording
+                                                   ? theme.micRecordingBorder
+                                                   : theme.micIdleBorder,
                                               width: 1),
                                         ),
                                         child: _isProcessing
@@ -879,12 +733,12 @@ cQBOFhw1ZkYvxx4A6HSNxyae
                                                 ),
                                               )
                                             : Icon(
-                                                _isRecording
-                                                    ? Icons.stop
-                                                    : Icons.mic,
-                                                color: _isRecording
-                                                    ? theme.micRecordingIcon
-                                                    : theme.micIdleIcon,
+                                                 _orchestrator.isRecording
+                                                     ? Icons.stop
+                                                     : Icons.mic,
+                                                 color: _orchestrator.isRecording
+                                                     ? theme.micRecordingIcon
+                                                     : theme.micIdleIcon,
                                                 size: 20,
                                               ),
                                       ),
@@ -946,8 +800,8 @@ cQBOFhw1ZkYvxx4A6HSNxyae
                                                     Colors.transparent,
                                                 builder: (context) =>
                                                     InboxManagerDialog(
-                                                  isRecording: _isRecording,
-                                                  isProcessing: _isProcessing,
+        isRecording: _orchestrator.isRecording,
+        isProcessing: _orchestrator.isProcessing,
                                                   onRecordTap: _toggleRecording,
                                                   recorderService: _recorder,
                                                   compressionLabel:

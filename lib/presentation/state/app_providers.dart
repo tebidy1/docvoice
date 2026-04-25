@@ -10,7 +10,8 @@ import 'package:soutnote/core/usecases/login_usecase.dart';
 import 'package:soutnote/core/usecases/register_usecase.dart';
 import 'package:soutnote/core/usecases/upload_audio_usecase.dart';
 import 'package:soutnote/core/entities/app_theme.dart';
-import '../../platform/android/services/websocket_service.dart' as unified_ws;
+import 'package:soutnote/core/services/websocket_service_interface.dart';
+import 'package:soutnote/data/services/websocket_service.dart';
 
 final apiClientProvider =
     Provider<ApiClient>((ref) => ServiceLocator.get<ApiClient>());
@@ -36,8 +37,8 @@ final getInboxNotesUseCaseProvider = Provider<GetInboxNotesUseCase>(
 final uploadAudioUseCaseProvider = Provider<UploadAudioUseCase>(
     (ref) => ServiceLocator.get<UploadAudioUseCase>());
 
-final webSocketServiceProvider = Provider<unified_ws.WebSocketService>((ref) {
-  return unified_ws.WebSocketService();
+final webSocketServiceProvider = Provider<IWebSocketService>((ref) {
+  return WebSocketService();
 });
 
 final themeProvider = ChangeNotifierProvider<ThemeService>((ref) {

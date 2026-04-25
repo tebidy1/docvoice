@@ -7,7 +7,7 @@ import 'platform/web/screens/extension_login_screen.dart';
 
 import 'platform/web/screens/extension_home_screen.dart';
 import 'core/entities/app_theme.dart';
-import 'core/services/auth_service.dart';
+import 'data/services/auth_service.dart';
 import 'core/services/theme_service.dart';
 import 'presentation/widgets/auth_guard.dart';
 import 'presentation/state/app_providers.dart';

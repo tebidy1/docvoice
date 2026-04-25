@@ -9,7 +9,7 @@ import '../../android/features/settings/company_settings_screen.dart';
 import '../../android/features/settings/macro_manager_screen.dart';
 
 // Services & Core
-import '../../../core/services/auth_service.dart';
+import '../../../data/services/auth_service.dart';
 import '../../android/core/theme.dart';
 import '../../android/services/macro_service.dart';
 import '../../android/services/websocket_service.dart';
