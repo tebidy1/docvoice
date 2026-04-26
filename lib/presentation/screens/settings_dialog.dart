@@ -26,7 +26,7 @@ class SettingsDialog extends StatefulWidget {
 
 class _SettingsDialogState extends State<SettingsDialog> {
   String _localIp = "Loading...";
-  String _sttEnginePref = 'groq';
+
   bool _useOracleWhisperModel = false;
   // Track initial values to determine if changes occurred
 
@@ -85,7 +85,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
 
     if (mounted) {
       setState(() {
-        _sttEnginePref = prefs.getString('stt_engine_pref') ?? 'gemini_oneshot';
+
         _useOracleWhisperModel =
             prefs.getBool('oracle_use_whisper_model') ?? true;
       });
@@ -475,55 +475,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
     );
   }
 
-  Widget _buildSttItem({
-    required String title,
-    String? subtitle,
-    required String value,
-    required ThemePreset theme,
-  }) {
-    final isSelected = _sttEnginePref == value;
-    final primaryColor = value == 'offline_whisper'
-        ? Colors.green
-        : value == 'oracle_live'
-            ? Colors.orange
-            : value == 'gemini_oneshot'
-                ? Colors.amber
-                : Colors.blue;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: isSelected
-            ? theme.micIdleBackground.withOpacity(0.8)
-            : theme.backgroundColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-            color: isSelected ? primaryColor : theme.dividerColor,
-            width: isSelected ? 2 : 1),
-      ),
-      child: RadioListTile<String>(
-        title: Text(title,
-            style: TextStyle(
-                color: theme.iconColor,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
-        subtitle: subtitle != null
-            ? Text(subtitle,
-                style: TextStyle(
-                    color: theme.iconColor.withOpacity(0.6), fontSize: 12))
-            : null,
-        value: value,
-        groupValue: _sttEnginePref,
-        activeColor: primaryColor,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-        onChanged: (val) async {
-          if (val != null) {
-            setState(() => _sttEnginePref = val);
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setString('stt_engine_pref', val);
-          }
-        },
-      ),
-    );
-  }
+
 
   void _showDepartmentPicker(ThemePreset theme) {
     String searchQuery = '';

@@ -32,7 +32,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isLoading = false;
   String _statusMessage = "Not Connected";
   Color _statusColor = Colors.grey;
-  String _sttEnginePref = 'gemini_oneshot';
+
 
   // A/B Testing: Oracle Medical (default) vs Whisper Generic
   bool _useOracleWhisperModel = false;
@@ -148,7 +148,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     setState(() {
       _ipController.text = prefs.getString('server_ip') ?? "192.168.1.100";
-      _sttEnginePref = prefs.getString('stt_engine_pref') ?? 'gemini_oneshot';
+
       _useOracleWhisperModel =
           prefs.getBool('oracle_use_whisper_model') ?? true;
     });

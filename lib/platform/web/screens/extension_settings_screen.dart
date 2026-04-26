@@ -34,7 +34,7 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
   String _statusMessage = "Not Connected";
   Color _statusColor = Colors.grey;
 
-  String _sttEnginePref = 'gemini_oneshot';
+
   bool _useOracleWhisperModel = false;
 
   Map<String, dynamic>? _currentUser;
@@ -120,7 +120,7 @@ class _ExtensionSettingsScreenState extends State<ExtensionSettingsScreen> {
     // but we load server IP
     setState(() {
       _ipController.text = prefs.getString('server_ip') ?? "192.168.1.100";
-      _sttEnginePref = prefs.getString('stt_engine_pref') ?? 'gemini_oneshot';
+
       _useOracleWhisperModel =
           prefs.getBool('oracle_use_whisper_model') ?? true;
     });
