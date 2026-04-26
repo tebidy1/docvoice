@@ -27,24 +27,6 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
   void initState() {
     super.initState();
     _loadMacros();
-    // Initial Mock Data (Same as before)
-    _notes.addAll([
-      NoteModel()
-        ..title = "Patient H.M."
-        ..content = "History of amnesia..."
-        ..status = NoteStatus.processed
-        ..createdAt = DateTime.now().subtract(const Duration(minutes: 5)),
-      NoteModel()
-        ..title = "Follow-up: Sarah J."
-        ..content = "Prescription renewal..."
-        ..status = NoteStatus.ready
-        ..createdAt = DateTime.now().subtract(const Duration(hours: 1)),
-      NoteModel()
-        ..title = "Dr. Notes"
-        ..content = "Staff meeting at 5 PM"
-        ..status = NoteStatus.draft
-        ..createdAt = DateTime.now().subtract(const Duration(days: 1)),
-    ]);
   }
 
   Future<void> _loadMacros() async {
@@ -301,8 +283,7 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              // Show Note Number or Patient Name
-                              noteNumber > 0 ? 'NO-$noteNumber' : 'Draft Note',
+                              'NO-$noteNumber',
                               style: TextStyle(
                                 fontWeight:
                                     isDraft ? FontWeight.w500 : FontWeight.w600,
@@ -319,26 +300,25 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
                               ),
                             ),
                           ),
-                          if (index != null)
-                            IconButton(
-                              icon: Icon(Icons.subdirectory_arrow_left,
-                                  color: isDraft
-                                      ? Theme.of(context)
-                                          .colorScheme
-                                          .onSurface
-                                          .withValues(alpha: 0.3)
-                                      : Theme.of(context)
-                                          .colorScheme
-                                          .onSurface
-                                          .withValues(alpha: 0.7),
-                                  size: 20),
-                              tooltip: isDraft
-                                  ? 'Select a template first'
-                                  : 'Copy & Inject',
-                              onPressed: isDraft
-                                  ? null
-                                  : () => _copyAndMarkCopied(note),
-                            )
+                          IconButton(
+                            icon: Icon(Icons.subdirectory_arrow_left,
+                                color: isDraft
+                                    ? Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withValues(alpha: 0.3)
+                                    : Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withValues(alpha: 0.7),
+                                size: 20),
+                            tooltip: isDraft
+                                ? 'Select a template first'
+                                : 'Copy & Inject',
+                            onPressed: isDraft
+                                ? null
+                                : () => _copyAndMarkCopied(note),
+                          )
                         ],
                       ),
                       const SizedBox(height: 8),

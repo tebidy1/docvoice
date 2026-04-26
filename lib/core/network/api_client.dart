@@ -147,6 +147,11 @@ class ApiClient {
     }
   }
 
+  /// Specialized method for direct GET (e.g. fetching blob data on web)
+  Future<http.Response> getDirect(String url) async {
+    return await http.get(Uri.parse(url));
+  }
+
   /// Specialized method for multipart requests (e.g. audio upload)
   Future<Map<String, dynamic>> multipartPost(
     String endpoint, {

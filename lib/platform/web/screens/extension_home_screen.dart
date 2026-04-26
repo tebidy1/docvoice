@@ -21,8 +21,7 @@ class ExtensionHomeScreen extends StatefulWidget {
 
 class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
   int _selectedIndex = 0; // 0: Inbox, 1: Profile
-  bool _isRecording = false;
-  final AudioRecordingService _audioService = AudioRecordingService();
+  late final WebRecordingOrchestrator _orchestrator;
   final GlobalKey<ExtensionInboxScreenState> _inboxKey =
       GlobalKey<ExtensionInboxScreenState>();
 
@@ -32,11 +31,26 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
   @override
   void initState() {
     super.initState();
+    _orchestrator = WebRecordingOrchestrator();
+    _orchestrator.initialize();
+    _orchestrator.addListener(_onOrchestratorChanged);
+
     _screens = [
       ExtensionInboxScreen(key: _inboxKey), // Use Extension Version
       const ExtensionSettingsScreen(),
     ];
     _loadPreferences();
+  }
+
+  @override
+  void dispose() {
+    _orchestrator.removeListener(_onOrchestratorChanged);
+    _orchestrator.dispose();
+    super.dispose();
+  }
+
+  void _onOrchestratorChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadPreferences() async {
@@ -83,56 +97,32 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
               ),
             );
           }
-          if (mounted) setState(() => _isRecording = false);
           return; // Stop here
         }
       }
 
-      // 2. Refresh preferences and Start Recording
-      await _loadPreferences();
-      if (_currentSttEngine == 'gemini_oneshot') {
-        await _audioService.startRecordingCompressed();
-      } else {
-        await _audioService.startRecording();
-      }
+      await _orchestrator.startRecording();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
         );
       }
-      if (mounted) setState(() => _isRecording = false);
     }
   }
 
   Future<void> _stopRecording() async {
     try {
-      final path = await _audioService.stopRecording();
-
-      if (path != null && mounted) {
-        final draft = NoteModel()
-          ..uuid = const Uuid().v4()
-          ..title = "Extension Note"
-          ..content = ""
-          ..audioPath = path
-          ..status = NoteStatus.draft
-          ..createdAt = DateTime.now()
-          ..updatedAt = DateTime.now();
-
-        final result = await Navigator.push(
-          context,
-          MaterialPageRoute(
-              builder: (_) => ExtensionEditorScreen(draftNote: draft)),
+      await _orchestrator.stopRecording();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("📥 تم حفظ الملاحظة في الوارد"),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
         );
-
-        if (result != null && result is String) {
-          draft.content = result;
-          draft.status = NoteStatus.processed;
-          setState(() => _selectedIndex = 0); // Go to inbox
-          Future.delayed(const Duration(milliseconds: 100), () {
-            _inboxKey.currentState?.addNote(draft);
-          });
-        }
       }
     } catch (e) {
       if (mounted) {
@@ -161,20 +151,18 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
               index: _selectedIndex,
               children: _screens,
             ),
-            if (_isRecording)
+            if (_orchestrator.isRecording)
               Positioned.fill(
                 child: ListeningModeView(
                   getAmplitude: () async {
-                    final prefs = await SharedPreferences.getInstance();
-                    // Web typically doesn't use the system_native STT.
-                    final amp = await _audioService.getAmplitude();
-                    return amp.current;
+                    final amp = await _orchestrator.transcriptionService.getAmplitude();
+                    return amp;
                   },
                 ),
               ),
 
             // AAC/M4A/WebM indicator — must be ABOVE ListeningModeView
-            if (_isRecording && _currentSttEngine == 'gemini_oneshot')
+            if (_orchestrator.isRecording && _currentSttEngine == 'gemini_oneshot')
               Positioned(
                 bottom: 60,
                 left: 12,
@@ -193,11 +181,12 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
         width: 70, // Slightly smaller for extension
         height: 70,
         child: AnimatedRecordButton(
-          initialIsRecording: _isRecording,
+          initialIsRecording: _orchestrator.isRecording,
+          initialIsProcessing: _orchestrator.isProcessing,
           onStartRecording: _startRecording,
           onStopRecording: _stopRecording,
           onRecordingStateChanged: (isRecording) {
-            setState(() => _isRecording = isRecording);
+            // Orchestrator handles state, but we might need to trigger rebuild
           },
         ),
       ),

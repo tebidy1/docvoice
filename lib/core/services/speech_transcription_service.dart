@@ -64,8 +64,15 @@ class SpeechTranscriptionService {
 
       _updateState(SpeechTranscriptionState.uploading);
 
-      final fileBytes = await File(path).readAsBytes();
-      final filename = p.basename(path);
+      final Uint8List fileBytes;
+      if (kIsWeb) {
+        final response = await _apiClient.getDirect(path);
+        fileBytes = response.bodyBytes;
+      } else {
+        fileBytes = await File(path).readAsBytes();
+      }
+      
+      final filename = kIsWeb ? 'recording.webm' : p.basename(path);
 
       final response = await _apiClient.multipartPost(
         '/audio/transcribe-oracle',
