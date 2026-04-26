@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:web/web.dart' as web;
 import 'dart:js_interop';
+import '../../../core/services/recording_orchestrator.dart';
 import '../../../presentation/widgets/animated_record_button.dart';
 import '../../../presentation/widgets/listening_mode_view.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -21,7 +22,7 @@ class ExtensionHomeScreen extends StatefulWidget {
 
 class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
   int _selectedIndex = 0; // 0: Inbox, 1: Profile
-  late final WebRecordingOrchestrator _orchestrator;
+  late final RecordingOrchestrator _orchestrator;
   final GlobalKey<ExtensionInboxScreenState> _inboxKey =
       GlobalKey<ExtensionInboxScreenState>();
 
@@ -31,7 +32,7 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
   @override
   void initState() {
     super.initState();
-    _orchestrator = WebRecordingOrchestrator();
+    _orchestrator = RecordingOrchestrator();
     _orchestrator.initialize();
     _orchestrator.addListener(_onOrchestratorChanged);
 

@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
-import 'package:uuid/uuid.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
-import '../../../../core/services/speech_transcription_service.dart';
+import '../../../../core/services/recording_orchestrator.dart';
 import '../../../../core/utils/permission_fixer.dart';
 import '../../../../presentation/widgets/animated_record_button.dart';
 import '../../../../presentation/widgets/listening_mode_view.dart';
 import 'package:soutnote/core/entities/note_model.dart';
-import '../editor/editor_screen.dart';
 import '../inbox/inbox_screen.dart';
 import '../settings/settings_screen.dart';
 
@@ -22,8 +19,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0; // 0: Inbox, 1: Settings
-  bool _isRecording = false;
-  final SpeechTranscriptionService _transcriptionService = SpeechTranscriptionService();
+  late final RecordingOrchestrator _orchestrator;
 
   // Key to control Inbox state
   final GlobalKey<InboxScreenState> _inboxKey = GlobalKey<InboxScreenState>();
@@ -34,12 +30,26 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _orchestrator = RecordingOrchestrator();
+    _orchestrator.initialize();
+    _orchestrator.addListener(_onOrchestratorChanged);
+
     _screens = [
       InboxScreen(key: _inboxKey),
       const SettingsScreen(),
     ];
   }
 
+  @override
+  void dispose() {
+    _orchestrator.removeListener(_onOrchestratorChanged);
+    _orchestrator.dispose();
+    super.dispose();
+  }
+
+  void _onOrchestratorChanged() {
+    if (mounted) setState(() {});
+  }
 
   void _onItemTapped(int index) {
     setState(() {
@@ -49,7 +59,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _startRecording() async {
     try {
-      await _transcriptionService.startRecording();
+      await _orchestrator.startRecording();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -63,50 +73,28 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         );
-        setState(() => _isRecording = false);
       }
     }
   }
 
   Future<void> _stopRecording() async {
-    setState(() => _isRecording = false);
-    final transcriptFuture = _transcriptionService.stopAndTranscribe();
-    _processAndNavigate(oracleTranscriptFuture: transcriptFuture);
-  }
-
-  Future<void> _processAndNavigate({Future<String>? oracleTranscriptFuture}) async {
-    // Create Real Draft Note
-    final draft = NoteModel()
-      ..uuid = const Uuid().v4()
-      ..title = "New Recording"
-      ..content = "Transcribing..."
-      ..originalText = ""
-      ..audioPath = ""
-      ..status = NoteStatus.draft
-      ..createdAt = DateTime.now()
-      ..updatedAt = DateTime.now();
-
-    if (mounted) {
-      // Navigate to Editor and wait for result
-      final result = await Navigator.push(
-        context,
-        MaterialPageRoute(
-            builder: (_) => EditorScreen(
-                draftNote: draft,
-                oracleTranscriptFuture: oracleTranscriptFuture)),
-      );
-
-      // If note returned, animate it into inbox
-      if (result != null && result is String && result.isNotEmpty) {
-        draft.content = result;
-        draft.title = "Processed Note";
-        draft.status = NoteStatus.processed;
-
-        setState(() => _selectedIndex = 0);
-
-        Future.delayed(const Duration(milliseconds: 100), () {
-          _inboxKey.currentState?.addNote(draft);
-        });
+    try {
+      await _orchestrator.stopRecording(defaultTitle: 'Android Note');
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("📥 تم حفظ الملاحظة في الوارد"),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+        );
       }
     }
   }
@@ -124,11 +112,10 @@ class _HomeScreenState extends State<HomeScreen> {
               index: _selectedIndex,
               children: _screens,
             ),
-
-            if (_isRecording)
+            if (_orchestrator.isRecording)
               Positioned.fill(
                 child: ListeningModeView(
-                  getAmplitude: _transcriptionService.getAmplitude,
+                  getAmplitude: _orchestrator.transcriptionService.getAmplitude,
                 ),
               ),
           ],
@@ -138,11 +125,12 @@ class _HomeScreenState extends State<HomeScreen> {
         width: 80,
         height: 80,
         child: AnimatedRecordButton(
-          initialIsRecording: _isRecording,
+          initialIsRecording: _orchestrator.isRecording,
+          initialIsProcessing: _orchestrator.isProcessing,
           onStartRecording: _startRecording,
           onStopRecording: _stopRecording,
           onRecordingStateChanged: (isRecording) {
-            setState(() => _isRecording = isRecording);
+            // Orchestrator handles state
           },
         ),
       ),

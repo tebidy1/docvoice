@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../core/services/speech_transcription_service.dart';
+import 'speech_transcription_service.dart';
 import '../../data/services/inbox_service_api.dart';
-import '../../core/entities/note_model.dart';
+import '../entities/note_model.dart';
 
 class RecordingResult {
   final String text;
@@ -13,7 +13,7 @@ class RecordingResult {
   RecordingResult({required this.text, this.audioPath, this.savedNote});
 }
 
-class WebRecordingOrchestrator extends ChangeNotifier {
+class RecordingOrchestrator extends ChangeNotifier {
   // Services
   final SpeechTranscriptionService _transcriptionService = SpeechTranscriptionService();
   final InboxService _inboxService = InboxService();
@@ -45,7 +45,7 @@ class WebRecordingOrchestrator extends ChangeNotifier {
       _isRecording = true;
       notifyListeners();
     } catch (e) {
-      debugPrint("Error recording: $e");
+      debugPrint("Error starting recording: $e");
       _isRecording = false;
       _isProcessing = false;
       notifyListeners();
@@ -55,7 +55,7 @@ class WebRecordingOrchestrator extends ChangeNotifier {
     }
   }
 
-  Future<void> stopRecording() async {
+  Future<void> stopRecording({String defaultTitle = 'New Note'}) async {
     if (_isToggling) return;
     _isToggling = true;
 
@@ -66,10 +66,11 @@ class WebRecordingOrchestrator extends ChangeNotifier {
 
       final text = await _transcriptionService.stopAndTranscribe();
       
+      NoteModel? savedNote;
       if (text.trim().isNotEmpty) {
-        final savedNote = await _inboxService.addNote(
+        savedNote = await _inboxService.addNote(
           text,
-          patientName: 'Web Note',
+          patientName: defaultTitle,
           summary: null,
         );
         _resultController.add(RecordingResult(text: text, savedNote: savedNote));
@@ -78,7 +79,7 @@ class WebRecordingOrchestrator extends ChangeNotifier {
       _isProcessing = false;
       notifyListeners();
     } catch (e) {
-      debugPrint("Error stopping: $e");
+      debugPrint("Error stopping recording: $e");
       _isProcessing = false;
       notifyListeners();
       rethrow;
