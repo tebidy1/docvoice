@@ -141,23 +141,8 @@ class _DesktopAppState extends State<DesktopApp> {
 
   Future<void> _toggleRecording() async {
     if (_orchestrator.isRecording) {
-      // Stop recording - orchestrator handles all the logic
       await _orchestrator.stopRecording();
-
-      // Handle UI-specific concerns for certain STT engines
-      final sttEngine = await _orchestrator.getSttEngine();
-      if (sttEngine == 'oracle_live' && mounted) {
-        // For Oracle, we need to show the detail view immediately
-        await _handleOracleStop();
-      } else if (sttEngine == 'gemini_oneshot' && mounted) {
-        // For Gemini One-Shot, we need to show the template picker
-        await _handleGeminiOneShotStop();
-      } else if (sttEngine == 'offline_whisper' && mounted) {
-        // For Offline Whisper, we need to show the detail view immediately
-        await _handleOfflineWhisperStop();
-      }
     } else {
-      // Start recording
       await _orchestrator.startRecording();
       if (mounted) {
         _openRecordingDialog();
@@ -165,90 +150,6 @@ class _DesktopAppState extends State<DesktopApp> {
     }
   }
 
-  Future<void> _handleOracleStop() async {
-    if (!_orchestrator.isRecording && _orchestrator.isProcessing) {
-      // Create temporary note for Oracle streaming
-      final tempNote = NoteModel()
-        ..id = 0
-        ..uuid = 'temp_${DateTime.now().millisecondsSinceEpoch}'
-        ..content = ''
-        ..rawText = ''
-        ..createdAt = DateTime.now()
-        ..updatedAt = DateTime.now()
-        ..status = NoteStatus.draft
-        ..patientName = 'Untitled';
-
-      final instantTextController = StreamController<String>.broadcast();
-
-      final dialogFuture = showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => InboxNoteDetailView(
-          note: tempNote,
-          pendingTextStream: instantTextController.stream,
-        ),
-      );
-
-      // Listen to live text from orchestrator
-      final sub = _orchestrator.liveTextStream.listen((text) {
-        instantTextController.add(text);
-      });
-
-      await dialogFuture;
-      await sub.cancel();
-      instantTextController.close();
-    }
-  }
-
-  Future<void> _handleGeminiOneShotStop() async {
-    // Wait for the orchestrator to finish saving the note
-    final results = await _orchestrator.resultStream.first;
-    if (results.savedNote != null && results.audioPath != null) {
-      await showDialog(
-        context: context,
-        barrierDismissible: true,
-        builder: (context) => InboxNoteDetailView(
-          note: results.savedNote!,
-          oneShotAudioPath: results.audioPath!,
-        ),
-      );
-    }
-  }
-
-  Future<void> _handleOfflineWhisperStop() async {
-    if (!_orchestrator.isRecording && _orchestrator.isProcessing) {
-      // Create temporary note for offline whisper
-      final tempNote = NoteModel()
-        ..id = 0
-        ..uuid = 'temp_${DateTime.now().millisecondsSinceEpoch}'
-        ..content = ''
-        ..rawText = ''
-        ..createdAt = DateTime.now()
-        ..updatedAt = DateTime.now()
-        ..status = NoteStatus.draft
-        ..patientName = 'Untitled';
-
-      final instantTextController = StreamController<String>.broadcast();
-
-      final dialogFuture = showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => InboxNoteDetailView(
-          note: tempNote,
-          pendingTextStream: instantTextController.stream,
-        ),
-      );
-
-      // Listen to live text from orchestrator
-      final sub = _orchestrator.liveTextStream.listen((text) {
-        instantTextController.add(text);
-      });
-
-      await dialogFuture;
-      await sub.cancel();
-      instantTextController.close();
-    }
-  }
 
   // Helper to open the visual recording overlay on the side
   void _openRecordingDialog() async {
