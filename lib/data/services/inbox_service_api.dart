@@ -218,7 +218,7 @@ class InboxService {
           forceRefresh ? CacheStrategy.networkFirst : CacheStrategy.cacheFirst,
       apiCall: () => _ApiClient.fetchPendingNotes(),
       fromJson: (json) =>
-          (json as List).map((i) => NoteModelJson.fromJson(i)).toList(),
+          (json as List).map((i) => NoteModel.fromJson(i)).toList(),
       toJson: (notes) => notes.map((n) => n.toJson()).toList(),
       cacheExpiry: const Duration(minutes: 10),
     );
@@ -234,7 +234,7 @@ class InboxService {
           forceRefresh ? CacheStrategy.networkFirst : CacheStrategy.cacheFirst,
       apiCall: () => _ApiClient.fetchArchivedNotes(),
       fromJson: (json) =>
-          (json as List).map((i) => NoteModelJson.fromJson(i)).toList(),
+          (json as List).map((i) => NoteModel.fromJson(i)).toList(),
       toJson: (notes) => notes.map((n) => n.toJson()).toList(),
       cacheExpiry: const Duration(minutes: 30),
     );

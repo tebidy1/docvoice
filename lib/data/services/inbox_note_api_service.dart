@@ -26,7 +26,7 @@ class InboxNoteApiClient extends BaseApiClient {
       endpoint: '$baseEndpoint/pending',
       fromJson: (json) {
         final List<dynamic> data = json is List ? json : (json['data'] ?? []);
-        return data.map((item) => NoteModelJson.fromJson(item)).toList();
+        return data.map((item) => NoteModel.fromJson(item)).toList();
       },
     );
   }
@@ -37,7 +37,7 @@ class InboxNoteApiClient extends BaseApiClient {
       endpoint: '$baseEndpoint/archived',
       fromJson: (json) {
         final List<dynamic> data = json is List ? json : (json['data'] ?? []);
-        return data.map((item) => NoteModelJson.fromJson(item)).toList();
+        return data.map((item) => NoteModel.fromJson(item)).toList();
       },
     );
   }
@@ -45,7 +45,7 @@ class InboxNoteApiClient extends BaseApiClient {
   /// Fetch all notes (pending and archived)
   Future<List<NoteModel>> fetchAllNotes() async {
     return await fetchAll<NoteModel>(
-      fromJson: (json) => NoteModelJson.fromJson(json),
+      fromJson: (json) => NoteModel.fromJson(json),
     );
   }
 
@@ -53,7 +53,7 @@ class InboxNoteApiClient extends BaseApiClient {
   Future<NoteModel> fetchNoteById(String id) async {
     return await fetchById<NoteModel>(
       id: id,
-      fromJson: (json) => NoteModelJson.fromJson(json),
+      fromJson: (json) => NoteModel.fromJson(json),
     );
   }
 
@@ -65,7 +65,7 @@ class InboxNoteApiClient extends BaseApiClient {
   Future<NoteModel> createNote(NoteModel note) async {
     return await create<NoteModel>(
       data: note.toJson(),
-      fromJson: (json) => NoteModelJson.fromJson(json),
+      fromJson: (json) => NoteModel.fromJson(json),
     );
   }
 
@@ -78,7 +78,7 @@ class InboxNoteApiClient extends BaseApiClient {
     return await update<NoteModel>(
       id: id,
       data: payload,
-      fromJson: (json) => NoteModelJson.fromJson(json),
+      fromJson: (json) => NoteModel.fromJson(json),
     );
   }
 
@@ -90,7 +90,7 @@ class InboxNoteApiClient extends BaseApiClient {
   Future<NoteModel> archiveNote(String id) async {
     return await patch<NoteModel>(
       endpoint: '$baseEndpoint/$id/archive',
-      fromJson: (json) => NoteModelJson.fromJson(json),
+      fromJson: (json) => NoteModel.fromJson(json),
     );
   }
 
@@ -99,7 +99,7 @@ class InboxNoteApiClient extends BaseApiClient {
     return await patch<NoteModel>(
       endpoint: '$baseEndpoint/$id/status',
       data: {'status': status.toString().split('.').last},
-      fromJson: (json) => NoteModelJson.fromJson(json),
+      fromJson: (json) => NoteModel.fromJson(json),
     );
   }
 

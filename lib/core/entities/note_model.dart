@@ -1,6 +1,8 @@
 /// Pure NoteModel entity - no platform dependencies
 /// This is the core business entity used across all layers
 
+import 'generated_output.dart';
+
 enum NoteStatus {
   draft, // Initial recording or raw text
   processed, // AI macro applied
