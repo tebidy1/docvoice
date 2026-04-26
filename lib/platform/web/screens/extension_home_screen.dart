@@ -71,14 +71,15 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: const Text("Microphone access denied."),
+                content: const Text("عذراً، يجب منح إذن الوصول للميكروفون للمتابعة."),
+                backgroundColor: Colors.orange.shade900,
                 action: SnackBarAction(
-                    label: "Fix Permissions",
+                    label: "منح الإذن",
                     textColor: Colors.white,
                     onPressed: () {
                       web.window.open('permissions.html', '_blank');
                     }),
-                duration: const Duration(seconds: 5),
+                duration: const Duration(seconds: 8),
               ),
             );
           }
