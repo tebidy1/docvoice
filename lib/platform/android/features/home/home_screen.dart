@@ -145,7 +145,6 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              // Left Tab: Inbox
               IconButton(
                 icon: const Icon(Icons.inbox),
                 color: _selectedIndex == 0
@@ -155,10 +154,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 tooltip: 'Inbox',
                 iconSize: 28,
               ),
-
-              const SizedBox(width: 48), // Spacer for the FAB
-
-              // Right Tab: Settings
+              const SizedBox(width: 48),
               IconButton(
                 icon: const Icon(Icons.settings),
                 color: _selectedIndex == 1

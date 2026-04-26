@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../android/services/audio_recording_service.dart';
 import 'extension_settings_screen.dart';
-import 'extension_inbox_screen.dart'; // New Extension Inbox
-import 'extension_editor_screen.dart';
+import 'extension_inbox_screen.dart';
 import '../../../core/entities/note_model.dart';
-import 'package:uuid/uuid.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:web/web.dart' as web;
 import 'dart:js_interop';
@@ -37,7 +34,7 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
     _orchestrator.addListener(_onOrchestratorChanged);
 
     _screens = [
-      ExtensionInboxScreen(key: _inboxKey), // Use Extension Version
+      ExtensionInboxScreen(key: _inboxKey),
       const ExtensionSettingsScreen(),
     ];
     _loadPreferences();
@@ -69,20 +66,16 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
 
   Future<void> _startRecording() async {
     try {
-      // 1. Explicit Web Permission Check (Force Prompt)
       if (kIsWeb) {
         try {
           final stream = await web.window.navigator.mediaDevices
               .getUserMedia(web.MediaStreamConstraints(audio: true.toJS))
               .toDart;
-
-          // Got permission! Stop these tracks immediately to release mic for the actual recorder
           final tracks = stream.getTracks().toDart;
           for (final track in tracks) {
             track.stop();
           }
         } catch (e) {
-          print("Web Permission Error: $e");
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -98,7 +91,7 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
               ),
             );
           }
-          return; // Stop here
+          return;
         }
       }
 
@@ -114,7 +107,7 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
 
   Future<void> _stopRecording() async {
     try {
-      await _orchestrator.stopRecording();
+      await _orchestrator.stopRecording(defaultTitle: 'Extension Note');
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -137,14 +130,10 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final backgroundColor = theme.scaffoldBackgroundColor;
-    final surfaceColor = theme.cardTheme.color ??
-        (theme.brightness == Brightness.dark
-            ? const Color(0xFF1E1E1E)
-            : Colors.white);
-
+    final colorScheme = theme.colorScheme;
+    
     return Scaffold(
-      backgroundColor: backgroundColor,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: Stack(
           children: [
@@ -162,7 +151,6 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
                 ),
               ),
 
-            // AAC/M4A/WebM indicator — must be ABOVE ListeningModeView
             if (_orchestrator.isRecording && _currentSttEngine == 'gemini_oneshot')
               Positioned(
                 bottom: 60,
@@ -179,7 +167,7 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
         ),
       ),
       floatingActionButton: SizedBox(
-        width: 70, // Slightly smaller for extension
+        width: 70,
         height: 70,
         child: AnimatedRecordButton(
           initialIsRecording: _orchestrator.isRecording,
@@ -187,7 +175,7 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
           onStartRecording: _startRecording,
           onStopRecording: _stopRecording,
           onRecordingStateChanged: (isRecording) {
-            // Orchestrator handles state, but we might need to trigger rebuild
+            // Orchestrator handles state
           },
         ),
       ),
@@ -195,34 +183,26 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
       bottomNavigationBar: BottomAppBar(
         shape: const CircularNotchedRectangle(),
         notchMargin: 6.0,
-        color: surfaceColor,
+        color: colorScheme.surface,
         child: SizedBox(
-          height: 50.0, // Comapct
+          height: 60.0,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               IconButton(
                 icon: const Icon(Icons.inbox),
                 color: _selectedIndex == 0
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.5),
+                    ? colorScheme.primary
+                    : colorScheme.onSurface.withOpacity(0.5),
                 onPressed: () => _onItemTapped(0),
-                tooltip: 'Inbox',
               ),
-              const SizedBox(width: 32),
+              const SizedBox(width: 48),
               IconButton(
                 icon: const Icon(Icons.settings),
                 color: _selectedIndex == 1
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.5),
+                    ? colorScheme.primary
+                    : colorScheme.onSurface.withOpacity(0.5),
                 onPressed: () => _onItemTapped(1),
-                tooltip: 'Settings',
               ),
             ],
           ),
