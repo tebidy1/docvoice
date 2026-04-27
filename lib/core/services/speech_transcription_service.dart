@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io' show File, Platform;
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
@@ -40,9 +41,20 @@ class SpeechTranscriptionService {
     }
 
     try {
-      final tempDir = await getTemporaryDirectory();
-      final extension = (!kIsWeb && Platform.isWindows) ? 'flac' : 'wav';
-      _currentRecordingPath = p.join(tempDir.path, 'transcription_${DateTime.now().millisecondsSinceEpoch}.$extension');
+      String path = '';
+      if (!kIsWeb) {
+        final tempDir = await getTemporaryDirectory();
+        final String extension;
+        if (Platform.isWindows) {
+          extension = 'flac';
+        } else if (Platform.isAndroid || Platform.isIOS) {
+          extension = 'm4a';
+        } else {
+          extension = 'wav';
+        }
+        path = p.join(tempDir.path, 'transcription_${DateTime.now().millisecondsSinceEpoch}.$extension');
+      }
+      _currentRecordingPath = path;
 
       await _recorder.startRecordingCompressed(_currentRecordingPath!);
       _updateState(SpeechTranscriptionState.recording);

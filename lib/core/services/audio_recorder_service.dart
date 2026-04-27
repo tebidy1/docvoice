@@ -100,9 +100,13 @@ class AudioRecorderService {
       throw Exception("Microphone permission denied");
     }
 
-    AudioEncoder encoder = AudioEncoder.aacLc;
-    if (!kIsWeb && Platform.isWindows) {
-      encoder = AudioEncoder.flac; // FLAC is the best compression on Windows
+    AudioEncoder encoder;
+    if (kIsWeb) {
+      encoder = AudioEncoder.opus;
+    } else if (Platform.isWindows) {
+      encoder = AudioEncoder.flac;
+    } else {
+      encoder = AudioEncoder.aacLc;
     }
 
     try {
