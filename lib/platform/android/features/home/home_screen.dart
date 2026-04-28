@@ -1,17 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
-import 'package:uuid/uuid.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 
-import '../../../../core/services/speech_transcription_service.dart';
 import '../../../../core/utils/permission_fixer.dart';
 import '../../../../presentation/widgets/animated_record_button.dart';
 import '../../../../presentation/widgets/listening_mode_view.dart';
-import 'package:soutnote/core/entities/note_model.dart';
-import '../editor/editor_screen.dart';
 import '../inbox/inbox_screen.dart';
 import '../settings/settings_screen.dart';
+import '../../services/mobile_recording_orchestrator.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,25 +15,36 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _selectedIndex = 0; // 0: Inbox, 1: Settings
+  int _selectedIndex = 0;
   bool _isRecording = false;
-  final SpeechTranscriptionService _transcriptionService = SpeechTranscriptionService();
+  bool _isProcessing = false;
 
-  // Key to control Inbox state
+  late final MobileRecordingOrchestrator _orchestrator;
   final GlobalKey<InboxScreenState> _inboxKey = GlobalKey<InboxScreenState>();
 
-  // Screens list must use the key
   late List<Widget> _screens;
 
   @override
   void initState() {
     super.initState();
+    _orchestrator = MobileRecordingOrchestrator();
+    _orchestrator.initialize();
+    _orchestrator.addListener(_onOrchestratorChanged);
+
     _screens = [
-      InboxScreen(key: _inboxKey),
+      InboxScreen(key: _inboxKey, getAmplitude: _orchestrator.getAmplitude),
       const SettingsScreen(),
     ];
   }
 
+  void _onOrchestratorChanged() {
+    if (!mounted) return;
+    setState(() {
+      _isRecording = _orchestrator.isRecording;
+      _isProcessing = _orchestrator.isProcessing;
+    });
+    _inboxKey.currentState?.setRecordingState(_orchestrator.isRecording);
+  }
 
   void _onItemTapped(int index) {
     setState(() {
@@ -47,68 +52,46 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  Future<void> _startRecording() async {
-    try {
-      await _transcriptionService.startRecording();
-    } catch (e) {
+  Future<void> _toggleRecording() async {
+    if (_orchestrator.isRecording) {
+      await _orchestrator.stopRecording();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Failed to start recording: $e"),
-            backgroundColor: Colors.red,
-            action: SnackBarAction(
-              label: "FIX",
-              textColor: Colors.white,
-              onPressed: openPermissionFixPage,
-            ),
+          const SnackBar(
+            content: Text("📥 Saved Recording"),
+            duration: Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.green,
           ),
         );
-        setState(() => _isRecording = false);
+      }
+    } else {
+      try {
+        await _orchestrator.startRecording();
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Failed to start recording: $e"),
+              backgroundColor: Colors.red,
+              action: SnackBarAction(
+                label: "FIX",
+                textColor: Colors.white,
+                onPressed: openPermissionFixPage,
+              ),
+            ),
+          );
+          setState(() => _isRecording = false);
+        }
       }
     }
   }
 
-  Future<void> _stopRecording() async {
-    setState(() => _isRecording = false);
-    final transcriptFuture = _transcriptionService.stopAndTranscribe();
-    _processAndNavigate(oracleTranscriptFuture: transcriptFuture);
-  }
-
-  Future<void> _processAndNavigate({Future<String>? oracleTranscriptFuture}) async {
-    // Create Real Draft Note
-    final draft = NoteModel()
-      ..uuid = const Uuid().v4()
-      ..title = "New Recording"
-      ..content = "Transcribing..."
-      ..originalText = ""
-      ..audioPath = ""
-      ..status = NoteStatus.draft
-      ..createdAt = DateTime.now()
-      ..updatedAt = DateTime.now();
-
-    if (mounted) {
-      // Navigate to Editor and wait for result
-      final result = await Navigator.push(
-        context,
-        MaterialPageRoute(
-            builder: (_) => EditorScreen(
-                draftNote: draft,
-                oracleTranscriptFuture: oracleTranscriptFuture)),
-      );
-
-      // If note returned, animate it into inbox
-      if (result != null && result is String && result.isNotEmpty) {
-        draft.content = result;
-        draft.title = "Processed Note";
-        draft.status = NoteStatus.processed;
-
-        setState(() => _selectedIndex = 0);
-
-        Future.delayed(const Duration(milliseconds: 100), () {
-          _inboxKey.currentState?.addNote(draft);
-        });
-      }
-    }
+  @override
+  void dispose() {
+    _orchestrator.removeListener(_onOrchestratorChanged);
+    _orchestrator.dispose();
+    super.dispose();
   }
 
   @override
@@ -128,7 +111,31 @@ class _HomeScreenState extends State<HomeScreen> {
             if (_isRecording)
               Positioned.fill(
                 child: ListeningModeView(
-                  getAmplitude: _transcriptionService.getAmplitude,
+                  getAmplitude: _orchestrator.getAmplitude,
+                ),
+              ),
+
+            if (_isProcessing)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.black54,
+                  child: const Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(color: Colors.white),
+                        SizedBox(height: 16),
+                        Text(
+                          'جاري معالجة التسجيل...',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
           ],
@@ -139,8 +146,9 @@ class _HomeScreenState extends State<HomeScreen> {
         height: 80,
         child: AnimatedRecordButton(
           initialIsRecording: _isRecording,
-          onStartRecording: _startRecording,
-          onStopRecording: _stopRecording,
+          initialIsProcessing: _isProcessing,
+          onStartRecording: _toggleRecording,
+          onStopRecording: _toggleRecording,
           onRecordingStateChanged: (isRecording) {
             setState(() => _isRecording = isRecording);
           },
@@ -157,25 +165,21 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              // Left Tab: Inbox
               IconButton(
                 icon: const Icon(Icons.inbox),
                 color: _selectedIndex == 0
                     ? colorScheme.primary
-                    : colorScheme.onSurface.withOpacity(0.5),
+                    : colorScheme.onSurface.withValues(alpha: 0.5),
                 onPressed: () => _onItemTapped(0),
                 tooltip: 'Inbox',
                 iconSize: 28,
               ),
-
-              const SizedBox(width: 48), // Spacer for the FAB
-
-              // Right Tab: Settings
+              const SizedBox(width: 48),
               IconButton(
                 icon: const Icon(Icons.settings),
                 color: _selectedIndex == 1
                     ? colorScheme.primary
-                    : colorScheme.onSurface.withOpacity(0.5),
+                    : colorScheme.onSurface.withValues(alpha: 0.5),
                 onPressed: () => _onItemTapped(1),
                 tooltip: 'Settings',
                 iconSize: 28,

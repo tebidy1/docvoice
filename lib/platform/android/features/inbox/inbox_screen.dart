@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import '../../core/theme.dart';
 import 'package:flutter/services.dart';
 import 'package:soutnote/core/entities/note_model.dart';
@@ -9,10 +11,13 @@ import '../../services/macro_service.dart';
 import '../../../../core/entities/macro.dart';
 import '../editor/editor_screen.dart';
 import 'archive_screen.dart';
-import '../../core/utils/date_helper.dart';
+import '../../../../presentation/widgets/listening_mode_view.dart';
 
 class InboxScreen extends StatefulWidget {
-  const InboxScreen({super.key});
+  final void Function()? onRecordingStateChanged;
+  final Future<double> Function()? getAmplitude;
+
+  const InboxScreen({super.key, this.onRecordingStateChanged, this.getAmplitude});
 
   @override
   State<InboxScreen> createState() => InboxScreenState();
@@ -20,33 +25,24 @@ class InboxScreen extends StatefulWidget {
 
 class InboxScreenState extends State<InboxScreen> {
   final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
-  final List<NoteModel> _notes = []; // Active Notes
-  final List<NoteModel> _archivedNotes = []; // Archived Notes
+  final List<NoteModel> _archivedNotes = [];
   final _macroService = MacroService();
+  final _inboxService = InboxService();
   List<Macro> _allMacros = [];
+
+  bool _isRecording = false;
+
+  bool get isRecording => _isRecording;
+
+  void setRecordingState(bool value) {
+    if (_isRecording == value) return;
+    setState(() => _isRecording = value);
+  }
 
   @override
   void initState() {
     super.initState();
     _loadMacros();
-    // Initial Mock Data (Same as before)
-    _notes.addAll([
-      NoteModel()
-        ..title = "Patient H.M."
-        ..content = "History of amnesia..."
-        ..status = NoteStatus.processed
-        ..createdAt = DateTime.now().subtract(const Duration(minutes: 5)),
-      NoteModel()
-        ..title = "Follow-up: Sarah J."
-        ..content = "Prescription renewal..."
-        ..status = NoteStatus.ready
-        ..createdAt = DateTime.now().subtract(const Duration(hours: 1)),
-      NoteModel()
-        ..title = "Dr. Notes"
-        ..content = "Staff meeting at 5 PM"
-        ..status = NoteStatus.draft
-        ..createdAt = DateTime.now().subtract(const Duration(days: 1)),
-    ]);
   }
 
   Future<void> _loadMacros() async {
@@ -55,23 +51,19 @@ class InboxScreenState extends State<InboxScreen> {
   }
 
   void addNote(NoteModel note) {
-    _notes.insert(0, note);
     _listKey.currentState
         ?.insertItem(0, duration: const Duration(milliseconds: 600));
   }
 
   Future<void> _copyAndMarkCopied(NoteModel note) async {
-    // 1. Copy to Clipboard
     await Clipboard.setData(ClipboardData(text: note.content));
 
-    // 2. Update Status to COPIED (Not Archived)
     try {
-      await InboxService().updateStatus(note.id, NoteStatus.copied);
+      await _inboxService.updateStatus(note.id, NoteStatus.copied);
     } catch (e) {
       debugPrint("Error updating status: $e");
     }
 
-    // 3. Feedback
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text("Copied to Clipboard! ✓"),
@@ -105,188 +97,218 @@ class InboxScreenState extends State<InboxScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              // Branded Logo Area
-              Row(
-                textDirection: TextDirection.ltr,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: colorScheme.onSurface.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: SvgPicture.asset(
-                      'assets/images/logo_icon.svg',
-                      height: 28,
-                      width: 28,
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      RichText(
-                        text: TextSpan(
-                          children: [
-                            TextSpan(
-                              text: 'Sout',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                                color: colorScheme.onSurface,
-                              ),
-                            ),
-                            TextSpan(
-                              text: 'Note',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                                color: colorScheme.primary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      RichText(
-                        text: TextSpan(
-                          style: GoogleFonts.tajawal(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                            color: colorScheme.onSurface.withOpacity(0.9),
-                            height: 1.0,
-                          ),
-                          children: [
-                            const TextSpan(text: 'صوت '),
-                            TextSpan(
-                              text: 'ن',
-                              style: TextStyle(color: colorScheme.primary),
-                            ),
-                            const TextSpan(text: 'وت'),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              IconButton(
-                icon: Icon(Icons.inventory_2_outlined,
-                    color: colorScheme.onSurface.withOpacity(0.7)),
-                tooltip: 'View Archive',
-                onPressed: _openArchive,
-              )
-            ],
-          ),
+          _buildHeader(colorScheme),
           const SizedBox(height: 16),
           Expanded(
-            child: StreamBuilder<List<NoteModel>>(
-                stream: InboxService().watchPendingNotes(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting &&
-                      _archivedNotes.isEmpty) {
-                    // Changed _notes.isEmpty to _archivedNotes.isEmpty as _notes is no longer a state variable
-                    return const Center(child: CircularProgressIndicator());
-                  }
-
-                  if (snapshot.hasError) {
-                    return Center(
-                        child: Text("Error fetching notes: ${snapshot.error}",
-                            style: const TextStyle(color: Colors.red)));
-                  }
-
-                  final notes = snapshot.data ?? [];
-
-                  if (notes.isEmpty) {
-                    return Center(
-                        child: Text("All caught up! 🎉",
-                            style: GoogleFonts.inter(color: Colors.white30)));
-                  }
-
-                  return AnimatedList(
-                    key:
-                        _listKey, // Note: Key usage with StreamBuilder might be tricky if list changes drastically.
-                    // For simplicity in this iteration, we use ListView.builder inside the Stream
-                    // or we manually manage diffs.
-                    // Let's swap to ListView.builder for reliability with Streams, or just populate _notes.
-                    // Real proper AnimatedList with Stream requires DiffUtil.
-                    // Let's use simple ListView for the V1 Cloud Sync to ensure correctness.
-
-                    initialItemCount: notes.length,
-                    itemBuilder: (context, index, animation) {
-                      // Since we can't easily animate item insertion from Stream without diffing,
-                      // we will lose the slide animation on load, but gain Real-time Sync.
-                      // A fair trade-off for Phase 9.
-
-                      bool showHeader = true;
-                      if (index > 0) {
-                        final current = notes[index];
-                        final prev = notes[index - 1];
-                        if (DateHelper.isSameDay(
-                            prev.createdAt, current.createdAt)) {
-                          showHeader = false;
-                        }
-                      }
-
-                      final header = showHeader
-                          ? Padding(
-                              padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
-                              child: Text(
-                                DateHelper.formatGroupingDate(
-                                        notes[index].createdAt)
-                                    .toUpperCase(),
-                                style: TextStyle(
-                                    color: colorScheme.primary,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                    letterSpacing: 1.2),
-                              ),
-                            )
-                          : const SizedBox.shrink();
-
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          header,
-                          // The _buildAnimatedItem wrapper is removed as per instruction.
-                          // The _archiveNote call needs to be updated to use the note from the stream.
-                          _buildNoteCard(context, notes[index],
-                              index: index,
-                              noteNumber: notes.length -
-                                  index), // Removed animation wrapper for now
-                        ],
-                      );
-                    },
-                  );
-                }),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 350),
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: child,
+              ),
+              child: _isRecording
+                  ? _buildListeningView(key: const ValueKey('listening'))
+                  : _buildNotesList(colorScheme, key: const ValueKey('list')),
+            ),
           ),
         ],
       ),
     );
   }
 
-  // Modified to accept index for Copy action
-  Widget _buildAnimatedItem(
-      BuildContext context, NoteModel note, Animation<double> animation,
-      {int? index}) {
-    return SizeTransition(
-      sizeFactor: animation,
-      axisAlignment: 0.0,
-      child: FadeTransition(
-        opacity: animation,
-        child: SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0, -0.2),
-            end: Offset.zero,
-          ).animate(
-              CurvedAnimation(parent: animation, curve: Curves.easeOutBack)),
-          child: _buildNoteCard(context, note, index: index),
+  Widget _buildHeader(ColorScheme colorScheme) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
+          textDirection: TextDirection.ltr,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: colorScheme.onSurface.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: SvgPicture.asset(
+                'assets/images/logo_icon.svg',
+                height: 28,
+                width: 28,
+                fit: BoxFit.contain,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: 'Sout',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: colorScheme.onSurface,
+                        ),
+                      ),
+                      TextSpan(
+                        text: 'Note',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: colorScheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                RichText(
+                  text: TextSpan(
+                    style: GoogleFonts.tajawal(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                      color: colorScheme.onSurface.withValues(alpha: 0.9),
+                      height: 1.0,
+                    ),
+                    children: [
+                      const TextSpan(text: 'صوت '),
+                      TextSpan(
+                        text: 'ن',
+                        style: TextStyle(color: colorScheme.primary),
+                      ),
+                      const TextSpan(text: 'وت'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
-      ),
+        IconButton(
+          icon: Icon(Icons.inventory_2_outlined,
+              color: colorScheme.onSurface.withValues(alpha: 0.7)),
+          tooltip: 'View Archive',
+          onPressed: _openArchive,
+        )
+      ],
+    );
+  }
+
+  Widget _buildListeningView({Key? key}) {
+    return Stack(
+      key: key,
+      children: [
+        ListeningModeView(
+          getAmplitude: widget.getAmplitude ?? () async => -160.0,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNotesList(ColorScheme colorScheme, {Key? key}) {
+    return StreamBuilder<List<NoteModel>>(
+      key: key,
+      stream: _inboxService.watchPendingNotes(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            _archivedNotes.isEmpty) {
+          return Center(
+              child: CircularProgressIndicator(color: colorScheme.primary));
+        }
+
+        if (snapshot.hasError) {
+          return Center(
+              child: Text("Error fetching notes: ${snapshot.error}",
+                  style: const TextStyle(color: Colors.red)));
+        }
+
+        final notes = snapshot.data ?? [];
+
+        if (notes.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.mic_none_rounded,
+                    color: Colors.grey[700], size: 64),
+                const SizedBox(height: 16),
+                Text(
+                  'No notes yet',
+                  style: TextStyle(
+                    color: Colors.grey[500],
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Tap the mic to start recording',
+                  style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final groupedNotes = <String, List<NoteModel>>{};
+        for (var note in notes) {
+          final date = note.createdAt;
+          final now = DateTime.now();
+          String groupKey;
+          if (date.year == now.year &&
+              date.month == now.month &&
+              date.day == now.day) {
+            groupKey = 'Today';
+          } else if (date.year == now.year &&
+              date.month == now.month &&
+              date.day == now.day - 1) {
+            groupKey = 'Yesterday';
+          } else {
+            groupKey = DateFormat('MMMM d, y').format(date);
+          }
+          groupedNotes.putIfAbsent(groupKey, () => []).add(note);
+        }
+
+        return ListView.builder(
+          key: _listKey,
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          itemCount: groupedNotes.length,
+          itemBuilder: (context, index) {
+            final dateKey = groupedNotes.keys.elementAt(index);
+            final groupNotes = groupedNotes[dateKey]!;
+
+            int notesAfterThisGroup = 0;
+            for (int i = index + 1; i < groupedNotes.length; i++) {
+              notesAfterThisGroup += groupedNotes.values.elementAt(i).length;
+            }
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(left: 4, bottom: 8, top: 16),
+                  child: Text(
+                    dateKey.toUpperCase(),
+                    style: TextStyle(
+                      color: Colors.grey[500],
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                ),
+                ...groupNotes.asMap().entries.map((entry) {
+                  final noteNumber =
+                      notesAfterThisGroup + (groupNotes.length - entry.key);
+                  return _buildNoteCard(context, entry.value,
+                      index: entry.key, noteNumber: noteNumber);
+                }),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -295,10 +317,8 @@ class InboxScreenState extends State<InboxScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     final bool isDraft = note.formattedText.isEmpty;
 
-    // Primary blue — consistent with login screen and Windows app
     const Color primaryBlue = Color(0xFF00A5FE);
 
-    // Find applied template name
     String? templateName = note.summary;
     if ((templateName == null || templateName.isEmpty) &&
         _allMacros.isNotEmpty) {
@@ -309,7 +329,6 @@ class InboxScreenState extends State<InboxScreen> {
       }
     }
 
-    // Badge label
     final String badgeLabel;
     if (note.status == NoteStatus.ready) {
       badgeLabel = 'Ready';
@@ -377,7 +396,6 @@ class InboxScreenState extends State<InboxScreen> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Left accent bar — blue stripe like Windows card
                 Container(
                   width: 4,
                   decoration: BoxDecoration(
@@ -396,7 +414,6 @@ class InboxScreenState extends State<InboxScreen> {
                       children: [
                         Row(
                           children: [
-                            // Circular avatar with blue icon
                             Container(
                               width: 34,
                               height: 34,
@@ -466,8 +483,10 @@ class InboxScreenState extends State<InboxScreen> {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: isDraft
-                                ? colorScheme.onSurface.withValues(alpha: 0.38)
-                                : colorScheme.onSurface.withValues(alpha: 0.68),
+                                ? colorScheme.onSurface
+                                    .withValues(alpha: 0.38)
+                                : colorScheme.onSurface
+                                    .withValues(alpha: 0.68),
                             height: 1.45,
                             fontSize: 13.5,
                           ),
@@ -489,7 +508,6 @@ class InboxScreenState extends State<InboxScreen> {
                               ),
                             ),
                             const Spacer(),
-                            // Badge pill — Windows-style with star icon
                             Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 8, vertical: 3),
