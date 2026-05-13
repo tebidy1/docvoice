@@ -17,6 +17,26 @@ class InboxService {
 
   bool _isInitialized = false;
 
+  // ============================================
+  // Pagination State
+  // ============================================
+
+  int _pendingCurrentPage = 1;
+  int _pendingLastPage = 1;
+  int _pendingTotal = 0;
+  int _pendingPerPage = 15;
+  bool _pendingLoading = false;
+  List<NoteModel> _pendingItems = [];
+
+  List<NoteModel> get pendingItems => _pendingItems;
+  int get pendingCurrentPage => _pendingCurrentPage;
+  int get pendingLastPage => _pendingLastPage;
+  int get pendingTotal => _pendingTotal;
+  int get pendingPerPage => _pendingPerPage;
+  bool get pendingLoading => _pendingLoading;
+  bool get hasPreviousPage => _pendingCurrentPage > 1;
+  bool get hasNextPage => _pendingCurrentPage < _pendingLastPage;
+
   Future<void> init() async {
     if (_isInitialized) return;
     await _syncManager.init();
@@ -45,14 +65,14 @@ class InboxService {
     note.summary = summary;
     note.suggestedMacroId = suggestedMacroId;
     note.formattedText = formattedText ?? '';
-    note.audioPath = audioPath; // Added audio path map
+    note.audioPath = audioPath;
     if (generatedOutputs != null) {
       note.generatedOutputs =
           generatedOutputs.map((e) => GeneratedOutput.fromJson(e)).toList();
     }
     note.content = note.formattedText.isNotEmpty
         ? note.formattedText
-        : note.originalText; // Fix LateInitializationError
+        : note.originalText;
     note.status =
         note.formattedText.isNotEmpty ? NoteStatus.processed : NoteStatus.draft;
     note.createdAt = DateTime.now();
@@ -69,7 +89,7 @@ class InboxService {
     try {
       final createdNote = await _ApiClient.createNote(note);
       _invalidateCache();
-      refresh(); // Trigger stream update
+      refresh();
       return createdNote;
     } catch (e) {
       debugPrint('⚠️ Network failure, queuing note for sync: $e');
@@ -205,10 +225,65 @@ class InboxService {
   }
 
   // ============================================
-  // Fetch Operations
+  // Paginated Fetch Operations
   // ============================================
 
-  /// Get pending notes with caching
+  /// Fetch a specific page of pending notes
+  Future<void> goToPendingPage(int page) async {
+    await init();
+    _pendingLoading = true;
+    _pendingController.add(this);
+
+    try {
+      final result = await _ApiClient.fetchPendingNotesPaginated(
+        page: page,
+        perPage: _pendingPerPage,
+      );
+      _pendingItems = result.items;
+      _pendingCurrentPage = result.currentPage;
+      _pendingLastPage = result.lastPage;
+      _pendingTotal = result.total;
+      _pendingPerPage = result.perPage;
+    } catch (e) {
+      debugPrint('Error fetching page $page: $e');
+      _pendingItems = [];
+      _pendingCurrentPage = 1;
+      _pendingLastPage = 1;
+      _pendingTotal = 0;
+    }
+    _pendingLoading = false;
+    _pendingController.add(this);
+  }
+
+  /// Go to next page of pending notes
+  Future<void> nextPendingPage() async {
+    if (!hasNextPage) return;
+    await goToPendingPage(_pendingCurrentPage + 1);
+  }
+
+  /// Go to previous page of pending notes
+  Future<void> previousPendingPage() async {
+    if (!hasPreviousPage) return;
+    await goToPendingPage(_pendingCurrentPage - 1);
+  }
+
+  /// Fetch a specific page of archived notes
+  Future<List<NoteModel>> goToArchivedPage(int page) async {
+    await init();
+
+    try {
+      final result = await _ApiClient.fetchArchivedNotesPaginated(
+        page: page,
+        perPage: 15,
+      );
+      return result.items;
+    } catch (e) {
+      debugPrint('Error fetching archived page $page: $e');
+      return [];
+    }
+  }
+
+  /// Get pending notes with caching (legacy - fetches all at once)
   Future<List<NoteModel>> getPendingNotes({bool forceRefresh = false}) async {
     await init();
 
@@ -224,7 +299,7 @@ class InboxService {
     );
   }
 
-  /// Get archived notes with caching
+  /// Get archived notes with caching (legacy)
   Future<List<NoteModel>> getArchivedNotes({bool forceRefresh = false}) async {
     await init();
 
@@ -241,57 +316,62 @@ class InboxService {
   }
 
   // ============================================
-  // Real-time Streams (Polling)
+  // Reactive State (Page-based)
   // ============================================
 
-  // Real-time Streams (Reactive + Polling)
-  final _pendingNotesController = StreamController<List<NoteModel>>.broadcast();
+  final _pendingController = StreamController<InboxService>.broadcast();
+
+  /// Watch the InboxService state for reactive UI updates
+  Stream<InboxService> watch() {
+    return _pendingController.stream;
+  }
+
+  /// Manually trigger a refresh (goes back to page 1)
+  Future<void> refresh() async {
+    await goToPendingPage(1);
+  }
+
+  // ============================================
+  // Legacy Stream Support (for backward compat)
+  // ============================================
+
+  final _pendingNotesLegacyController =
+      StreamController<List<NoteModel>>.broadcast();
   Timer? _pollingTimer;
 
+  /// Legacy stream that emits all pending notes (no pagination)
   Stream<List<NoteModel>> watchPendingNotes() {
-    // Start polling if not already started
     if (_pollingTimer == null || !_pollingTimer!.isActive) {
       _startPolling();
     }
-    // Return the stream
-    return _pendingNotesController.stream;
+    return _pendingNotesLegacyController.stream;
   }
 
   void _startPolling() async {
-    // 1. Initial Instant Load from Cache
     try {
       final cachedNotes = await getPendingNotes(forceRefresh: false);
       if (cachedNotes.isNotEmpty) {
-        _pendingNotesController.add(cachedNotes);
+        _pendingNotesLegacyController.add(cachedNotes);
       }
     } catch (e) {
       debugPrint('Cache load failed: $e');
     }
-
-    // 2. Fetch Fresh Data
-    _refreshPendingNotes();
-
-    // 3. Start Polling
+    _refreshPendingNotesLegacy();
     _pollingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      _refreshPendingNotes();
+      _refreshPendingNotesLegacy();
     });
   }
 
-  Future<void> _refreshPendingNotes() async {
+  Future<void> _refreshPendingNotesLegacy() async {
     try {
       final notes = await getPendingNotes(forceRefresh: true);
-      _pendingNotesController.add(notes);
+      _pendingNotesLegacyController.add(notes);
     } catch (e) {
       debugPrint('Error refreshing pending notes: $e');
     }
   }
 
-  /// Manually trigger an update (e.g. after adding a note)
-  Future<void> refresh() async {
-    await _refreshPendingNotes();
-  }
-
-  /// Watch archived notes
+  /// Watch archived notes (legacy)
   Stream<List<NoteModel>> watchArchivedNotes() async* {
     while (true) {
       try {
@@ -300,8 +380,7 @@ class InboxService {
       } catch (e) {
         debugPrint('Error polling archived notes: $e');
       }
-      await Future.delayed(
-          const Duration(seconds: 30)); // Poll every 30s for archive
+      await Future.delayed(const Duration(seconds: 30));
     }
   }
 

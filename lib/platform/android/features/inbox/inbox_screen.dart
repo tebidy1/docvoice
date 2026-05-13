@@ -29,6 +29,8 @@ class InboxScreenState extends State<InboxScreen> {
   final _macroService = MacroService();
   final _inboxService = InboxService();
   List<Macro> _allMacros = [];
+  List<NoteModel> _notes = [];
+  StreamSubscription? _stateSub;
 
   bool _isRecording = false;
 
@@ -43,6 +45,16 @@ class InboxScreenState extends State<InboxScreen> {
   void initState() {
     super.initState();
     _loadMacros();
+    _inboxService.init().then((_) => _inboxService.goToPendingPage(1));
+    _stateSub = _inboxService.watch().listen((service) {
+      if (mounted) setState(() => _notes = service.pendingItems);
+    });
+  }
+
+  @override
+  void dispose() {
+    _stateSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadMacros() async {
@@ -110,6 +122,55 @@ class InboxScreenState extends State<InboxScreen> {
                   ? _buildListeningView(key: const ValueKey('listening'))
                   : _buildNotesList(colorScheme, key: const ValueKey('list')),
             ),
+          ),
+          if (!_isRecording) _buildPagination(colorScheme),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPagination(ColorScheme colorScheme) {
+    final svc = _inboxService;
+    if (svc.pendingLoading) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: colorScheme.primary)),
+      );
+    }
+    if (svc.pendingTotal == 0 && _notes.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: colorScheme.outline.withValues(alpha: 0.2))),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.chevron_left, size: 20),
+            onPressed: svc.hasPreviousPage
+                ? () => svc.previousPendingPage()
+                : null,
+            visualDensity: VisualDensity.compact,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            '${svc.pendingCurrentPage} / ${svc.pendingLastPage}',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colorScheme.onSurface),
+          ),
+          const SizedBox(width: 4),
+          IconButton(
+            icon: const Icon(Icons.chevron_right, size: 20),
+            onPressed: svc.hasNextPage
+                ? () => svc.nextPendingPage()
+                : null,
+            visualDensity: VisualDensity.compact,
+          ),
+          const SizedBox(width: 12),
+          Text(
+            '${svc.pendingTotal} total',
+            style: TextStyle(fontSize: 11, color: colorScheme.onSurface.withValues(alpha: 0.5)),
           ),
         ],
       ),
@@ -207,106 +268,70 @@ class InboxScreenState extends State<InboxScreen> {
   }
 
   Widget _buildNotesList(ColorScheme colorScheme, {Key? key}) {
-    return StreamBuilder<List<NoteModel>>(
-      key: key,
-      stream: _inboxService.watchPendingNotes(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting &&
-            _archivedNotes.isEmpty) {
-          return Center(
-              child: CircularProgressIndicator(color: colorScheme.primary));
+    if (_inboxService.pendingLoading && _notes.isEmpty) {
+      return Center(child: CircularProgressIndicator(color: colorScheme.primary));
+    }
+
+    if (_notes.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.mic_none_rounded, color: Colors.grey[700], size: 64),
+            const SizedBox(height: 16),
+            Text('No notes yet',
+                style: TextStyle(color: Colors.grey[500], fontSize: 16, fontWeight: FontWeight.w500)),
+            const SizedBox(height: 8),
+            Text('Tap the mic to start recording',
+                style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+          ],
+        ),
+      );
+    }
+
+    final groupedNotes = <String, List<NoteModel>>{};
+    for (var note in _notes) {
+      final date = note.createdAt;
+      final now = DateTime.now();
+      String groupKey;
+      if (date.year == now.year && date.month == now.month && date.day == now.day) {
+        groupKey = 'Today';
+      } else if (date.year == now.year && date.month == now.month && date.day == now.day - 1) {
+        groupKey = 'Yesterday';
+      } else {
+        groupKey = DateFormat('MMMM d, y').format(date);
+      }
+      groupedNotes.putIfAbsent(groupKey, () => []).add(note);
+    }
+
+    return ListView.builder(
+      key: _listKey,
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      itemCount: groupedNotes.length,
+      itemBuilder: (context, index) {
+        final dateKey = groupedNotes.keys.elementAt(index);
+        final groupNotes = groupedNotes[dateKey]!;
+
+        int notesAfterThisGroup = 0;
+        for (int i = index + 1; i < groupedNotes.length; i++) {
+          notesAfterThisGroup += groupedNotes.values.elementAt(i).length;
         }
 
-        if (snapshot.hasError) {
-          return Center(
-              child: Text("Error fetching notes: ${snapshot.error}",
-                  style: const TextStyle(color: Colors.red)));
-        }
-
-        final notes = snapshot.data ?? [];
-
-        if (notes.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.mic_none_rounded,
-                    color: Colors.grey[700], size: 64),
-                const SizedBox(height: 16),
-                Text(
-                  'No notes yet',
-                  style: TextStyle(
-                    color: Colors.grey[500],
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Tap the mic to start recording',
-                  style: TextStyle(color: Colors.grey[600], fontSize: 13),
-                ),
-              ],
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 8, top: 16),
+              child: Text(
+                dateKey.toUpperCase(),
+                style: TextStyle(color: Colors.grey[500], fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.0),
+              ),
             ),
-          );
-        }
-
-        final groupedNotes = <String, List<NoteModel>>{};
-        for (var note in notes) {
-          final date = note.createdAt;
-          final now = DateTime.now();
-          String groupKey;
-          if (date.year == now.year &&
-              date.month == now.month &&
-              date.day == now.day) {
-            groupKey = 'Today';
-          } else if (date.year == now.year &&
-              date.month == now.month &&
-              date.day == now.day - 1) {
-            groupKey = 'Yesterday';
-          } else {
-            groupKey = DateFormat('MMMM d, y').format(date);
-          }
-          groupedNotes.putIfAbsent(groupKey, () => []).add(note);
-        }
-
-        return ListView.builder(
-          key: _listKey,
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          itemCount: groupedNotes.length,
-          itemBuilder: (context, index) {
-            final dateKey = groupedNotes.keys.elementAt(index);
-            final groupNotes = groupedNotes[dateKey]!;
-
-            int notesAfterThisGroup = 0;
-            for (int i = index + 1; i < groupedNotes.length; i++) {
-              notesAfterThisGroup += groupedNotes.values.elementAt(i).length;
-            }
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(left: 4, bottom: 8, top: 16),
-                  child: Text(
-                    dateKey.toUpperCase(),
-                    style: TextStyle(
-                      color: Colors.grey[500],
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 1.0,
-                    ),
-                  ),
-                ),
-                ...groupNotes.asMap().entries.map((entry) {
-                  final noteNumber =
-                      notesAfterThisGroup + (groupNotes.length - entry.key);
-                  return _buildNoteCard(context, entry.value,
-                      index: entry.key, noteNumber: noteNumber);
-                }),
-              ],
-            );
-          },
+            ...groupNotes.asMap().entries.map((entry) {
+              final noteNumber = notesAfterThisGroup + (groupNotes.length - entry.key);
+              return _buildNoteCard(context, entry.value, index: entry.key, noteNumber: noteNumber);
+            }),
+          ],
         );
       },
     );

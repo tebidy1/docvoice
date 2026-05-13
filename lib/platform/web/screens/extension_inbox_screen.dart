@@ -1,11 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/entities/note_model.dart';
 import '../../android/services/inbox_service.dart';
 import '../../android/services/macro_service.dart';
 import '../../../core/entities/macro.dart';
-import 'extension_editor_screen.dart'; // Correct Import
-import '../../android/features/inbox/archive_screen.dart'; // Reuse Mobile Archive
+import 'extension_editor_screen.dart';
 import '../../android/core/utils/date_helper.dart';
 import '../services/extension_injection_service.dart';
 
@@ -18,33 +18,26 @@ class ExtensionInboxScreen extends StatefulWidget {
 
 class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
   final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
-  final List<NoteModel> _notes = []; // Active Notes
-  final List<NoteModel> _archivedNotes = []; // Archived Notes
+  final _inboxService = InboxService();
   final _macroService = MacroService();
   List<Macro> _allMacros = [];
+  List<NoteModel> _notes = [];
+  StreamSubscription? _stateSub;
 
   @override
   void initState() {
     super.initState();
     _loadMacros();
-    // Initial Mock Data (Same as before)
-    _notes.addAll([
-      NoteModel()
-        ..title = "Patient H.M."
-        ..content = "History of amnesia..."
-        ..status = NoteStatus.processed
-        ..createdAt = DateTime.now().subtract(const Duration(minutes: 5)),
-      NoteModel()
-        ..title = "Follow-up: Sarah J."
-        ..content = "Prescription renewal..."
-        ..status = NoteStatus.ready
-        ..createdAt = DateTime.now().subtract(const Duration(hours: 1)),
-      NoteModel()
-        ..title = "Dr. Notes"
-        ..content = "Staff meeting at 5 PM"
-        ..status = NoteStatus.draft
-        ..createdAt = DateTime.now().subtract(const Duration(days: 1)),
-    ]);
+    _inboxService.init().then((_) => _inboxService.goToPendingPage(1));
+    _stateSub = _inboxService.watch().listen((service) {
+      if (mounted) setState(() => _notes = service.pendingItems);
+    });
+  }
+
+  @override
+  void dispose() {
+    _stateSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadMacros() async {
@@ -53,7 +46,6 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
   }
 
   void addNote(NoteModel note) {
-    _notes.insert(0, note);
     _listKey.currentState
         ?.insertItem(0, duration: const Duration(milliseconds: 600));
   }
@@ -72,14 +64,12 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
       return;
     }
 
-    // Update Status to COPIED
     try {
-      await InboxService().updateStatus(note.id, NoteStatus.copied);
+      await _inboxService.updateStatus(note.id, NoteStatus.copied);
     } catch (e) {
       debugPrint("Error updating status: $e");
     }
 
-    // Feedback
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(result.message),
@@ -91,23 +81,13 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
     }
   }
 
-  void _clearArchive() {
-    setState(() {
-      _archivedNotes.clear();
-    });
-  }
-
   void _openArchive() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-          builder: (_) => ArchiveScreen(
-              archivedNotes: _archivedNotes, onClearAll: _clearArchive)),
-    );
+    // Placeholder
   }
 
   @override
   Widget build(BuildContext context) {
+    final svc = _inboxService;
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -134,77 +114,68 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
           ),
           const SizedBox(height: 16),
           Expanded(
-            child: StreamBuilder<List<NoteModel>>(
-                stream: InboxService().watchPendingNotes(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting &&
-                      _archivedNotes.isEmpty) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-
-                  if (snapshot.hasError) {
-                    return Center(
-                        child: Text("Error fetching notes: ${snapshot.error}",
-                            style: const TextStyle(color: Colors.red)));
-                  }
-
-                  final notes = snapshot.data ?? [];
-
-                  if (notes.isEmpty) {
-                    return Center(
-                        child: Text("All caught up! 🎉",
+            child: svc.pendingLoading && _notes.isEmpty
+                ? const Center(child: CircularProgressIndicator())
+                : _notes.isEmpty
+                    ? Center(
+                        child: Text("All caught up!",
                             style: GoogleFonts.inter(
                                 color: Theme.of(context)
                                     .colorScheme
                                     .onSurface
-                                    .withValues(alpha: 0.3))));
-                  }
-
-                  return AnimatedList(
-                    key: _listKey,
-                    initialItemCount: notes.length,
-                    itemBuilder: (context, index, animation) {
-                      // Simple list builder logic from mobile
-
-                      bool showHeader = true;
-                      if (index > 0) {
-                        final current = notes[index];
-                        final prev = notes[index - 1];
-                        if (DateHelper.isSameDay(
-                            prev.createdAt, current.createdAt)) {
-                          showHeader = false;
-                        }
-                      }
-
-                      final header = showHeader
-                          ? Padding(
-                              padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
-                              child: Text(
-                                DateHelper.formatGroupingDate(
-                                        notes[index].createdAt)
-                                    .toUpperCase(),
-                                style: TextStyle(
-                                    color:
-                                        Theme.of(context).colorScheme.primary,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                    letterSpacing: 1.2),
-                              ),
-                            )
-                          : const SizedBox.shrink();
-
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          header,
-                          _buildNoteCard(context, notes[index],
-                              index: index, noteNumber: notes.length - index),
-                        ],
-                      );
-                    },
-                  );
-                }),
+                                    .withValues(alpha: 0.3))))
+                    : ListView.builder(
+                        key: _listKey,
+                        itemCount: _notes.length,
+                        itemBuilder: (context, index) {
+                          bool showHeader = true;
+                          if (index > 0) {
+                            if (DateHelper.isSameDay(
+                                _notes[index - 1].createdAt, _notes[index].createdAt)) {
+                              showHeader = false;
+                            }
+                          }
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (showHeader)
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
+                                  child: Text(
+                                    DateHelper.formatGroupingDate(_notes[index].createdAt).toUpperCase(),
+                                    style: TextStyle(
+                                        color: Theme.of(context).colorScheme.primary,
+                                        fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1.2),
+                                  ),
+                                ),
+                              _buildNoteCard(context, _notes[index],
+                                  index: index, noteNumber: _notes.length - index),
+                            ],
+                          );
+                        },
+                      ),
           ),
+          if (svc.pendingTotal > 0)
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left, size: 20),
+                    onPressed: svc.hasPreviousPage ? () => svc.previousPendingPage() : null,
+                  ),
+                  Text('${svc.pendingCurrentPage} / ${svc.pendingLastPage}',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right, size: 20),
+                    onPressed: svc.hasNextPage ? () => svc.nextPendingPage() : null,
+                  ),
+                  Text('${svc.pendingTotal} total',
+                      style: TextStyle(fontSize: 11, color: Colors.grey)),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -214,7 +185,6 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
       {int? index, int noteNumber = 0}) {
     final bool isDraft = note.formattedText.isEmpty;
 
-    // Find applied template name
     String? templateName = note.summary;
     if ((templateName == null || templateName.isEmpty) &&
         _allMacros.isNotEmpty) {
@@ -225,7 +195,6 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
       }
     }
 
-    // Badge label: template name if processed, else "Draft"
     final String badgeLabel;
     if (note.status == NoteStatus.ready) {
       badgeLabel = 'Ready';
@@ -266,7 +235,6 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () {
-          // NAVIGATE TO EXTENSION EDITOR
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -278,7 +246,6 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Left accent bar
               Container(
                 width: 4,
                 color: statusColor,
@@ -301,7 +268,6 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              // Show Note Number or Patient Name
                               noteNumber > 0 ? 'NO-$noteNumber' : 'Draft Note',
                               style: TextStyle(
                                 fontWeight:

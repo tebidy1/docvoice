@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:soutnote/core/entities/note_model.dart';
+import 'package:soutnote/data/models/interfaces/paginated_response.dart';
 import 'base_api_service.dart';
 
 /// API Service for Inbox Notes
@@ -20,7 +21,7 @@ class InboxNoteApiClient extends BaseApiClient {
   // Fetch Operations
   // ============================================
 
-  /// Fetch all pending (non-archived) notes
+  /// Fetch all pending (non-archived) notes (legacy - fetches all at once)
   Future<List<NoteModel>> fetchPendingNotes() async {
     return await customGet<List<NoteModel>>(
       endpoint: '$baseEndpoint/pending',
@@ -31,7 +32,22 @@ class InboxNoteApiClient extends BaseApiClient {
     );
   }
 
-  /// Fetch all archived notes
+  /// Fetch pending notes with pagination
+  Future<PaginatedResponse<NoteModel>> fetchPendingNotesPaginated({
+    int page = 1,
+    int perPage = 15,
+  }) async {
+    return await customGet<PaginatedResponse<NoteModel>>(
+      endpoint: '$baseEndpoint/pending',
+      queryParams: {'page': '$page', 'per_page': '$perPage'},
+      fromJson: (json) => PaginatedResponse.fromJson(
+        json,
+        (e) => NoteModel.fromJson(e as Map<String, dynamic>),
+      ),
+    );
+  }
+
+  /// Fetch all archived notes (legacy)
   Future<List<NoteModel>> fetchArchivedNotes() async {
     return await customGet<List<NoteModel>>(
       endpoint: '$baseEndpoint/archived',
@@ -39,6 +55,21 @@ class InboxNoteApiClient extends BaseApiClient {
         final List<dynamic> data = json is List ? json : (json['data'] ?? []);
         return data.map((item) => NoteModel.fromJson(item)).toList();
       },
+    );
+  }
+
+  /// Fetch archived notes with pagination
+  Future<PaginatedResponse<NoteModel>> fetchArchivedNotesPaginated({
+    int page = 1,
+    int perPage = 15,
+  }) async {
+    return await customGet<PaginatedResponse<NoteModel>>(
+      endpoint: '$baseEndpoint/archived',
+      queryParams: {'page': '$page', 'per_page': '$perPage'},
+      fromJson: (json) => PaginatedResponse.fromJson(
+        json,
+        (e) => NoteModel.fromJson(e as Map<String, dynamic>),
+      ),
     );
   }
 
