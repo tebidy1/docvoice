@@ -106,6 +106,7 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
             ],
           ),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               // ── Header ──
               _buildHeader(theme, colorScheme),

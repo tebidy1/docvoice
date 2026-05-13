@@ -437,7 +437,9 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
                   border: Border.all(color: currentTheme.dividerColor),
                   boxShadow: currentTheme.shadows,
                 ),
-                child: Column(children: [
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                   _buildHeader(context, currentTheme),
                   Expanded(
                       child: Row(children: [

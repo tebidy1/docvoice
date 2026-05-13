@@ -145,6 +145,7 @@ class _InboxWidgetState extends State<InboxWidget> {
             ),
           ),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Container(
                 padding: const EdgeInsets.all(16),
