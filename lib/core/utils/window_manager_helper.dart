@@ -30,8 +30,8 @@ class WindowManagerHelper {
     try {
       final primaryDisplay = await screenRetriever.getPrimaryDisplay();
       final screenSize = primaryDisplay.size;
-      const pillWidth = 300.0; // Matches actual button content width
-      const pillHeight = 56.0; // Native Utility Height
+      const pillWidth = 300.0;
+      const pillHeight = 120.0;
       
       // Shrink to pill size
       try {

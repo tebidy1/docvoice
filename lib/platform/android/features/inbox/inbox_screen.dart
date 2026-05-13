@@ -137,7 +137,11 @@ class InboxScreenState extends State<InboxScreen> {
         child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: colorScheme.primary)),
       );
     }
-    if (svc.pendingTotal == 0 && _notes.isEmpty) return const SizedBox.shrink();
+    if (_notes.isEmpty) return const SizedBox.shrink();
+
+    final total = svc.pendingTotal > 0 ? svc.pendingTotal : _notes.length;
+    final lastPage = svc.pendingLastPage > 1 ? svc.pendingLastPage : 1;
+    final currentPage = svc.pendingCurrentPage;
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
@@ -149,27 +153,27 @@ class InboxScreenState extends State<InboxScreen> {
         children: [
           IconButton(
             icon: const Icon(Icons.chevron_left, size: 20),
-            onPressed: svc.hasPreviousPage
+            onPressed: currentPage > 1
                 ? () => svc.previousPendingPage()
                 : null,
             visualDensity: VisualDensity.compact,
           ),
           const SizedBox(width: 4),
           Text(
-            '${svc.pendingCurrentPage} / ${svc.pendingLastPage}',
+            '$currentPage / $lastPage',
             style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colorScheme.onSurface),
           ),
           const SizedBox(width: 4),
           IconButton(
             icon: const Icon(Icons.chevron_right, size: 20),
-            onPressed: svc.hasNextPage
+            onPressed: currentPage < lastPage
                 ? () => svc.nextPendingPage()
                 : null,
             visualDensity: VisualDensity.compact,
           ),
           const SizedBox(width: 12),
           Text(
-            '${svc.pendingTotal} total',
+            '$total total',
             style: TextStyle(fontSize: 11, color: colorScheme.onSurface.withValues(alpha: 0.5)),
           ),
         ],

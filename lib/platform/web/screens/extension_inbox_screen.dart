@@ -155,7 +155,7 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
                         },
                       ),
           ),
-          if (svc.pendingTotal > 0)
+          if (_notes.isNotEmpty)
             Container(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Row(
@@ -171,7 +171,7 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
                     icon: const Icon(Icons.chevron_right, size: 20),
                     onPressed: svc.hasNextPage ? () => svc.nextPendingPage() : null,
                   ),
-                  Text('${svc.pendingTotal} total',
+                  Text('${svc.pendingTotal > 0 ? svc.pendingTotal : _notes.length} total',
                       style: TextStyle(fontSize: 11, color: Colors.grey)),
                 ],
               ),

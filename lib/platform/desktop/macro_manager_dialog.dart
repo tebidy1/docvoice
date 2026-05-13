@@ -12,6 +12,7 @@ import '../../core/medical_departments.dart';
 import 'dart:async';
 import 'macro_settings_dialog.dart';
 import '../../presentation/widgets/user_profile_header.dart';
+import 'widgets/desktop_bottom_nav.dart';
 
 // ─── Primary Blue — consistent with login & light theme ───────────────────
 const Color _kBlue = Color(0xFF00A5FE);
@@ -443,6 +444,33 @@ class _MacroManagerDialogState extends State<MacroManagerDialog> {
                     _buildSidebar(currentTheme),
                     Expanded(child: _buildMainPanel(currentTheme)),
                   ])),
+                // ── Bottom Navigation Bar ──
+                DesktopBottomNav(
+                  currentIndex: 0,
+                  onTap: (index) {
+                    if (index == 1) {
+                      // Settings - close and open settings
+                      Navigator.of(context).pop();
+                    } else if (index == 2) {
+                      // Home - close and go back
+                      Navigator.of(context).pop();
+                    }
+                  },
+                  items: const [
+                    BottomNavItem(
+                      icon: Icons.notes_rounded,
+                      label: 'الملاحظات',
+                    ),
+                    BottomNavItem(
+                      icon: Icons.settings_rounded,
+                      label: 'الإعدادات',
+                    ),
+                    BottomNavItem(
+                      icon: Icons.home_rounded,
+                      label: 'الرئيسية',
+                    ),
+                  ],
+                ),
                 ]),
               ),
             ),

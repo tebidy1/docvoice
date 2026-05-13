@@ -110,7 +110,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
         if (WindowManagerHelper.isLoggingOut) return;
 
         try {
-          await windowManager.setSize(const Size(350, 56));
+          await windowManager.setSize(const Size(350, 120));
           await windowManager.setAlwaysOnTop(true);
           await windowManager.setResizable(false);
 
@@ -118,7 +118,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
           final display = await screenRetriever.getPrimaryDisplay();
           final screenSize = display.size;
           const w = 350.0;
-          const h = 56.0;
+          const h = 120.0;
           final x = screenSize.width - w - 20;
           final y = screenSize.height - h - 80;
           await windowManager.setPosition(Offset(x, y));
@@ -294,15 +294,14 @@ class _SettingsDialogState extends State<SettingsDialog> {
                                 icon: Icons.business_outlined,
                                 label: "Company Settings",
                                 subtitle: "Manage AI & Company configuration",
-                                onTap: () async {
-                                  Navigator.pop(context);
-                                  await showDialog(
+                                onTap: () {
+                                  Navigator.of(context).push(DialogRoute(
                                     context: context,
+                                    builder: (_) =>
+                                        const CompanySettingsDialog(),
                                     barrierDismissible: true,
                                     barrierColor: Colors.transparent,
-                                    builder: (context) =>
-                                        const CompanySettingsDialog(),
-                                  );
+                                  ));
                                 },
                                 theme: currentTheme,
                               ),
@@ -312,7 +311,6 @@ class _SettingsDialogState extends State<SettingsDialog> {
                                   label: "Admin Dashboard",
                                   subtitle: "Access advanced controls",
                                   onTap: () {
-                                    Navigator.pop(context);
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(
@@ -326,6 +324,8 @@ class _SettingsDialogState extends State<SettingsDialog> {
                           ],
                         ),
                       ),
+                      // ── Bottom Navigation Bar ──
+                      _buildBottomNavigation(currentTheme),
                     ],
                   ),
                 ),
@@ -333,6 +333,68 @@ class _SettingsDialogState extends State<SettingsDialog> {
             ),
           );
         });
+  }
+
+  Widget _buildBottomNavigation(ThemePreset theme) {
+    return Container(
+      height: 40,
+      decoration: BoxDecoration(
+        color: theme.backgroundColor,
+        border: Border(
+          top: BorderSide(color: theme.dividerColor),
+        ),
+      ),
+      child: Row(
+        children: [
+          _bottomNavItem(
+            icon: Icons.settings_rounded,
+            label: 'الإعدادات',
+            onTap: () {},
+            isActive: true,
+            theme: theme,
+          ),
+          _bottomNavItem(
+            icon: Icons.notes_rounded,
+            label: 'الملاحظات',
+            onTap: () => Navigator.of(context).pop('notes'),
+            isActive: false,
+            theme: theme,
+          ),
+          const Spacer(),
+          _bottomNavItem(
+            icon: Icons.home_rounded,
+            label: 'الرئيسية',
+            onTap: () => Navigator.of(context).pop(),
+            isActive: false,
+            theme: theme,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _bottomNavItem({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    required bool isActive,
+    required ThemePreset theme,
+  }) {
+    final color = isActive ? theme.micIdleIcon : theme.iconColor.withValues(alpha: 0.5);
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: 16),
+            const SizedBox(width: 4),
+            Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w500)),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildSectionHeader(String title, ThemePreset theme) {

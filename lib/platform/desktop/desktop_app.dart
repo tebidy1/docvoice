@@ -94,8 +94,7 @@ class _DesktopAppState extends State<DesktopApp> {
     try {
       await windowManager.setResizable(false);
       await windowManager.setAlwaysOnTop(true);
-      // 300px gives enough room for 7 buttons + Windows window chrome overhead
-      await windowManager.setSize(const Size(300, 56));
+      await windowManager.setSize(const Size(300, 120));
     } catch (e) {
       print("Error setting initial window size: $e");
     }
@@ -426,13 +425,32 @@ class _DesktopAppState extends State<DesktopApp> {
                                   _buildIconButton(
                                     icon: Icons.settings,
                                     onTap: () async {
-                                      await showDialog(
+                                      final result = await showDialog<String>(
                                         context: context,
                                         barrierDismissible: true,
                                         barrierColor: Colors.transparent,
                                         builder: (context) =>
                                             const SettingsDialog(),
                                       );
+                                      if (result == 'notes' && mounted) {
+                                        await WindowManagerHelper
+                                            .expandToSidebar(context);
+                                        if (!mounted) return;
+                                        await showDialog(
+                                          context: context,
+                                          barrierDismissible: true,
+                                          barrierColor: Colors.transparent,
+                                          builder: (ctx) => InboxManagerDialog(
+                                            isRecording: _orchestrator.isRecording,
+                                            isProcessing: _orchestrator.isProcessing,
+                                            onRecordTap: _toggleRecording,
+                                            recorderService: _orchestrator.recorder,
+                                          ),
+                                        );
+                                        if (!mounted) return;
+                                        await WindowManagerHelper
+                                            .collapseToPill(context);
+                                      }
                                     },
                                     tooltip: "Settings",
                                     color: theme.iconColor,

@@ -4,7 +4,9 @@ import 'package:soutnote/core/entities/note_model.dart';
 import '../../core/entities/macro.dart';
 import '../../core/services/inbox_service.dart';
 import '../../core/services/macro_service.dart';
+import '../../presentation/screens/settings_dialog.dart';
 import 'inbox_card.dart';
+import 'widgets/desktop_bottom_nav.dart';
 
 class InboxWidget extends StatefulWidget {
   final bool isExpanded;
@@ -173,7 +175,7 @@ class _InboxWidgetState extends State<InboxWidget> {
                         ),
                         child: Row(
                           children: [
-                            _buildTab(0, 'Notes', svc.pendingTotal),
+                            _buildTab(0, 'Notes', svc.pendingTotal > 0 ? svc.pendingTotal : _pendingNotes.length),
                             _buildTab(1, 'Archive', null),
                           ],
                         ),
@@ -212,15 +214,47 @@ class _InboxWidgetState extends State<InboxWidget> {
                             itemBuilder: (context, index) {
                               return InboxCard(
                                 note: notes[index],
-                                noteNumber: svc.pendingTotal - index,
+                                noteNumber: (svc.pendingTotal > 0 ? svc.pendingTotal : notes.length) - index,
                                 quickMacros: _allMacros,
                                 onArchived: () {},
                               );
                             },
                           ),
               ),
-              if (_selectedTab == 0 && svc.pendingTotal > 0)
+              if (_selectedTab == 0 && _pendingNotes.isNotEmpty)
                 _buildPagination(svc),
+              // ── Bottom Navigation Bar ──
+              DesktopBottomNav(
+                currentIndex: _selectedTab.clamp(0, 1),
+                onTap: (index) {
+                  if (index == 2) {
+                    Navigator.of(context).pop();
+                  } else if (index == 1) {
+                    Navigator.of(context).push(DialogRoute(
+                      context: context,
+                      builder: (_) => const SettingsDialog(),
+                      barrierDismissible: true,
+                      barrierColor: Colors.transparent,
+                    ));
+                  } else {
+                    setState(() => _selectedTab = index);
+                  }
+                },
+                items: const [
+                  BottomNavItem(
+                    icon: Icons.notes_rounded,
+                    label: 'الملاحظات',
+                  ),
+                  BottomNavItem(
+                    icon: Icons.settings_rounded,
+                    label: 'الإعدادات',
+                  ),
+                  BottomNavItem(
+                    icon: Icons.home_rounded,
+                    label: 'الرئيسية',
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -229,6 +263,10 @@ class _InboxWidgetState extends State<InboxWidget> {
   }
 
   Widget _buildPagination(InboxService svc) {
+    final total = svc.pendingTotal > 0 ? svc.pendingTotal : _pendingNotes.length;
+    final currentPage = svc.pendingCurrentPage;
+    final lastPage = svc.pendingLastPage > 1 ? svc.pendingLastPage : 1;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
@@ -239,25 +277,48 @@ class _InboxWidgetState extends State<InboxWidget> {
         children: [
           IconButton(
             icon: const Icon(Icons.chevron_left, color: Colors.white70, size: 18),
-            onPressed: svc.hasPreviousPage ? () => svc.previousPendingPage() : null,
+            onPressed: currentPage > 1 ? () => svc.previousPendingPage() : null,
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
           ),
           Text(
-            '${svc.pendingCurrentPage} / ${svc.pendingLastPage}',
+            '$currentPage / $lastPage',
             style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
           ),
           IconButton(
             icon: const Icon(Icons.chevron_right, color: Colors.white70, size: 18),
-            onPressed: svc.hasNextPage ? () => svc.nextPendingPage() : null,
+            onPressed: currentPage < lastPage ? () => svc.nextPendingPage() : null,
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
           ),
           Text(
-            '${svc.pendingTotal} total',
+            '$total total',
             style: const TextStyle(color: Colors.white38, fontSize: 11),
           ),
         ],
+      ),
+    );
+}
+
+  Widget _bottomNavItem({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    required bool isActive,
+  }) {
+    final color = isActive ? const Color(0xFF00A5FE) : Colors.white.withOpacity(0.5);
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: 16),
+            const SizedBox(width: 4),
+            Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w500)),
+          ],
+        ),
       ),
     );
   }

@@ -15,6 +15,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../platform/android/features/inbox/archive_screen.dart';
 import '../../presentation/widgets/animated_record_button.dart';
 import '../../presentation/widgets/listening_mode_view.dart';
+import 'widgets/desktop_bottom_nav.dart';
 
 class InboxManagerDialog extends StatefulWidget {
   final Future<void> Function()? onRecordTap;
@@ -44,6 +45,9 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
 
   // ── Local recording state (drives UI updates) ──
   bool _localIsRecording = false;
+
+  // ── Bottom nav tab state ──
+  int _navTab = 0; // 0 = الملاحظات (notes), 1 = الإعدادات (settings)
 
   @override
   void initState() {
@@ -106,25 +110,160 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
               // ── Header ──
               _buildHeader(theme, colorScheme),
 
-              // ── Body: AnimatedSwitcher between list and listening view ──
+              // ── Body: IndexedStack for navigation between notes and settings ──
               Expanded(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 350),
-                  transitionBuilder: (child, animation) => FadeTransition(
-                    opacity: animation,
-                    child: child,
-                  ),
-                  child: _localIsRecording
-                      ? _buildListeningView(key: const ValueKey('listening'))
-                      : _buildNotesList(colorScheme,
-                          key: const ValueKey('list')),
+                child: IndexedStack(
+                  index: _navTab,
+                  children: [
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 350),
+                      transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: child,
+                      ),
+                      child: _localIsRecording
+                          ? _buildListeningView(key: const ValueKey('listening'))
+                          : _buildNotesList(colorScheme,
+                              key: const ValueKey('list')),
+                    ),
+                    _buildSettingsView(colorScheme),
+                  ],
                 ),
               ),
 
-              // ── Bottom Action Bar ──
+// ── Bottom Action Bar ──
               _buildBottomBar(theme, colorScheme),
+              // ── Bottom Navigation Bar ──
+              DesktopBottomNav(
+                currentIndex: _navTab.clamp(0, 1),
+                onTap: (index) {
+                  if (index == 2) {
+                    Navigator.of(context).pop();
+                  } else {
+                    setState(() => _navTab = index);
+                  }
+                },
+                items: const [
+                  BottomNavItem(
+                    icon: Icons.notes_rounded,
+                    label: 'الملاحظات',
+                  ),
+                  BottomNavItem(
+                    icon: Icons.settings_rounded,
+                    label: 'الإعدادات',
+                  ),
+                  BottomNavItem(
+                    icon: Icons.home_rounded,
+                    label: 'الرئيسية',
+                  ),
+                ],
+              ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  // ──────────────────────────────────────────────
+  // SETTINGS VIEW (embedded inline)
+  // ──────────────────────────────────────────────
+  Widget _buildSettingsView(ColorScheme colorScheme) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'الإعدادات',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 20),
+          _buildSettingsItem(
+            icon: Icons.mic,
+            title: 'إعدادات الميكروفون',
+            subtitle: 'اختر الميكروفون الافتراضي',
+            colorScheme: colorScheme,
+            onTap: () {},
+          ),
+          _buildSettingsItem(
+            icon: Icons.language,
+            title: 'اللغة',
+            subtitle: 'العربية',
+            colorScheme: colorScheme,
+            onTap: () {},
+          ),
+          _buildSettingsItem(
+            icon: Icons.notifications,
+            title: 'الإشعارات',
+            subtitle: 'مفعّل',
+            colorScheme: colorScheme,
+            onTap: () {},
+          ),
+          _buildSettingsItem(
+            icon: Icons.info_outline,
+            title: 'حول التطبيق',
+            subtitle: 'الإصدار 1.0.0',
+            colorScheme: colorScheme,
+            onTap: () {},
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSettingsItem({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required ColorScheme colorScheme,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        margin: const EdgeInsets.only(bottom: 8),
+        decoration: BoxDecoration(
+          color: colorScheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: colorScheme.outline.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: colorScheme.primary, size: 24),
+            const SizedBox(width: 12),
+Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: colorScheme.onSurface,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_left,
+              color: colorScheme.onSurface.withValues(alpha: 0.4),
+            ),
+          ],
         ),
       ),
     );
@@ -421,34 +560,26 @@ class _InboxManagerDialogState extends State<InboxManagerDialog>
               _buildBottomBarIcon(
                 icon: Icons.description_outlined,
                 label: 'Templates',
-                onTap: () async {
-                  await WindowManagerHelper.centerDialog();
-                  if (!mounted) return;
-                  await showDialog(
+                onTap: () {
+                  Navigator.of(context).push(DialogRoute(
                     context: context,
+                    builder: (_) => const MacroManagerDialog(),
                     barrierDismissible: true,
-                    builder: (context) => const MacroManagerDialog(),
-                  );
-                  if (mounted) {
-                    await WindowManagerHelper.expandToSidebar(context);
-                  }
+                    barrierColor: Colors.transparent,
+                  ));
                 },
               ),
               const SizedBox(width: 70),
               _buildBottomBarIcon(
                 icon: Icons.settings_outlined,
                 label: 'Settings',
-                onTap: () async {
-                  await WindowManagerHelper.centerDialog();
-                  if (!mounted) return;
-                  await showDialog(
+                onTap: () {
+                  Navigator.of(context).push(DialogRoute(
                     context: context,
+                    builder: (_) => const SettingsDialog(),
                     barrierDismissible: true,
-                    builder: (context) => const SettingsDialog(),
-                  );
-                  if (mounted) {
-                    await WindowManagerHelper.expandToSidebar(context);
-                  }
+                    barrierColor: Colors.transparent,
+                  ));
                 },
               ),
             ],
