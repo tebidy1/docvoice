@@ -24,8 +24,8 @@ abstract class InboxNoteRepository extends BaseRepository<InboxNote> {
   /// Get notes with audio
   Future<List<InboxNote>> getNotesWithAudio();
   
-  /// Apply macro to note
-  Future<void> applyMacro(String noteId, String macroId);
+  /// Apply macro to note - returns the updated note with generated outputs
+  Future<InboxNote> applyMacro(String noteId, String macroId);
   
   /// Sync with remote server
   Future<void> sync();

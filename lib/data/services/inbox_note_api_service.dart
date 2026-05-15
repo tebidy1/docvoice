@@ -135,6 +135,21 @@ class InboxNoteApiClient extends BaseApiClient {
   }
 
   // ============================================
+  // Macro Application
+  // ============================================
+
+  /// Apply a macro to a note via backend API
+  /// Calls POST /inbox-notes/{id}/apply-macro with { macro_id }
+  /// Returns the updated NoteModel with generated outputs
+  Future<NoteModel> applyMacro(String noteId, int macroId) async {
+    return await customPost<NoteModel>(
+      endpoint: '$baseEndpoint/$noteId/apply-macro',
+      data: {'macro_id': macroId},
+      fromJson: (json) => NoteModel.fromJson(json),
+    );
+  }
+
+  // ============================================
   // Delete Operations
   // ============================================
 

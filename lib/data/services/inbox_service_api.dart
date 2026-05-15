@@ -175,6 +175,32 @@ class InboxService {
     }
   }
 
+  /// Apply a macro to a note via backend API
+  /// Returns the updated NoteModel with generated outputs
+  Future<NoteModel?> applyMacro(int noteId, int macroId) async {
+    await init();
+
+    try {
+      final updatedNote =
+          await _ApiClient.applyMacro(noteId.toString(), macroId);
+      _invalidateCache();
+      refresh();
+      return updatedNote;
+    } catch (e) {
+      debugPrint('⚠️ Network failure applying macro: $e');
+
+      await _syncManager.addToQueue(SyncItem(
+        id: '${noteId}_apply_macro_$macroId',
+        endpoint: '/inbox-notes/$noteId/apply-macro',
+        operation: SyncOperation.create,
+        data: {'macro_id': macroId},
+        timestamp: DateTime.now(),
+      ));
+
+      return null;
+    }
+  }
+
   /// Archive a note
   Future<void> archiveNote(int id) async {
     await init();

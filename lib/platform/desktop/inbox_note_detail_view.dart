@@ -400,10 +400,9 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
       _selectedMacro = macro;
       _elapsedSeconds = 0;
       _statusMessageIndex = 0;
-      _isTemplateCardExpanded = false; // Collapse template accordion
+      _isTemplateCardExpanded = false;
     });
 
-    // Start timer for AI Processing Ring
     _generationTimer?.cancel();
     _generationTimer =
         Timer.periodic(const Duration(milliseconds: 1500), (timer) {
@@ -416,7 +415,6 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
       }
     });
 
-    // Optimistic UI: If transcription is still running in background, wait for it!
     if (_backgroundTranscriptionFuture != null) {
       await _backgroundTranscriptionFuture;
       _backgroundTranscriptionFuture = null;
@@ -430,20 +428,36 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     }
 
     try {
-      // ✅ Use centralized AIProcessingService (Phase 1 refactor)
-      final aiService = AIProcessingService();
-      final enableSuggestions =
-          await AIProcessingService.isSmartSuggestionsEnabled();
+      final updatedNote = await _inboxService.applyMacro(widget.note.id, macro.id);
 
-      final result = await aiService.processNote(
-        transcript: widget.note.rawText,
-        macroContent: macro.content,
-        mode:
-            enableSuggestions ? AIProcessingMode.smart : AIProcessingMode.fast,
-      );
+      if (updatedNote != null && mounted) {
+        setState(() {
+          widget.note.appliedMacroId = updatedNote.appliedMacroId;
+          widget.note.suggestedMacroId = updatedNote.suggestedMacroId;
+          widget.note.summary = updatedNote.summary;
 
-      if (result.success) {
-        if (enableSuggestions) {
+          if (updatedNote.generatedOutputs.isNotEmpty) {
+            _generatedOutputs = List.from(updatedNote.generatedOutputs);
+            _activeTabIndex = _generatedOutputs.length;
+            _finalNoteController.text = _generatedOutputs.last.content ?? '';
+          }
+
+          _suggestions = [];
+          _showCleanTemplatePicker = false;
+        });
+      } else if (mounted) {
+        final aiService = AIProcessingService();
+        final enableSuggestions =
+            await AIProcessingService.isSmartSuggestionsEnabled();
+
+        final result = await aiService.processNote(
+          transcript: widget.note.rawText,
+          macroContent: macro.content,
+          mode:
+              enableSuggestions ? AIProcessingMode.smart : AIProcessingMode.fast,
+        );
+
+        if (result.success) {
           setState(() {
             _generatedOutputs.add(GeneratedOutput(
                 macroId: macro.id,
@@ -451,27 +465,19 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
                 content: result.formattedNote));
             _activeTabIndex = _generatedOutputs.length;
             _finalNoteController.text = result.formattedNote;
-            _suggestions = result.missingSuggestions
-                .map((s) => SmartSuggestion.fromJson(s))
-                .toList();
-            _showCleanTemplatePicker = false; // Transition to normal editor
+            if (enableSuggestions) {
+              _suggestions = result.missingSuggestions
+                  .map((s) => SmartSuggestion.fromJson(s))
+                  .toList();
+            } else {
+              _suggestions = [];
+            }
+            _showCleanTemplatePicker = false;
           });
           _autoSaveGeneratedContent(result.formattedNote, macro);
         } else {
-          setState(() {
-            _generatedOutputs.add(GeneratedOutput(
-                macroId: macro.id,
-                title: macro.trigger,
-                content: result.formattedNote));
-            _activeTabIndex = _generatedOutputs.length;
-            _finalNoteController.text = result.formattedNote;
-            _suggestions = [];
-            _showCleanTemplatePicker = false; // Transition to normal editor
-          });
-          _autoSaveGeneratedContent(result.formattedNote, macro);
+          _showError("Failed to generate note: ${result.errorMessage}");
         }
-      } else {
-        _showError("Failed to generate note: ${result.errorMessage}");
       }
     } catch (e) {
       print("DetailView: Error: $e");

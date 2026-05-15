@@ -396,17 +396,22 @@ class ApiInboxNoteRepository extends AbstractApiRepository<InboxNote>
   }
 
   @override
-  Future<void> applyMacro(String noteId, String macroId) async {
+  Future<InboxNote> applyMacro(String noteId, String macroId) async {
     try {
       final response =
           await _ApiClient.post('$endpoint/$noteId/apply-macro', body: {
         'macro_id': macroId,
       });
 
-      if (response['success'] != true && response['status'] != true) {
-        throw Exception(
-            'Failed to apply macro: ${response['message'] ?? 'Unknown error'}');
+      if (response['success'] == true || response['status'] == true) {
+        final data = response['data'] ?? response['payload'];
+        if (data != null) {
+          return fromJson(data);
+        }
       }
+
+      throw Exception(
+          'Failed to apply macro: ${response['message'] ?? 'Unknown error'}');
     } catch (e) {
       if (e is ApiException) {
         throw Exception('API Error: ${e.message}');
