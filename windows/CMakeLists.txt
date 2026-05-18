@@ -212,3 +212,19 @@ install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
 # Install whisper_bridge.dll next to the executable for Dart FFI loading.
 install(TARGETS whisper_bridge RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
+
+# =========================================================================
+# Build automation_engine.exe
+# =========================================================================
+add_executable(automation_engine
+    "${CMAKE_CURRENT_SOURCE_DIR}/automation_engine.cpp"
+)
+target_compile_features(automation_engine PUBLIC cxx_std_17)
+target_compile_definitions(automation_engine PRIVATE _UNICODE UNICODE)
+target_link_libraries(automation_engine PRIVATE
+    ole32.lib
+    oleacc.lib
+    UIAutomationCore.lib
+)
+install(TARGETS automation_engine RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
+  COMPONENT Runtime)

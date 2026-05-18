@@ -1,0 +1,115 @@
+=== SESSION START: advancedInject_173 ===
+Time: 2026-05-18 05:55:07.317749
+Log: D:\docvoice\flutter\inject_logs\inject_20260518_055507_advancedInject_173.txt
+
+
+============================================================
+  ADVANCED INJECT START
+============================================================
+[05:55:07] Note ID: 173
+[05:55:07] Active tab: 2
+[05:55:07] Clean text length: 801
+[05:55:07] Full clean text:
+[05:55:07] - Chief Complaint (CC): Headache, acute onset during football.
+- History of Present Illness (HPI): A 12-year-old male presents with a headache that started acutely while playing football. He was given a painkiller (phonetically described as 'Bernad') prior to presentation and is currently resting. No further details regarding severity, specific location, or associated symptoms were reported.
+
+- Primary Diagnosis: Headache, acute onset, associated with physical activity.
+- Medical Decision Making (MDM): The diagnosis is based solely on the patient's reported acute onset of headache during football activity, with subsequent administration of painkillers and rest. No objective findings or further history were provided to support additional differential diagnoses or rule out serious conditions.
+
+============================================================
+  BUILDING INJECTION DATA
+============================================================
+[05:55:07] Using API field_mappings (1 fields)
+[05:55:07] Form type: clinical_observation
+[05:55:07]   ✓ patient_informations = "ddtfdtd" (confidence: 0.0, labels: معلومات المريض, patient informations...)
+[05:55:07]   ~ (text) OVERRIDE patient_informations: API="ddtfdtd" -> "Headache, acute onset during football."
+[05:55:07]   + (text) patient_history = "A 12-year-old male presents with a headache that started acutely while playing football. He was given a painkiller (phonetically described as 'Bernad') prior to presentation and is currently resting. No further details regarding severity, specific location, or associated symptoms were reported."
+[05:55:07]   + (text) patient_diagnosis_and_tests = "Headache, acute onset, associated with physical activity."
+[05:55:07]   + (text) plan_and_drugs = "The diagnosis is based solely on the patient's reported acute onset of headache during football activity, with subsequent administration of painkillers and rest. No objective findings or further history were provided to support additional differential diagnoses or rule out serious conditions."
+[05:55:07] Total resolved 4 fields (API + text):
+[05:55:07]   patient_informations = "Headache, acute onset during football."
+[05:55:07]   patient_history = "A 12-year-old male presents with a headache that started acutely while playing football. He was given a painkiller (phonetically described as 'Bernad') prior to presentation and is currently resting. No further details regarding severity, specific location, or associated symptoms were reported."
+[05:55:07]   patient_diagnosis_and_tests = "Headache, acute onset, associated with physical activity."
+[05:55:07]   plan_and_drugs = "The diagnosis is based solely on the patient's reported acute onset of headache during football activity, with subsequent administration of painkillers and rest. No objective findings or further history were provided to support additional differential diagnoses or rule out serious conditions."
+[05:55:09] Selected app: medical_form_project
+[05:55:09] Engine available: yes
+
+============================================================
+  STEP 1: SCAN TARGET APP
+============================================================
+
+============================================================
+  SCANNING TARGET APP: medical_form_project
+============================================================
+[05:55:09] Found 12 elements in medical_form_project:
+[05:55:09] 
+[05:55:09]   Element Name                   Control              AutomationId              Value
+[05:55:09]   ------------------------------ -------------------- ------------------------- ------------------------------
+[05:55:09]   Medical Form                   group                                          
+[05:55:09]   Patient informations
+Patien~   edit                                           Headache, acute onset durin~
+[05:55:09]   Patient History
+Patient His~   edit                                            
+[05:55:09]   Patient diagnosis and tests~   edit                                           
+[05:55:09]   Plan and drugs
+Plan and dru~   edit                                           The diagnosis is based sole~
+[05:55:09]   حفظ                            button                                         
+[05:55:09]                                  title bar                                      medical_form_project
+[05:55:09]   System                         menu bar             MenuBar                   
+[05:55:09]   System                         menu item                                      
+[05:55:09]   Minimize                       button                                         
+[05:55:09]   Maximize                       button                                         
+[05:55:09]   Close                          button                                         
+[05:55:09] 
+
+============================================================
+  BUILDING INJECTION TARGETS
+============================================================
+[05:55:09]   ✓ "patient_informations" -> matched via "patient informations" -> "Patient informations
+Patient informations"
+[05:55:09]   ✓ "patient_history" -> matched via "patient history" -> "Patient History
+Patient History"
+[05:55:09]   ✓ "patient_diagnosis_and_tests" -> matched via "patient diagnosis and tests" -> "Patient diagnosis and tests
+Patient diagnosis and tests"
+[05:55:09]   ✓ "plan_and_drugs" -> matched via "plan and drugs" -> "Plan and drugs
+Plan and drugs"
+
+============================================================
+  FIELD MATCHING ANALYSIS
+============================================================
+[05:55:09]   ✗ "معلومات المريض" NO MATCH
+[05:55:09]   ✗ "التاريخ المرضي" NO MATCH
+[05:55:09]   ✗ "التشخيص والتحاليل" NO MATCH
+[05:55:09]   ✗ "الخطة والأدوية" NO MATCH
+
+============================================================
+  STEP 2: INJECTING VIA ENGINE
+============================================================
+[05:55:09] Trying label "معلومات المريض" for field "patient_informations"
+[05:55:09]   ✗ "معلومات المريض" -> No edit field found near label: معلومات المريض
+[05:55:09] Trying label "patient informations" for field "patient_informations"
+[05:55:10]   ✓ "patient informations" -> success
+[05:55:10] Trying label "التاريخ المرضي" for field "patient_history"
+[05:55:10]   ✗ "التاريخ المرضي" -> No edit field found near label: التاريخ المرضي
+[05:55:10] Trying label "patient history" for field "patient_history"
+[05:55:15]   ✓ "patient history" -> success
+[05:55:15] Trying label "التشخيص والتحاليل" for field "patient_diagnosis_and_tests"
+[05:55:16]   ✗ "التشخيص والتحاليل" -> No edit field found near label: التشخيص والتحاليل
+[05:55:16] Trying label "patient diagnosis and tests" for field "patient_diagnosis_and_tests"
+[05:55:17]   ✓ "patient diagnosis and tests" -> success
+[05:55:17] Trying label "الخطة والأدوية" for field "plan_and_drugs"
+[05:55:17]   ✗ "الخطة والأدوية" -> No edit field found near label: الخطة والأدوية
+[05:55:17] Trying label "plan and drugs" for field "plan_and_drugs"
+[05:55:22]   ✓ "plan and drugs" -> success
+
+============================================================
+  ENGINE INJECTION DONE
+============================================================
+[05:55:22] 4/4 fields succeeded
+✓ [patient_informations] -> "Headache, acute onset during football." [method: KeyboardSimulation]
+✓ [patient_history] -> "A 12-year-old male presents with a headache that started acutely while playing football. He was given a painkiller (phonetically described as 'Bernad') prior to presentation and is currently resting. No further details regarding severity, specific location, or associated symptoms were reported." [method: KeyboardSimulation]
+✓ [patient_diagnosis_and_tests] -> "Headache, acute onset, associated with physical activity." [method: KeyboardSimulation]
+✓ [plan_and_drugs] -> "The diagnosis is based solely on the patient's reported acute onset of headache during football activity, with subsequent administration of painkillers and rest. No objective findings or further history were provided to support additional differential diagnoses or rule out serious conditions." [method: KeyboardSimulation]
+[05:55:24] Status updated to: copied
+
+=== SESSION END ===

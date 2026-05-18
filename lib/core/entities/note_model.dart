@@ -1,6 +1,7 @@
 /// Pure NoteModel entity - no platform dependencies
 /// This is the core business entity used across all layers
 
+import 'dart:convert';
 import 'generated_output.dart';
 
 enum NoteStatus {
@@ -39,6 +40,10 @@ class NoteModel {
 
   // Smart Tabs Outputs
   List<GeneratedOutput> generatedOutputs = [];
+
+  // AI Analysis Data (from textAnalyses API relation)
+  List<FieldMapping> fieldMappings = [];
+  String? analysisFormName;
 
   // Aliases for Desktop compatibility
   String get rawText => originalText;
@@ -106,6 +111,26 @@ class NoteModel {
       }
     }
 
+    // Parse text_analyses from API (loaded via textAnalyses relation)
+    if (json['text_analyses'] != null && json['text_analyses'] is List) {
+      for (final analysis in (json['text_analyses'] as List)) {
+        if (analysis is Map<String, dynamic>) {
+          final analysisData = analysis['analysis_data'];
+          if (analysisData is Map<String, dynamic>) {
+            final mappings = analysisData['field_mappings'];
+            if (mappings is List) {
+              note.fieldMappings = mappings
+                  .map((m) => FieldMapping.fromJson(
+                      m is Map<String, dynamic> ? m : {}))
+                  .where((m) => m.value != null && m.value!.isNotEmpty)
+                  .toList();
+            }
+            note.analysisFormName = analysis['form_name'] as String?;
+          }
+        }
+      }
+    }
+
     return note;
   }
 
@@ -150,5 +175,29 @@ class NoteModel {
       default:
         return NoteStatus.draft;
     }
+  }
+}
+
+/// A single field mapping from the AI analysis
+class FieldMapping {
+  final String formField;
+  final String? value;
+  final double confidence;
+  final String? matchedKey;
+
+  FieldMapping({
+    required this.formField,
+    this.value,
+    this.confidence = 0,
+    this.matchedKey,
+  });
+
+  factory FieldMapping.fromJson(Map<String, dynamic> json) {
+    return FieldMapping(
+      formField: json['form_field'] as String? ?? '',
+      value: json['value'] as String?,
+      confidence: (json['confidence'] as num?)?.toDouble() ?? 0,
+      matchedKey: json['matched_key'] as String?,
+    );
   }
 }

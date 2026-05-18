@@ -1,4 +1,4 @@
-import 'dart:io' show Platform;
+import 'dart:io' show Platform, File;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -16,10 +16,31 @@ import 'presentation/landing_page/theme/app_theme.dart';
 import 'presentation/state/app_providers.dart';
 import 'presentation/router/app_router.dart';
 
+Future<String> _resolveEnvPath() async {
+  const filename = '.env';
+  if (await File(filename).exists()) return filename;
+
+  final exeFile = File(Platform.resolvedExecutable);
+  var dir = exeFile.parent;
+  for (int i = 0; i < 4; i++) {
+    final candidate = File('${dir.path}\\$filename');
+    if (await candidate.exists()) return candidate.path;
+    dir = dir.parent;
+  }
+
+  return filename;
+}
+
 void main() async {
   setPathUrlStrategy();
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: ".env");
+
+  final envPath = await _resolveEnvPath();
+  try {
+    await dotenv.load(fileName: envPath);
+  } catch (_) {
+    // .env is optional for development; env vars sourced from API
+  }
 
   await ServiceLocator.initialize();
 

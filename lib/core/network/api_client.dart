@@ -13,8 +13,13 @@ class ApiClient {
 
   String? _baseUrl;
   String? _token;
-  final int _timeout =
-      int.tryParse(dotenv.env['API_TIMEOUT'] ?? '30000') ?? 30000;
+  final int _timeout = () {
+    try {
+      return int.tryParse(dotenv.env['API_TIMEOUT'] ?? '30000') ?? 30000;
+    } catch (_) {
+      return 30000;
+    }
+  }();
 
   bool get hasToken => _token != null && _token!.isNotEmpty;
 
@@ -221,6 +226,10 @@ class ApiClient {
             'data': decoded
           };
         }
+        throw ApiException(
+          'Request failed with status $statusCode',
+          statusCode,
+        );
       }
 
       final data = decoded as Map<String, dynamic>;

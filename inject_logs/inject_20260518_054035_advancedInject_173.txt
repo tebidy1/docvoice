@@ -1,0 +1,228 @@
+=== SESSION START: advancedInject_173 ===
+Time: 2026-05-18 05:40:35.962291
+Log: D:\docvoice\flutter\inject_logs\inject_20260518_054035_advancedInject_173.txt
+
+
+============================================================
+  ADVANCED INJECT START
+============================================================
+[05:40:35] Note ID: 173
+[05:40:35] Active tab: 2
+[05:40:35] Clean text length: 801
+[05:40:35] Full clean text:
+[05:40:35] - Chief Complaint (CC): Headache, acute onset during football.
+- History of Present Illness (HPI): A 12-year-old male presents with a headache that started acutely while playing football. He was given a painkiller (phonetically described as 'Bernad') prior to presentation and is currently resting. No further details regarding severity, specific location, or associated symptoms were reported.
+
+- Primary Diagnosis: Headache, acute onset, associated with physical activity.
+- Medical Decision Making (MDM): The diagnosis is based solely on the patient's reported acute onset of headache during football activity, with subsequent administration of painkillers and rest. No objective findings or further history were provided to support additional differential diagnoses or rule out serious conditions.
+
+============================================================
+  BUILDING INJECTION DATA
+============================================================
+[05:40:35] Using API field_mappings (1 fields)
+[05:40:35] Form type: clinical_observation
+[05:40:35]   ✓ patient_informations = "ddtfdtd" (confidence: 0.0, labels: معلومات المريض, patient informations...)
+[05:40:35]   + (text) patient_history = "A 12-year-old male presents with a headache that started acutely while playing football. He was given a painkiller (phonetically described as 'Bernad') prior to presentation and is currently resting. No further details regarding severity, specific location, or associated symptoms were reported."
+[05:40:35]   + (text) patient_diagnosis_and_tests = "Headache, acute onset, associated with physical activity."
+[05:40:35]   + (text) plan_and_drugs = "The diagnosis is based solely on the patient's reported acute onset of headache during football activity, with subsequent administration of painkillers and rest. No objective findings or further history were provided to support additional differential diagnoses or rule out serious conditions."
+[05:40:35] Total resolved 4 fields (API + text):
+[05:40:35]   patient_informations = "ddtfdtd"
+[05:40:35]   patient_history = "A 12-year-old male presents with a headache that started acutely while playing football. He was given a painkiller (phonetically described as 'Bernad') prior to presentation and is currently resting. No further details regarding severity, specific location, or associated symptoms were reported."
+[05:40:35]   patient_diagnosis_and_tests = "Headache, acute onset, associated with physical activity."
+[05:40:35]   plan_and_drugs = "The diagnosis is based solely on the patient's reported acute onset of headache during football activity, with subsequent administration of painkillers and rest. No objective findings or further history were provided to support additional differential diagnoses or rule out serious conditions."
+[05:40:37] Selected app: medical_form_project
+[05:40:37] Engine available: yes
+
+============================================================
+  STEP 1: SCAN TARGET APP
+============================================================
+
+============================================================
+  SCANNING TARGET APP: medical_form_project
+============================================================
+[05:40:37] Found 12 elements in medical_form_project:
+[05:40:37] 
+[05:40:37]   Element Name                   Control              AutomationId              Value
+[05:40:37]   ------------------------------ -------------------- ------------------------- ------------------------------
+[05:40:37]   Medical Form                   group                                          
+[05:40:37]   Patient informations
+Patien~   edit                                           
+[05:40:37]   Patient History
+Patient His~   edit                                           
+[05:40:37]   Patient diagnosis and tests~   edit                                           
+[05:40:37]   Plan and drugs
+Plan and dru~   edit                                           
+[05:40:37]   حفظ                            button                                         
+[05:40:37]                                  title bar                                      medical_form_project
+[05:40:37]   System                         menu bar             MenuBar                   
+[05:40:37]   System                         menu item                                      
+[05:40:37]   Minimize                       button                                         
+[05:40:37]   Maximize                       button                                         
+[05:40:37]   Close                          button                                         
+[05:40:37] 
+
+============================================================
+  BUILDING INJECTION TARGETS
+============================================================
+[05:40:37]   ✓ "patient_informations" -> matched via "patient informations" -> "Patient informations
+Patient informations"
+[05:40:37]   ✓ "patient_history" -> matched via "patient history" -> "Patient History
+Patient History"
+[05:40:37]   ✓ "patient_diagnosis_and_tests" -> matched via "patient diagnosis and tests" -> "Patient diagnosis and tests
+Patient diagnosis and tests"
+[05:40:37]   ✓ "plan_and_drugs" -> matched via "plan and drugs" -> "Plan and drugs
+Plan and drugs"
+
+============================================================
+  FIELD MATCHING ANALYSIS
+============================================================
+[05:40:37]   ✗ "معلومات المريض" NO MATCH
+[05:40:37]   ✗ "التاريخ المرضي" NO MATCH
+[05:40:37]   ✗ "التشخيص والتحاليل" NO MATCH
+[05:40:37]   ✗ "الخطة والأدوية" NO MATCH
+
+============================================================
+  STEP 2: INJECTING VIA ENGINE
+============================================================
+[05:40:37] Trying label "معلومات المريض" for field "patient_informations"
+[05:40:38]   ✗ "معلومات المريض" -> No edit field found near label: معلومات المريض
+[05:40:38] Trying label "patient informations" for field "patient_informations"
+[05:40:38]   ✗ "patient informations" -> All injection methods failed
+[05:40:38] Trying label "patient information" for field "patient_informations"
+[05:40:38]   ✗ "patient information" -> All injection methods failed
+[05:40:38] Trying label "patient_informations" for field "patient_informations"
+[05:40:38]   ✗ "patient_informations" -> All injection methods failed
+[05:40:38] Trying label "بيانات المريض" for field "patient_informations"
+[05:40:39]   ✗ "بيانات المريض" -> No edit field found near label: بيانات المريض
+[05:40:39] Trying label "اسم المريض" for field "patient_informations"
+[05:40:39]   ✗ "اسم المريض" -> No edit field found near label: اسم المريض
+[05:40:39] Trying label "patient name" for field "patient_informations"
+[05:40:39]   ✗ "patient name" -> No edit field found near label: patient name
+[05:40:39] Trying label "عمر المريض" for field "patient_informations"
+[05:40:39]   ✗ "عمر المريض" -> No edit field found near label: عمر المريض
+[05:40:39] Trying label "patient age" for field "patient_informations"
+[05:40:39]   ✗ "patient age" -> No edit field found near label: patient age
+[05:40:39] Trying label "جنس المريض" for field "patient_informations"
+[05:40:40]   ✗ "جنس المريض" -> No edit field found near label: جنس المريض
+[05:40:40] Trying label "patient gender" for field "patient_informations"
+[05:40:40]   ✗ "patient gender" -> No edit field found near label: patient gender
+[05:40:40] Trying label "chief complaint" for field "patient_informations"
+[05:40:40]   ✗ "chief complaint" -> No edit field found near label: chief complaint
+[05:40:40] Trying label "chief complaint (cc)" for field "patient_informations"
+[05:40:40]   ✗ "chief complaint (cc)" -> No edit field found near label: chief complaint (cc)
+[05:40:40] Trying label "chief_complaint" for field "patient_informations"
+[05:40:40]   ✗ "chief_complaint" -> No edit field found near label: chief_complaint
+[05:40:40] Trying label "chief_complaint_cc" for field "patient_informations"
+[05:40:40]   ✗ "chief_complaint_cc" -> No edit field found near label: chief_complaint_cc
+[05:40:40] Trying label "chief complaint cc" for field "patient_informations"
+[05:40:41]   ✗ "chief complaint cc" -> No edit field found near label: chief complaint cc
+[05:40:41] Trying label "التاريخ المرضي" for field "patient_history"
+[05:40:41]   ✗ "التاريخ المرضي" -> No edit field found near label: التاريخ المرضي
+[05:40:41] Trying label "patient history" for field "patient_history"
+[05:40:41]   ✗ "patient history" -> All injection methods failed
+[05:40:41] Trying label "medical history" for field "patient_history"
+[05:40:41]   ✗ "medical history" -> No edit field found near label: medical history
+[05:40:41] Trying label "past medical history" for field "patient_history"
+[05:40:41]   ✗ "past medical history" -> No edit field found near label: past medical history
+[05:40:41] Trying label "history of present illness" for field "patient_history"
+[05:40:41]   ✗ "history of present illness" -> No edit field found near label: history of present illness
+[05:40:41] Trying label "hpi" for field "patient_history"
+[05:40:42]   ✗ "hpi" -> No edit field found near label: hpi
+[05:40:42] Trying label "التاريخ الطبي" for field "patient_history"
+[05:40:42]   ✗ "التاريخ الطبي" -> No edit field found near label: التاريخ الطبي
+[05:40:42] Trying label "pertinent negatives" for field "patient_history"
+[05:40:42]   ✗ "pertinent negatives" -> No edit field found near label: pertinent negatives
+[05:40:42] Trying label "past medical history / allergies" for field "patient_history"
+[05:40:42]   ✗ "past medical history / allergies" -> No edit field found near label: past medical history / allergies
+[05:40:42] Trying label "past_medical_history_allergies" for field "patient_history"
+[05:40:42]   ✗ "past_medical_history_allergies" -> No edit field found near label: past_medical_history_allergies
+[05:40:42] Trying label "التشخيص والتحاليل" for field "patient_diagnosis_and_tests"
+[05:40:42]   ✗ "التشخيص والتحاليل" -> No edit field found near label: التشخيص والتحاليل
+[05:40:42] Trying label "patient diagnosis and tests" for field "patient_diagnosis_and_tests"
+[05:40:42]   ✗ "patient diagnosis and tests" -> All injection methods failed
+[05:40:42] Trying label "diagnosis and tests" for field "patient_diagnosis_and_tests"
+[05:40:43]   ✗ "diagnosis and tests" -> All injection methods failed
+[05:40:43] Trying label "clinical diagnosis" for field "patient_diagnosis_and_tests"
+[05:40:43]   ✗ "clinical diagnosis" -> No edit field found near label: clinical diagnosis
+[05:40:43] Trying label "diagnosis" for field "patient_diagnosis_and_tests"
+[05:40:43]   ✗ "diagnosis" -> All injection methods failed
+[05:40:43] Trying label "clinical findings" for field "patient_diagnosis_and_tests"
+[05:40:44]   ✗ "clinical findings" -> No edit field found near label: clinical findings
+[05:40:44] Trying label "examination findings" for field "patient_diagnosis_and_tests"
+[05:40:44]   ✗ "examination findings" -> No edit field found near label: examination findings
+[05:40:44] Trying label "physical examination" for field "patient_diagnosis_and_tests"
+[05:40:44]   ✗ "physical examination" -> No edit field found near label: physical examination
+[05:40:44] Trying label "lab tests" for field "patient_diagnosis_and_tests"
+[05:40:44]   ✗ "lab tests" -> No edit field found near label: lab tests
+[05:40:44] Trying label "laboratory tests" for field "patient_diagnosis_and_tests"
+[05:40:45]   ✗ "laboratory tests" -> No edit field found near label: laboratory tests
+[05:40:45] Trying label "lab results" for field "patient_diagnosis_and_tests"
+[05:40:45]   ✗ "lab results" -> No edit field found near label: lab results
+[05:40:45] Trying label "investigations" for field "patient_diagnosis_and_tests"
+[05:40:45]   ✗ "investigations" -> No edit field found near label: investigations
+[05:40:45] Trying label "التحاليل المخبرية" for field "patient_diagnosis_and_tests"
+[05:40:45]   ✗ "التحاليل المخبرية" -> No edit field found near label: التحاليل المخبرية
+[05:40:45] Trying label "الموجودات السريرية" for field "patient_diagnosis_and_tests"
+[05:40:45]   ✗ "الموجودات السريرية" -> No edit field found near label: الموجودات السريرية
+[05:40:45] Trying label "primary diagnosis" for field "patient_diagnosis_and_tests"
+[05:40:45]   ✗ "primary diagnosis" -> No edit field found near label: primary diagnosis
+[05:40:45] Trying label "secondary diagnoses" for field "patient_diagnosis_and_tests"
+[05:40:45]   ✗ "secondary diagnoses" -> No edit field found near label: secondary diagnoses
+[05:40:45] Trying label "ultrasound" for field "patient_diagnosis_and_tests"
+[05:40:46]   ✗ "ultrasound" -> No edit field found near label: ultrasound
+[05:40:46] Trying label "urinalysis" for field "patient_diagnosis_and_tests"
+[05:40:46]   ✗ "urinalysis" -> No edit field found near label: urinalysis
+[05:40:46] Trying label "urodynamic study / urological imaging" for field "patient_diagnosis_and_tests"
+[05:40:46]   ✗ "urodynamic study / urological imaging" -> No edit field found near label: urodynamic study / urological imaging
+[05:40:46] Trying label "الخطة والأدوية" for field "plan_and_drugs"
+[05:40:46]   ✗ "الخطة والأدوية" -> No edit field found near label: الخطة والأدوية
+[05:40:46] Trying label "plan and drugs" for field "plan_and_drugs"
+[05:40:46]   ✗ "plan and drugs" -> All injection methods failed
+[05:40:46] Trying label "treatment plan" for field "plan_and_drugs"
+[05:40:47]   ✗ "treatment plan" -> No edit field found near label: treatment plan
+[05:40:47] Trying label "prescribed medications" for field "plan_and_drugs"
+[05:40:47]   ✗ "prescribed medications" -> No edit field found near label: prescribed medications
+[05:40:47] Trying label "medications" for field "plan_and_drugs"
+[05:40:47]   ✗ "medications" -> No edit field found near label: medications
+[05:40:47] Trying label "prescriptions" for field "plan_and_drugs"
+[05:40:47]   ✗ "prescriptions" -> No edit field found near label: prescriptions
+[05:40:47] Trying label "drug orders" for field "plan_and_drugs"
+[05:40:47]   ✗ "drug orders" -> No edit field found near label: drug orders
+[05:40:47] Trying label "الأدوية الموصوفة" for field "plan_and_drugs"
+[05:40:48]   ✗ "الأدوية الموصوفة" -> No edit field found near label: الأدوية الموصوفة
+[05:40:48] Trying label "dosage instructions" for field "plan_and_drugs"
+[05:40:48]   ✗ "dosage instructions" -> No edit field found near label: dosage instructions
+[05:40:48] Trying label "patient instructions" for field "plan_and_drugs"
+[05:40:48]   ✗ "patient instructions" -> No edit field found near label: patient instructions
+[05:40:48] Trying label "تعليمات المريض" for field "plan_and_drugs"
+[05:40:48]   ✗ "تعليمات المريض" -> No edit field found near label: تعليمات المريض
+[05:40:48] Trying label "medical decision making" for field "plan_and_drugs"
+[05:40:48]   ✗ "medical decision making" -> No edit field found near label: medical decision making
+[05:40:48] Trying label "medical decision making (mdm)" for field "plan_and_drugs"
+[05:40:48]   ✗ "medical decision making (mdm)" -> No edit field found near label: medical decision making (mdm)
+[05:40:48] Trying label "medical_decision_making_mdm" for field "plan_and_drugs"
+[05:40:49]   ✗ "medical_decision_making_mdm" -> No edit field found near label: medical_decision_making_mdm
+[05:40:49] Trying label "medical necessity / justification" for field "plan_and_drugs"
+[05:40:49]   ✗ "medical necessity / justification" -> No edit field found near label: medical necessity / justification
+[05:40:49] Trying label "medical_necessity_justification" for field "plan_and_drugs"
+[05:40:49]   ✗ "medical_necessity_justification" -> No edit field found near label: medical_necessity_justification
+[05:40:49] Trying label "medications prescribed" for field "plan_and_drugs"
+[05:40:49]   ✗ "medications prescribed" -> No edit field found near label: medications prescribed
+[05:40:49] Trying label "diagnostics ordered" for field "plan_and_drugs"
+[05:40:49]   ✗ "diagnostics ordered" -> No edit field found near label: diagnostics ordered
+[05:40:49] Trying label "follow-up" for field "plan_and_drugs"
+[05:40:49]   ✗ "follow-up" -> No edit field found near label: follow-up
+[05:40:49] Trying label "follow up & disposition" for field "plan_and_drugs"
+[05:40:49]   ✗ "follow up & disposition" -> No edit field found near label: follow up & disposition
+
+============================================================
+  ENGINE INJECTION DONE
+============================================================
+[05:40:49] 0/4 fields succeeded
+✗ [patient_informations] -> "ddtfdtd" [method: failed] ERROR: All labels failed
+✗ [patient_history] -> "A 12-year-old male presents with a headache that started acutely while playing football. He was given a painkiller (phonetically described as 'Bernad') prior to presentation and is currently resting. No further details regarding severity, specific location, or associated symptoms were reported." [method: failed] ERROR: All labels failed
+✗ [patient_diagnosis_and_tests] -> "Headache, acute onset, associated with physical activity." [method: failed] ERROR: All labels failed
+✗ [plan_and_drugs] -> "The diagnosis is based solely on the patient's reported acute onset of headache during football activity, with subsequent administration of painkillers and rest. No objective findings or further history were provided to support additional differential diagnoses or rule out serious conditions." [method: failed] ERROR: All labels failed
+[05:40:51] Status updated to: copied
+
+=== SESSION END ===

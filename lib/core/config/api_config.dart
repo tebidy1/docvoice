@@ -4,14 +4,15 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 class ApiConfig {
   // Base URL for the Laravel backend - strictly from .env
   static String get baseUrl {
-    final url = dotenv.env['API_BASE_URL'];
-    if (url == null || url.isEmpty) {
-      // In production/testing, if env is missing, it's a fatal configuration error
-      // but we return empty to let the caller handle it or fail naturally.
-      // Strict commitment: No hardcoded fallback.
+    try {
+      final url = dotenv.env['API_BASE_URL'];
+      if (url == null || url.isEmpty) {
+        return '';
+      }
+      return url;
+    } catch (_) {
       return '';
     }
-    return url;
   }
 
   // API Endpoints

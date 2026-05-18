@@ -16,12 +16,26 @@ import 'package:soutnote/core/ai/ai_regex_patterns.dart';
 import 'package:soutnote/core/ai/text_processing_service.dart';
 import '../../core/services/ai/ai_processing_service.dart';
 import '../../core/services/windows_injector.dart';
+import '../../core/services/windows_automation_injector.dart';
+import '../../core/services/injection_logger.dart';
 import '../../core/services/multimodal_ai/multimodal_ai_service.dart';
 import '../../core/services/multimodal_ai/ai_studio_multimodal_service.dart';
 import '../../core/services/multimodal_ai/gemini_transcription_helper.dart';
 import 'dart:io' show File;
 import '../../core/medical_departments.dart';
 import '../../core/services/department_service.dart';
+
+/// Holds resolved injection data for one field
+class _InjectionFieldData {
+  final String value;
+  final String displayLabel;
+  final List<String> uiLabels;
+  _InjectionFieldData({
+    required this.value,
+    required this.displayLabel,
+    required this.uiLabels,
+  });
+}
 
 class InboxNoteDetailView extends StatefulWidget {
   final NoteModel note;
@@ -862,29 +876,512 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   }
 
   Future<void> _smartCopyAndInject() async {
+    final log = InjectionLogger.instance;
+    log.startSession('smartCopy_${widget.note.id}');
+
     final cleanText = _getCleanText();
+    log.logSection('SMART COPY & INJECT');
+    log.log('Note ID: ${widget.note.id}');
+    log.log('Active tab: $_activeTabIndex');
+    log.log('Clean text length: ${cleanText.length}');
+
     if (cleanText.isEmpty) {
+      log.log('ERROR: Clean text is empty');
+      log.endSession();
       _showError("No content to inject");
       return;
     }
 
+    log.log('Clean text preview (first 500 chars):');
+    log.log(cleanText.length > 500 ? cleanText.substring(0, 500) : cleanText);
+
     try {
-      // Use smartInject: handles alwaysOnTop toggle + blur + Ctrl+V
       await WindowsInjector().smartInject(cleanText);
+      log.log('smartInject completed successfully');
+    } catch (e) {
+      log.log('smartInject FAILED: $e');
+      log.endSession();
+      _showError("Inject failed: $e");
+      return;
+    }
 
-      // SET STATUS TO COPIED
+    try {
       await _inboxService.updateStatus(widget.note.id, NoteStatus.copied);
+    } catch (e) {
+      log.log('Status update failed (non-blocking): $e');
+    }
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text("✅ Copied & Injected into EMR"),
-              backgroundColor: Colors.green),
+    log.endSession();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text("✅ Copied & Injected into EMR"),
+            backgroundColor: Colors.green),
+      );
+    }
+  }
+
+  Future<void> _advancedInject() async {
+    final log = InjectionLogger.instance;
+    log.startSession('advancedInject_${widget.note.id}');
+
+    final cleanText = _getCleanText();
+    log.logSection('ADVANCED INJECT START');
+    log.log('Note ID: ${widget.note.id}');
+    log.log('Active tab: $_activeTabIndex');
+    log.log('Clean text length: ${cleanText.length}');
+
+    if (cleanText.isEmpty) {
+      log.log('ERROR: cleanText is empty');
+      log.endSession();
+      _showError("No content to inject");
+      return;
+    }
+
+    log.log('Full clean text:');
+    log.log(cleanText);
+
+    // Determine injection data: prefer API field_mappings, fallback to text parsing
+    log.logSection('BUILDING INJECTION DATA');
+    Map<String, _InjectionFieldData> fieldData = {};
+
+    // Step 1: Try API field_mappings
+    if (widget.note.fieldMappings.isNotEmpty) {
+      log.log('Using API field_mappings (${widget.note.fieldMappings.length} fields)');
+      log.log('Form type: ${widget.note.analysisFormName ?? "unknown"}');
+      for (final fm in widget.note.fieldMappings) {
+        if (fm.value == null || fm.value!.isEmpty) {
+          log.log('  Skipping "${fm.formField}" (empty value)');
+          continue;
+        }
+        final uiLabels = _kFormFields[fm.formField] ?? [fm.formField];
+        fieldData[fm.formField] = _InjectionFieldData(
+          value: fm.value!,
+          displayLabel: fm.formField,
+          uiLabels: uiLabels,
         );
+        log.log('  ✓ ${fm.formField} = "${fm.value}" '
+            '(confidence: ${fm.confidence}, labels: ${uiLabels.take(2).join(", ")}${uiLabels.length > 2 ? "..." : ""})');
+      }
+    }
+
+    // Step 2: Supplement missing fields from text parsing
+    // and override low-confidence API values (e.g. confidence 0.0)
+    final parsedFields = _buildInjectionData(cleanText);
+    for (final entry in parsedFields.entries) {
+      final existing = widget.note.fieldMappings
+          .where((fm) => fm.formField == entry.key)
+          .firstOrNull;
+      final hasLowConfidence = existing != null &&
+          existing.confidence < 0.5 &&
+          !(existing.value?.trim().isEmpty ?? true);
+      if (!fieldData.containsKey(entry.key)) {
+        fieldData[entry.key] = entry.value;
+        log.log('  + (text) ${entry.key} = "${entry.value.value}"');
+      } else if (hasLowConfidence) {
+        log.log('  ~ (text) OVERRIDE ${entry.key}: API="${fieldData[entry.key]!.value}" -> "${entry.value.value}"');
+        fieldData[entry.key] = entry.value;
+      }
+    }
+
+    if (fieldData.isEmpty) {
+      log.log('ERROR: No injectable data found (API + text)');
+      log.endSession();
+      _showError("No injectable data found in content");
+      return;
+    }
+
+    log.log('Total resolved ${fieldData.length} fields (API + text):');
+    for (final entry in fieldData.entries) {
+      log.log('  ${entry.key} = "${entry.value.value}"');
+    }
+
+    if (!mounted) {
+      log.log('ABORTED: widget unmounted after dialog');
+      log.endSession();
+      return;
+    }
+
+    final selectedApp = await _showAppSelectionDialog();
+    if (selectedApp == null) {
+      log.log('ABORTED: no app selected');
+      log.endSession();
+      return;
+    }
+
+    log.log('Selected app: $selectedApp');
+
+    try {
+      final injector = WindowsAutomationInjector();
+
+      if (injector.isEngineAvailable) {
+        log.log('Engine available: yes');
+
+        // Step 1: Scan target app for all available fields
+        log.logSection('STEP 1: SCAN TARGET APP');
+        final targetFields = await injector.scanApp(selectedApp);
+
+        // Build injection targets — try ALL UI labels for each field
+        log.logSection('BUILDING INJECTION TARGETS');
+        // For matching analysis, find the best label per field
+        final bestLabels = <String>{};
+        for (final entry in fieldData.entries) {
+          String? bestLabel;
+          // Try to find which label matches an element in the target app
+          for (final uiLabel in entry.value.uiLabels) {
+            final match = targetFields.where((f) =>
+                f.name.toLowerCase().contains(uiLabel.toLowerCase()) ||
+                (f.label?.toLowerCase().contains(uiLabel.toLowerCase()) ?? false) ||
+                (f.automationId?.toLowerCase().contains(uiLabel.toLowerCase()) ?? false));
+            if (match.isNotEmpty) {
+              bestLabel = uiLabel;
+              log.log('  ✓ "${entry.key}" -> matched via "$uiLabel" -> "${match.first.name}"');
+              break;
+            }
+          }
+          bestLabels.add(bestLabel ?? entry.value.uiLabels.first);
+        }
+
+        // Log matching analysis
+        log.logSection('FIELD MATCHING ANALYSIS');
+        for (final entry in fieldData.entries) {
+          final label = bestLabels.firstWhere((l) => fieldData.values.any((v) => v.uiLabels.contains(l)));
+          // Actually just iterate again for cleaner log
+        }
+        for (final entry in fieldData.entries) {
+          final label = entry.value.uiLabels.first;
+          final match = targetFields.where((f) =>
+              f.name.toLowerCase().contains(label.toLowerCase()) ||
+              (f.label?.toLowerCase().contains(label.toLowerCase()) ?? false) ||
+              (f.automationId?.toLowerCase().contains(label.toLowerCase()) ?? false));
+          log.log('  ${match.isNotEmpty ? "✓" : "✗"} "$label"'
+              '${match.isNotEmpty ? ' -> "${match.first.name}" (${match.first.controlType})' : ' NO MATCH'}');
+        }
+
+        // Step 2: Inject — try ALL labels for each field
+        log.logSection('STEP 2: INJECTING VIA ENGINE');
+        final allResults = <InjectionResult>[];
+        for (final entry in fieldData.entries) {
+          final fieldKey = entry.key;
+          final fd = entry.value;
+          bool injected = false;
+          for (final uiLabel in fd.uiLabels) {
+            if (injected) break;
+            log.log('Trying label "$uiLabel" for field "$fieldKey"');
+            final response = await injector.injectField(selectedApp, uiLabel, fd.value);
+            if (response['success'] == true) {
+              allResults.add(InjectionResult(
+                label: fieldKey,
+                success: true,
+                value: fd.value,
+                method: response['method'] ?? 'UIAutomation',
+              ));
+              injected = true;
+              log.log('  ✓ "$uiLabel" -> success');
+            } else {
+              log.log('  ✗ "$uiLabel" -> ${response['error'] ?? 'failed'}');
+            }
+          }
+          if (!injected) {
+            allResults.add(InjectionResult(
+              label: fieldKey,
+              success: false,
+              value: fd.value,
+              method: 'failed',
+              error: 'All labels failed',
+            ));
+          }
+        }
+
+        final successCount = allResults.where((r) => r.success).length;
+
+        log.logSection('ENGINE INJECTION DONE');
+        log.log('$successCount/${fieldData.length} fields succeeded');
+        for (final r in allResults) {
+          log.logInjectionResult(r.label, r.success, r.value,
+              method: r.method, error: r.error);
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("✅ Injected $successCount/${fieldData.length} fields into $selectedApp"),
+              backgroundColor: successCount > 0 ? Colors.green : Colors.orange,
+            ),
+          );
+        }
+      } else {
+        log.log('Engine available: no, falling back to smartInject');
+        log.logSection('FALLBACK: SMART INJECT');
+
+        await WindowsInjector().smartInject(cleanText);
+        log.log('smartInject completed');
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("✅ Pasted into selected app (Engine not built)"),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      }
+
+      try {
+        await _inboxService.updateStatus(widget.note.id, NoteStatus.copied);
+        log.log('Status updated to: copied');
+      } catch (e) {
+        log.log('Status update failed (non-blocking): $e');
       }
     } catch (e) {
-      _showError("Inject failed: $e");
+      log.log('ADVANCED INJECT FAILED: $e');
+      _showError("Advanced inject failed: $e");
     }
+
+    log.endSession();
+  }
+
+  /// Mirrors backend TextAnalysisService $formTypes['clinical_observation']
+  static const Map<String, List<String>> _kFormFields = {
+    'patient_informations': [
+      'معلومات المريض', 'patient informations', 'patient information',
+      'patient_informations', 'بيانات المريض', 'اسم المريض', 'patient name',
+      'عمر المريض', 'patient age', 'جنس المريض', 'patient gender',
+      'chief complaint', 'chief complaint (cc)', 'chief_complaint',
+      'chief_complaint_cc', 'chief complaint cc',
+    ],
+    'patient_history': [
+      'التاريخ المرضي', 'patient history', 'medical history',
+      'past medical history', 'history of present illness', 'hpi',
+      'التاريخ الطبي',
+      'pertinent negatives',
+      'past medical history / allergies', 'past_medical_history_allergies',
+    ],
+    'patient_diagnosis_and_tests': [
+      'التشخيص والتحاليل', 'patient diagnosis and tests',
+      'diagnosis and tests', 'clinical diagnosis', 'diagnosis',
+      'clinical findings', 'examination findings', 'physical examination',
+      'lab tests', 'laboratory tests', 'lab results', 'investigations',
+      'التحاليل المخبرية', 'الموجودات السريرية',
+      'primary diagnosis', 'secondary diagnoses',
+      'ultrasound', 'urinalysis', 'urodynamic study / urological imaging',
+    ],
+    'plan_and_drugs': [
+      'الخطة والأدوية', 'plan and drugs', 'treatment plan',
+      'prescribed medications', 'medications', 'prescriptions',
+      'drug orders', 'الأدوية الموصوفة', 'dosage instructions',
+      'patient instructions', 'تعليمات المريض',
+      'medical decision making', 'medical decision making (mdm)',
+      'medical_decision_making_mdm',
+      'medical necessity / justification', 'medical_necessity_justification',
+      'medications prescribed', 'diagnostics ordered',
+      'follow-up', 'follow up & disposition',
+    ],
+  };
+
+  String _normalizeLabel(String label) {
+    return label
+        .toLowerCase()
+        .replaceAll('_', ' ')
+        .replaceAll(RegExp(r'[^\w\s\u0600-\u06FF]'), ' ')
+        .trim()
+        .replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  /// Map a parsed display label to its canonical backend field key.
+  /// Returns (fieldKey, uiLabels) or null if no match.
+  (String fieldKey, List<String> uiLabels)? _resolveField(String displayLabel) {
+    final normalized = _normalizeLabel(displayLabel);
+    for (final entry in _kFormFields.entries) {
+      for (final label in entry.value) {
+        final normLabel = _normalizeLabel(label);
+        if (normalized.contains(normLabel) || normLabel.contains(normalized)) {
+          return (entry.key, entry.value);
+        }
+      }
+    }
+    return null;
+  }
+
+  /// Parse content text into label:value pairs, then map to backend field keys.
+  /// Returns Map<fieldKey, {value, uiLabels}>
+  Map<String, _InjectionFieldData> _buildInjectionData(String content) {
+    // Step 1: parse all label:value pairs from text
+    final rawPairs = <String, String>{};
+    final lines = content.split('\n');
+
+    for (final line in lines) {
+      final trimmed = line.trim();
+      if (trimmed.isEmpty) continue;
+
+      // "Label: Value" or "Label: [Value]"
+      final colonIndex = trimmed.indexOf(':');
+      if (colonIndex > 0) {
+        final label = trimmed.substring(0, colonIndex).trim();
+        var value = trimmed.substring(colonIndex + 1).trim();
+        if (value.startsWith('[') && value.endsWith(']')) {
+          value = value.substring(1, value.length - 1).trim();
+        }
+        if (label.isNotEmpty && value.isNotEmpty) {
+          rawPairs[label] = value;
+          continue;
+        }
+      }
+
+      // Just "[Value]" (no label)
+      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+        final value = trimmed.substring(1, trimmed.length - 1).trim();
+        if (value.isNotEmpty) {
+          rawPairs['field_${rawPairs.length + 1}'] = value;
+        }
+        continue;
+      }
+
+      // "Label [Value]" (no colon)
+      final openBracket = trimmed.indexOf('[');
+      final closeBracket = trimmed.lastIndexOf(']');
+      if (openBracket >= 0 && closeBracket > openBracket) {
+        final before = trimmed.substring(0, openBracket).trim();
+        final value = trimmed.substring(openBracket + 1, closeBracket).trim();
+        if (before.isNotEmpty && value.isNotEmpty) {
+          var label = before;
+          if (label.endsWith(':')) label = label.substring(0, label.length - 1);
+          if (label.endsWith('-')) label = label.substring(0, label.length - 1);
+          rawPairs[label.trim()] = value;
+        }
+      }
+    }
+
+    // Step 2: map each display label to a backend field key
+    final result = <String, _InjectionFieldData>{};
+    final usedKeys = <String>{};
+    for (final entry in rawPairs.entries) {
+      final resolved = _resolveField(entry.key);
+      if (resolved != null) {
+        final (fieldKey, uiLabels) = resolved;
+        if (!usedKeys.contains(fieldKey)) {
+          usedKeys.add(fieldKey);
+          result[fieldKey] = _InjectionFieldData(
+            value: entry.value,
+            displayLabel: entry.key,
+            uiLabels: uiLabels,
+          );
+        }
+      } else {
+        // No mapping found — keep the raw label as-is for injection
+        final rawKey = entry.key
+            .toLowerCase()
+            .replaceAll('_', ' ')
+            .replaceAll(RegExp(r'[^\w\s\u0600-\u06FF]'), ' ')
+            .trim()
+            .replaceAll(RegExp(r'\s+'), '_');
+        if (!usedKeys.contains(rawKey)) {
+          usedKeys.add(rawKey);
+          result[rawKey] = _InjectionFieldData(
+            value: entry.value,
+            displayLabel: entry.key,
+            uiLabels: [entry.key],
+          );
+        }
+      }
+    }
+
+    return result;
+  }
+
+  Future<String?> _showAppSelectionDialog() async {
+    final injector = WindowsAutomationInjector();
+    await injector.initialize();
+
+    if (!mounted) return null;
+
+    final apps = await injector.getRunningApps();
+
+    if (!mounted) return null;
+
+    if (apps.isEmpty) {
+      return showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text("No Apps Found"),
+          content: const Text(
+            "No open windows detected.\n\n"
+            "Make sure the target app (EMR system) is open.",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("OK"),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text("Select Target Application${injector.isEngineAvailable ? '' : ' (Paste Mode)'}"),
+        content: SizedBox(
+          width: 400,
+          height: 300,
+          child: ListView.builder(
+            itemCount: apps.length,
+            itemBuilder: (context, index) {
+              final app = apps[index];
+              return ListTile(
+                leading: const Icon(Icons.apps),
+                title: Text(app.name),
+                subtitle: Text(app.mainWindowTitle ?? ''),
+                onTap: () => Navigator.pop(ctx, app.name),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<String> _extractLabelsFromContent(String content) {
+    final labels = <String>[];
+    final lines = content.split('\n');
+    for (final line in lines) {
+      final colonIndex = line.indexOf(':');
+      if (colonIndex > 0) {
+        labels.add(line.substring(0, colonIndex).trim());
+      }
+    }
+    return labels.take(10).toList();
+  }
+
+  Map<String, String> _buildInjectionDataFromScan(
+      String content, List<ScannedElement> fields) {
+    final data = <String, String>{};
+    final lines = content.split('\n');
+
+    for (final field in fields) {
+      if (field.label != null) {
+        for (final line in lines) {
+          final colonIndex = line.indexOf(':');
+          if (colonIndex > 0) {
+            final label = line.substring(0, colonIndex).trim();
+            if (label.toLowerCase().contains(field.label!.toLowerCase())) {
+              data[field.label!] = line.substring(colonIndex + 1).trim();
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    return data;
   }
 
   void _handleEditorTap() {
@@ -1768,6 +2265,23 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
             ),
             const SizedBox(height: 12),
           ],
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _finalNoteController.text.isEmpty ? null : _advancedInject,
+                  icon: const Icon(Icons.terminal, size: 18),
+                  label: const Text("ADVANCED INJECT"),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.amber,
+                    side: const BorderSide(color: Colors.amber),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
           // Unified Button
           ElevatedButton(
             onPressed:
