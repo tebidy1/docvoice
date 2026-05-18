@@ -90,7 +90,7 @@ class WindowsAutomationInjector {
       final result = await Process.run('powershell', [
         '-NoProfile',
         '-Command',
-        r"Get-Process | Where-Object { $_.MainWindowTitle -ne '' } | "
+        r"Get-Process | Where-Object { $_.MainWindowHandle -ne 0 } | "
         r"Select-Object @{N='name';E={$_.ProcessName}}, "
         r"@{N='processId';E={$_.Id}}, "
         r"@{N='mainWindowTitle';E={$_.MainWindowTitle}} | "

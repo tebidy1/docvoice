@@ -131,26 +131,10 @@ public:
         EnumWindows([](HWND hwnd, LPARAM lParam) -> BOOL {
             auto& data = *reinterpret_cast<EnumData*>(lParam);
             if (!IsWindowVisible(hwnd)) return TRUE;
-            int len = GetWindowTextLengthW(hwnd);
-            if (len == 0) return TRUE;
 
-            std::wstring title(len + 1, L'\0');
-            GetWindowTextW(hwnd, &title[0], len + 1);
-            title.resize(len);
-            if (title.empty()) return TRUE;
-
-            wchar_t className[256];
-            GetClassNameW(hwnd, className, 256);
-            std::wstring cls(className);
-
-            // Skip docvoice and scribeflow windows only — not all Flutter apps
-            if (ContainsIgnoreCase(WStringToString(title), "docvoice") ||
-                ContainsIgnoreCase(WStringToString(title), "scribeflow"))
-                return TRUE;
-
+            // Get process info FIRST — before filtering by title
             DWORD pid = 0;
             GetWindowThreadProcessId(hwnd, &pid);
-
             HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
             std::wstring processName;
             if (hProcess) {
@@ -168,6 +152,26 @@ public:
                 CloseHandle(hProcess);
             }
             if (processName.empty()) processName = L"unknown";
+
+            // Get window title
+            int len = GetWindowTextLengthW(hwnd);
+            std::wstring title;
+            if (len > 0) {
+                title.resize(len);
+                GetWindowTextW(hwnd, &title[0], len + 1);
+            }
+
+            wchar_t className[256];
+            GetClassNameW(hwnd, className, 256);
+            std::wstring cls(className);
+
+            // Skip only our own windows
+            if (ContainsIgnoreCase(WStringToString(title), "docvoice") ||
+                ContainsIgnoreCase(WStringToString(title), "scribeflow"))
+                return TRUE;
+
+            // Skip only if both title AND process name are empty/unknown
+            if (title.empty() && processName == L"unknown") return TRUE;
 
             if (!data.first) data.json << ",";
             data.first = false;
