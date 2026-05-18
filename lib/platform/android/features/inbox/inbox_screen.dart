@@ -143,6 +143,19 @@ class InboxScreenState extends State<InboxScreen> {
     final lastPage = svc.pendingLastPage > 1 ? svc.pendingLastPage : 1;
     final currentPage = svc.pendingCurrentPage;
 
+    List<int> _visiblePages() {
+      const int maxVisible = 5;
+      int half = maxVisible ~/ 2;
+      int start = (currentPage - half).clamp(1, lastPage);
+      int end = (start + maxVisible - 1).clamp(1, lastPage);
+      if (end - start < maxVisible - 1) {
+        start = (end - maxVisible + 1).clamp(1, lastPage);
+      }
+      return List.generate(end - start + 1, (i) => start + i);
+    }
+
+    final pages = _visiblePages();
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       decoration: BoxDecoration(
@@ -152,26 +165,47 @@ class InboxScreenState extends State<InboxScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           IconButton(
-            icon: const Icon(Icons.chevron_left, size: 20),
-            onPressed: currentPage > 1
-                ? () => svc.previousPendingPage()
-                : null,
+            icon: const Icon(Icons.first_page, size: 20),
+            tooltip: 'First',
+            onPressed: currentPage > 1 ? () => svc.goToPendingPage(1) : null,
             visualDensity: VisualDensity.compact,
           ),
-          const SizedBox(width: 4),
-          Text(
-            '$currentPage / $lastPage',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colorScheme.onSurface),
+          IconButton(
+            icon: const Icon(Icons.chevron_left, size: 20),
+            onPressed: currentPage > 1 ? () => svc.previousPendingPage() : null,
+            visualDensity: VisualDensity.compact,
           ),
-          const SizedBox(width: 4),
+          ...pages.map((p) => GestureDetector(
+            onTap: p != currentPage ? () => svc.goToPendingPage(p) : null,
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: p == currentPage ? colorScheme.primary : Colors.transparent,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                '$p',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: p == currentPage ? FontWeight.bold : FontWeight.w500,
+                  color: p == currentPage ? colorScheme.onPrimary : colorScheme.onSurface,
+                ),
+              ),
+            ),
+          )),
           IconButton(
             icon: const Icon(Icons.chevron_right, size: 20),
-            onPressed: currentPage < lastPage
-                ? () => svc.nextPendingPage()
-                : null,
+            onPressed: currentPage < lastPage ? () => svc.nextPendingPage() : null,
             visualDensity: VisualDensity.compact,
           ),
-          const SizedBox(width: 12),
+          IconButton(
+            icon: const Icon(Icons.last_page, size: 20),
+            tooltip: 'Last',
+            onPressed: currentPage < lastPage ? () => svc.goToPendingPage(lastPage) : null,
+            visualDensity: VisualDensity.compact,
+          ),
+          const SizedBox(width: 8),
           Text(
             '$total total',
             style: TextStyle(fontSize: 11, color: colorScheme.onSurface.withValues(alpha: 0.5)),
