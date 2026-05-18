@@ -9,12 +9,18 @@ class InjectionLogger {
   final StringBuffer _buf = StringBuffer();
   String? _currentPath;
   bool _sessionActive = false;
+  bool _enabled = false; // Set to true to enable logging
+
+  bool get isEnabled => _enabled;
+  void enable() => _enabled = true;
+  void disable() => _enabled = false;
 
   String _logDir() {
     return '${Directory.current.path}\\inject_logs';
   }
 
   void startSession(String label) {
+    if (!_enabled) return;
     _buf.clear();
     _buf.writeln('=== SESSION START: $label ===');
     _buf.writeln('Time: ${DateTime.now()}');
@@ -43,15 +49,18 @@ class InjectionLogger {
   }
 
   void log(String message) {
+    if (!_enabled) return;
     _buf.writeln('[${_timestamp()}] $message');
     _flushDebug();
   }
 
   void logRaw(String message) {
+    if (!_enabled) return;
     _buf.writeln(message);
   }
 
   void logData(String title, Map<String, String> data) {
+    if (!_enabled) return;
     _buf.writeln('');
     _buf.writeln('--- $title ---');
     for (final entry in data.entries) {
@@ -63,6 +72,7 @@ class InjectionLogger {
 
   void logInjectionResult(String label, bool success, String value,
       {String? method, String? error}) {
+    if (!_enabled) return;
     final status = success ? '✓' : '✗';
     _buf.writeln('$status [$label] -> "$value"'
         '${method != null ? ' [method: $method]' : ''}'
@@ -71,6 +81,7 @@ class InjectionLogger {
   }
 
   void logSection(String title) {
+    if (!_enabled) return;
     _buf.writeln('');
     _buf.writeln('=' * 60);
     _buf.writeln('  $title');
@@ -79,6 +90,7 @@ class InjectionLogger {
   }
 
   void logScannedElements(List<Map<String, String>> elements) {
+    if (!_enabled) return;
     _buf.writeln('');
     _buf.writeln('  ${'Name'.padRight(30)} ${'Control'.padRight(20)} ${'AutomationId'.padRight(25)} Value');
     _buf.writeln('  ${'-' * 30} ${'-' * 20} ${'-' * 25} ${'-' * 30}');
@@ -91,6 +103,7 @@ class InjectionLogger {
   }
 
   void endSession() {
+    if (!_enabled) return;
     if (!_sessionActive) return;
 
     _buf.writeln('');
