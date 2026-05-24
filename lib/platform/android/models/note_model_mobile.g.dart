@@ -200,7 +200,7 @@ NoteModel _noteModelDeserialize(
   object.rawText = reader.readString(offsets[8]);
   object.status =
       _NoteModelstatusValueEnumMap[reader.readStringOrNull(offsets[9])] ??
-          NoteStatus.draft;
+          NoteStatus.pending;
   object.suggestedMacroId = reader.readLongOrNull(offsets[10]);
   object.summary = reader.readStringOrNull(offsets[11]);
   object.title = reader.readString(offsets[12]);
@@ -236,7 +236,7 @@ P _noteModelDeserializeProp<P>(
       return (reader.readString(offset)) as P;
     case 9:
       return (_NoteModelstatusValueEnumMap[reader.readStringOrNull(offset)] ??
-          NoteStatus.draft) as P;
+          NoteStatus.pending) as P;
     case 10:
       return (reader.readLongOrNull(offset)) as P;
     case 11:
@@ -253,17 +253,13 @@ P _noteModelDeserializeProp<P>(
 }
 
 const _NoteModelstatusEnumValueMap = {
-  r'draft': r'draft',
+  r'pending': r'pending',
   r'processed': r'processed',
-  r'ready': r'ready',
-  r'copied': r'copied',
   r'archived': r'archived',
 };
 const _NoteModelstatusValueEnumMap = {
-  r'draft': NoteStatus.draft,
+  r'pending': NoteStatus.pending,
   r'processed': NoteStatus.processed,
-  r'ready': NoteStatus.ready,
-  r'copied': NoteStatus.copied,
   r'archived': NoteStatus.archived,
 };
 

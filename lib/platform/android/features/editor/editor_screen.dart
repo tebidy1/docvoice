@@ -1159,7 +1159,7 @@ class _EditorScreenState extends State<EditorScreen> {
     // Auto-update status to COPIED if we have a draft ID
     if (_currentNoteId != null) {
       try {
-        await InboxService().updateStatus(_currentNoteId!, NoteStatus.copied);
+        await InboxService().updateStatus(_currentNoteId!, NoteStatus.processed);
       } catch (e) {
         debugPrint("Failed to update status to copied: $e");
       }

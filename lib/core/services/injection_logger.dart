@@ -12,7 +12,7 @@ class InjectionLogger {
   bool _enabled = false; // Set to true to enable logging
 
   bool get isEnabled => _enabled;
-  void enable() => _enabled = true;
+  void enable() => _enabled = false;
   void disable() => _enabled = false;
 
   String _logDir() {
@@ -92,10 +92,12 @@ class InjectionLogger {
   void logScannedElements(List<Map<String, String>> elements) {
     if (!_enabled) return;
     _buf.writeln('');
-    _buf.writeln('  ${'Name'.padRight(30)} ${'Control'.padRight(20)} ${'AutomationId'.padRight(25)} Value');
+    _buf.writeln(
+        '  ${'Name'.padRight(30)} ${'Control'.padRight(20)} ${'AutomationId'.padRight(25)} Value');
     _buf.writeln('  ${'-' * 30} ${'-' * 20} ${'-' * 25} ${'-' * 30}');
     for (final el in elements) {
-      _buf.writeln('  ${el['name']!.padRight(30)} ${el['controlType']!.padRight(20)} '
+      _buf.writeln(
+          '  ${el['name']!.padRight(30)} ${el['controlType']!.padRight(20)} '
           '${el['automationId']!.padRight(25)} ${el['value']!}');
     }
     _buf.writeln('');
@@ -135,7 +137,8 @@ class InjectionLogger {
     // Print last line to debug console for real-time feedback
     final lines = _buf.toString().split('\n');
     if (lines.length > 1) {
-      print(lines[lines.length - 2]); // second to last (last is empty after writeln)
+      print(lines[
+          lines.length - 2]); // second to last (last is empty after writeln)
     }
   }
 

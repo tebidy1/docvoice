@@ -71,7 +71,7 @@ class InboxScreenState extends State<InboxScreen> {
     await Clipboard.setData(ClipboardData(text: note.content));
 
     try {
-      await _inboxService.updateStatus(note.id, NoteStatus.copied);
+      await _inboxService.updateStatus(note.id, NoteStatus.processed);
     } catch (e) {
       debugPrint("Error updating status: $e");
     }
@@ -393,32 +393,25 @@ class InboxScreenState extends State<InboxScreen> {
     }
 
     final String badgeLabel;
-    if (note.status == NoteStatus.ready) {
-      badgeLabel = 'Ready';
-    } else if (note.status == NoteStatus.copied) {
-      badgeLabel = 'Copied';
+    if (note.status == NoteStatus.processed) {
+      badgeLabel = 'Processed';
     } else if (note.formattedText.isNotEmpty) {
       badgeLabel = (templateName != null && templateName.isNotEmpty)
           ? templateName
           : 'Processed';
     } else {
-      badgeLabel = 'Draft';
+      badgeLabel = 'Pending';
     }
 
     Color statusColor;
     IconData statusIcon;
 
     switch (note.status) {
-      case NoteStatus.ready:
+      case NoteStatus.processed:
         statusColor = MobileAppTheme.success;
         statusIcon = Icons.check_circle;
         break;
-      case NoteStatus.copied:
-        statusColor = primaryBlue;
-        statusIcon = Icons.copy_all;
-        break;
-      case NoteStatus.processed:
-      case NoteStatus.draft:
+      case NoteStatus.pending:
       default:
         statusColor = primaryBlue;
         statusIcon = Icons.edit_note;
@@ -586,11 +579,9 @@ class InboxScreenState extends State<InboxScreen> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
-                                    note.status == NoteStatus.ready
+                                    note.status == NoteStatus.processed
                                         ? Icons.check_circle_outline
-                                        : note.status == NoteStatus.copied
-                                            ? Icons.copy_outlined
-                                            : Icons.auto_awesome,
+                                        : Icons.auto_awesome,
                                     size: 11,
                                     color: statusColor,
                                   ),

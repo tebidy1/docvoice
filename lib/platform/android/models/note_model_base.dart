@@ -3,11 +3,9 @@ import 'package:isar/isar.dart';
 import '../../../core/entities/generated_output.dart';
 
 enum NoteStatus {
-  draft, // Initial recording or raw text
-  processed, // AI macro applied
-  ready, // Confirmed by user, waiting to sync
-  copied, // Copied to clipboard/injected (New 3rd State)
-  archived // Synced/Completed
+  pending,
+  processed,
+  archived,
 }
 
 class NoteModelBase {
@@ -133,22 +131,22 @@ class NoteModelBase {
 
   /// Parse status from string
   static NoteStatus _parseStatus(dynamic status) {
-    if (status == null) return NoteStatus.draft;
+    if (status == null) return NoteStatus.pending;
 
     final statusStr = status.toString().toLowerCase();
     switch (statusStr) {
+      case 'pending':
       case 'draft':
-        return NoteStatus.draft;
+        return NoteStatus.pending;
       case 'processed':
         return NoteStatus.processed;
       case 'ready':
-        return NoteStatus.ready;
       case 'copied':
-        return NoteStatus.copied;
+        return NoteStatus.processed;
       case 'archived':
         return NoteStatus.archived;
       default:
-        return NoteStatus.draft;
+        return NoteStatus.pending;
     }
   }
 }

@@ -8,8 +8,8 @@ REVERB_APP_KEY=xulws4wwlsry6ighjepy
 REVERB_HOST=docapi.sootnote.com
 REVERB_PORT=443
 REVERB_SCHEME=https
-# API_BASE_URL=https://fin-mapping-between-favourite.trycloudflare.com/api
-API_BASE_URL=https://docapi.sootnote.com/api
+API_BASE_URL=https://universities-curious-identified-collaborative.trycloudflare.com/api
+#API_BASE_URL=https://docapi.sootnote.com/api
 
 # Oracle Cloud Infrastructure (OCI) - Live Speech API
 OCI_TENANCY_ID=ocid1.tenancy.oc1..aaaaaaaadt3eulxchu6ygrisqsai4z6qji5dyqiam7tgwgd6rrxe2wsocp2a

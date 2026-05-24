@@ -114,7 +114,7 @@ class _ExtensionHomeScreenState extends State<ExtensionHomeScreen> {
           ..title = "Extension Note"
           ..content = ""
           ..audioPath = path
-          ..status = NoteStatus.draft
+          ..status = NoteStatus.pending
           ..createdAt = DateTime.now()
           ..updatedAt = DateTime.now();
 

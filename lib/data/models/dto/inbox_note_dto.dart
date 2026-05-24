@@ -32,7 +32,7 @@ class InboxNoteDtoMapper extends EnhancedDtoMapper<InboxNote, InboxNoteDto>
   Map<String, NestedTransformer> get nestedTransformers => {
         ...dateTransformers,
         ...integerTransformers,
-        'status': EnumTransformer(NoteStatus.values, NoteStatus.draft),
+        'status': EnumTransformer(NoteStatus.values, NoteStatus.pending),
         'metadata': MetadataTransformer(),
       };
 
@@ -94,7 +94,7 @@ class InboxNoteDtoMapper extends EnhancedDtoMapper<InboxNote, InboxNoteDto>
 
     // Parse status with enhanced enum transformer
     note.status = MappingUtils.getNestedValue<NoteStatus>(data, 'status') ??
-        NoteStatus.draft;
+        NoteStatus.pending;
 
     // Handle dates with enhanced transformers
     note.createdAt =
@@ -176,20 +176,18 @@ class InboxNoteDtoMapper extends EnhancedDtoMapper<InboxNote, InboxNoteDto>
 
   /// Parse status from string
   NoteStatus _parseStatus(String? status) {
-    if (status == null) return NoteStatus.draft;
+    if (status == null) return NoteStatus.pending;
 
     final statusStr = status.toLowerCase();
     switch (statusStr) {
-      case 'draft':
-        return NoteStatus.draft;
+      case 'pending':
+        return NoteStatus.pending;
       case 'processed':
         return NoteStatus.processed;
-      case 'ready':
-        return NoteStatus.ready;
       case 'archived':
         return NoteStatus.archived;
       default:
-        return NoteStatus.draft;
+        return NoteStatus.pending;
     }
   }
 
@@ -202,7 +200,7 @@ class InboxNoteDtoMapper extends EnhancedDtoMapper<InboxNote, InboxNoteDto>
 
   /// Validate status value
   bool _isValidStatus(String status) {
-    const validStatuses = ['draft', 'processed', 'ready', 'archived'];
+    const validStatuses = ['pending', 'processed', 'archived'];
     return validStatuses.contains(status.toLowerCase());
   }
 

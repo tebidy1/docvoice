@@ -112,7 +112,8 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   // Dynamic Layout & Streaming
   bool _isLoadingText = false;
   bool _isOneShotMode = false;
-  bool _showCleanTemplatePicker = false; // ✨ For Optimistic Clean UI
+  bool _showCleanTemplatePicker = false;
+  List<FieldMapping> _fieldMappings = []; // ✨ For Optimistic Clean UI
   StreamSubscription? _textStreamSubscription;
   Timer? _debounceTimer;
   Future<void>? _backgroundTranscriptionFuture;
@@ -120,6 +121,7 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   @override
   void initState() {
     super.initState();
+    _fieldMappings = _fieldMappings;
     _dockWindow();
     _loadQuickMacros();
 
@@ -251,6 +253,9 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
       if (freshNote != null) {
         if (mounted) {
           setState(() {
+            if (freshNote.fieldMappings.isNotEmpty) {
+              _fieldMappings = freshNote.fieldMappings;
+            }
             // 1. Update Text if empty (or force update if needed, but usually we trust local if user is typing)
             if (_generatedOutputs.isEmpty &&
                 freshNote.generatedOutputs.isNotEmpty) {
@@ -912,7 +917,7 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     }
 
     try {
-      await _inboxService.updateStatus(widget.note.id, NoteStatus.copied);
+      await _inboxService.updateStatus(widget.note.id, NoteStatus.processed);
     } catch (e) {
       log.log('Status update failed (non-blocking): $e');
     }
@@ -928,83 +933,63 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     }
   }
 
-  Future<void> _advancedInject() async {
+Future<void> _advancedInject() async {
     final log = InjectionLogger.instance;
     log.startSession('advancedInject_${widget.note.id}');
 
-    final cleanText = _getCleanText();
     log.logSection('ADVANCED INJECT START');
     log.log('Note ID: ${widget.note.id}');
-    log.log('Active tab: $_activeTabIndex');
-    log.log('Clean text length: ${cleanText.length}');
+    log.log('Form name: ${widget.note.analysisFormName ?? "unknown"}');
+    log.log('Total field_mappings from text_analyses: ${_fieldMappings.length}');
 
-    if (cleanText.isEmpty) {
-      log.log('ERROR: cleanText is empty');
-      log.endSession();
-      _showError("No content to inject");
-      return;
+    for (final fm in _fieldMappings) {
+      log.log('  ${fm.formField} (${fm.formType ?? "?"}) '
+          '= "${fm.value ?? "NULL"}" (confidence: ${fm.confidence})');
     }
 
-    log.log('Full clean text:');
-    log.log(cleanText);
-
-    // Determine injection data: prefer API field_mappings, fallback to text parsing
     log.logSection('BUILDING INJECTION DATA');
     Map<String, _InjectionFieldData> fieldData = {};
 
-    // Step 1: Try API field_mappings
-    if (widget.note.fieldMappings.isNotEmpty) {
-      log.log('Using API field_mappings (${widget.note.fieldMappings.length} fields)');
-      log.log('Form type: ${widget.note.analysisFormName ?? "unknown"}');
-      for (final fm in widget.note.fieldMappings) {
-        if (fm.value == null || fm.value!.isEmpty) {
-          log.log('  Skipping "${fm.formField}" (empty value)');
-          continue;
-        }
-        final uiLabels = _kFormFields[fm.formField] ?? [fm.formField];
+    if (_fieldMappings.isEmpty) {
+      log.log('ERROR: No field_mappings available');
+      log.endSession();
+      _showError("No field mappings to inject");
+      return;
+    }
+
+    final allFieldMappings = _fieldMappings;
+    final formFields = _buildFormFieldsFromAll(allFieldMappings);
+
+    log.log('Dynamic field resolution (${allFieldMappings.length} total fields):');
+    for (final fm in allFieldMappings) {
+      final uiLabels = formFields[fm.formField] ?? [fm.formField];
+      final hasValue = fm.value != null && fm.value!.isNotEmpty;
+      log.log('  ${hasValue ? "✓" : "○"} "${fm.formField}" (${fm.formType ?? "?"}) '
+          '= "${fm.value ?? "NULL"}" | labels: ${uiLabels.join(", ")}');
+
+      if (hasValue) {
         fieldData[fm.formField] = _InjectionFieldData(
           value: fm.value!,
           displayLabel: fm.formField,
           uiLabels: uiLabels,
         );
-        log.log('  ✓ ${fm.formField} = "${fm.value}" '
-            '(confidence: ${fm.confidence}, labels: ${uiLabels.take(2).join(", ")}${uiLabels.length > 2 ? "..." : ""})');
-      }
-    }
-
-    // Step 2: Supplement missing fields from text parsing
-    // and override low-confidence API values (e.g. confidence 0.0)
-    final parsedFields = _buildInjectionData(cleanText);
-    for (final entry in parsedFields.entries) {
-      final existing = widget.note.fieldMappings
-          .where((fm) => fm.formField == entry.key)
-          .firstOrNull;
-      final hasLowConfidence = existing != null &&
-          existing.confidence < 0.5 &&
-          !(existing.value?.trim().isEmpty ?? true);
-      if (!fieldData.containsKey(entry.key)) {
-        fieldData[entry.key] = entry.value;
-        log.log('  + (text) ${entry.key} = "${entry.value.value}"');
-      } else if (hasLowConfidence) {
-        log.log('  ~ (text) OVERRIDE ${entry.key}: API="${fieldData[entry.key]!.value}" -> "${entry.value.value}"');
-        fieldData[entry.key] = entry.value;
       }
     }
 
     if (fieldData.isEmpty) {
-      log.log('ERROR: No injectable data found (API + text)');
+      log.log('ERROR: No fields with non-empty values to inject');
       log.endSession();
-      _showError("No injectable data found in content");
+      _showError("All field mappings have empty/null values — nothing to inject");
       return;
     }
 
-    log.log('Total resolved ${fieldData.length} fields (API + text):');
+    log.log('Will inject ${fieldData.length} fields (out of ${allFieldMappings.length} total):');
     for (final entry in fieldData.entries) {
       log.log('  ${entry.key} = "${entry.value.value}"');
     }
 
     if (!mounted) {
-      log.log('ABORTED: widget unmounted after dialog');
+      log.log('ABORTED: widget unmounted');
       log.endSession();
       return;
     }
@@ -1024,17 +1009,13 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
       if (injector.isEngineAvailable) {
         log.log('Engine available: yes');
 
-        // Step 1: Scan target app for all available fields
         log.logSection('STEP 1: SCAN TARGET APP');
         final targetFields = await injector.scanApp(selectedApp);
 
-        // Build injection targets — try ALL UI labels for each field
         log.logSection('BUILDING INJECTION TARGETS');
-        // For matching analysis, find the best label per field
         final bestLabels = <String>{};
         for (final entry in fieldData.entries) {
           String? bestLabel;
-          // Try to find which label matches an element in the target app
           for (final uiLabel in entry.value.uiLabels) {
             final match = targetFields.where((f) =>
                 f.name.toLowerCase().contains(uiLabel.toLowerCase()) ||
@@ -1049,12 +1030,7 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
           bestLabels.add(bestLabel ?? entry.value.uiLabels.first);
         }
 
-        // Log matching analysis
         log.logSection('FIELD MATCHING ANALYSIS');
-        for (final entry in fieldData.entries) {
-          final label = bestLabels.firstWhere((l) => fieldData.values.any((v) => v.uiLabels.contains(l)));
-          // Actually just iterate again for cleaner log
-        }
         for (final entry in fieldData.entries) {
           final label = entry.value.uiLabels.first;
           final match = targetFields.where((f) =>
@@ -1065,7 +1041,6 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
               '${match.isNotEmpty ? ' -> "${match.first.name}" (${match.first.controlType})' : ' NO MATCH'}');
         }
 
-        // Step 2: Inject — try ALL labels for each field
         log.logSection('STEP 2: INJECTING VIA ENGINE');
         final allResults = <InjectionResult>[];
         for (final entry in fieldData.entries) {
@@ -1118,27 +1093,15 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
           );
         }
       } else {
-        log.log('Engine available: no, falling back to smartInject');
-        log.logSection('FALLBACK: SMART INJECT');
-
-        await WindowsInjector().smartInject(cleanText);
-        log.log('smartInject completed');
-
+        log.log('Engine not available, cannot inject without field_mappings');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text("✅ Pasted into selected app (Engine not built)"),
-              backgroundColor: Colors.green,
+              content: Text("⚠ Engine not available — build automation_engine.exe first"),
+              backgroundColor: Colors.orange,
             ),
           );
         }
-      }
-
-      try {
-        await _inboxService.updateStatus(widget.note.id, NoteStatus.copied);
-        log.log('Status updated to: copied');
-      } catch (e) {
-        log.log('Status update failed (non-blocking): $e');
       }
     } catch (e) {
       log.log('ADVANCED INJECT FAILED: $e');
@@ -1148,43 +1111,31 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     log.endSession();
   }
 
-  /// Mirrors backend TextAnalysisService $formTypes['clinical_observation']
-  static const Map<String, List<String>> _kFormFields = {
-    'patient_informations': [
-      'معلومات المريض', 'patient informations', 'patient information',
-      'patient_informations', 'بيانات المريض', 'اسم المريض', 'patient name',
-      'عمر المريض', 'patient age', 'جنس المريض', 'patient gender',
-      'chief complaint', 'chief complaint (cc)', 'chief_complaint',
-      'chief_complaint_cc', 'chief complaint cc',
-    ],
-    'patient_history': [
-      'التاريخ المرضي', 'patient history', 'medical history',
-      'past medical history', 'history of present illness', 'hpi',
-      'التاريخ الطبي',
-      'pertinent negatives',
-      'past medical history / allergies', 'past_medical_history_allergies',
-    ],
-    'patient_diagnosis_and_tests': [
-      'التشخيص والتحاليل', 'patient diagnosis and tests',
-      'diagnosis and tests', 'clinical diagnosis', 'diagnosis',
-      'clinical findings', 'examination findings', 'physical examination',
-      'lab tests', 'laboratory tests', 'lab results', 'investigations',
-      'التحاليل المخبرية', 'الموجودات السريرية',
-      'primary diagnosis', 'secondary diagnoses',
-      'ultrasound', 'urinalysis', 'urodynamic study / urological imaging',
-    ],
-    'plan_and_drugs': [
-      'الخطة والأدوية', 'plan and drugs', 'treatment plan',
-      'prescribed medications', 'medications', 'prescriptions',
-      'drug orders', 'الأدوية الموصوفة', 'dosage instructions',
-      'patient instructions', 'تعليمات المريض',
-      'medical decision making', 'medical decision making (mdm)',
-      'medical_decision_making_mdm',
-      'medical necessity / justification', 'medical_necessity_justification',
-      'medications prescribed', 'diagnostics ordered',
-      'follow-up', 'follow up & disposition',
-    ],
-  };
+  Map<String, List<String>> _buildFormFieldsFromAll(List<FieldMapping> mappings) {
+    final fields = <String, List<String>>{};
+    for (final fm in mappings) {
+      final key = fm.formField;
+      if (key.isEmpty) continue;
+      final humanLabel = key
+          .replaceAll('_', ' ')
+          .split(' ')
+          .map((w) => w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : w)
+          .join(' ');
+      final labels = [humanLabel, key];
+      if (fm.matchedKey != null && fm.matchedKey!.isNotEmpty) {
+        labels.add(fm.matchedKey!);
+      }
+      fields[key] = labels;
+    }
+    if (fields.isEmpty) {
+      fields['_fallback'] = ['Fallback'];
+    }
+    return fields;
+  }
+
+  Map<String, List<String>> _buildFormFields() {
+    return _buildFormFieldsFromAll(_fieldMappings);
+  }
 
   String _normalizeLabel(String label) {
     return label
@@ -1199,7 +1150,8 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   /// Returns (fieldKey, uiLabels) or null if no match.
   (String fieldKey, List<String> uiLabels)? _resolveField(String displayLabel) {
     final normalized = _normalizeLabel(displayLabel);
-    for (final entry in _kFormFields.entries) {
+    final formFields = _buildFormFields();
+    for (final entry in formFields.entries) {
       for (final label in entry.value) {
         final normLabel = _normalizeLabel(label);
         if (normalized.contains(normLabel) || normLabel.contains(normalized)) {
@@ -1662,23 +1614,18 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
     String label;
 
     switch (widget.note.status) {
-      case NoteStatus.ready:
+      case NoteStatus.processed:
         color = Colors.green;
-        label = "READY";
-        break;
-      case NoteStatus.copied:
-        color = Colors.blue;
-        label = "COPIED";
+        label = "PROCESSD";
         break;
       case NoteStatus.archived:
         color = Colors.grey;
         label = "ARCHIVED";
         break;
-      case NoteStatus.processed:
-      case NoteStatus.draft:
+      case NoteStatus.pending:
       default:
         color = Colors.orange;
-        label = "DRAFT";
+        label = "PENDING";
         break;
     }
 
@@ -2209,7 +2156,7 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
         formattedText: _finalNoteController.text,
       );
       // EXPLICITLY SET STATUS TO READY
-      await _inboxService.updateStatus(widget.note.id, NoteStatus.ready);
+      await _inboxService.updateStatus(widget.note.id, NoteStatus.processed);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -2275,7 +2222,7 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: _finalNoteController.text.isEmpty ? null : _advancedInject,
+                  onPressed: _fieldMappings.where((fm) => fm.value != null && fm.value!.isNotEmpty).isEmpty ? null : _advancedInject,
                   icon: const Icon(Icons.terminal, size: 18),
                   label: const Text("ADVANCED INJECT"),
                   style: OutlinedButton.styleFrom(

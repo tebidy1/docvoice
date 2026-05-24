@@ -36,7 +36,7 @@ class InboxNoteDto {
       title: json['title'] ?? '',
       content: json['content'] ?? '',
       audioPath: json['audio_path'],
-      status: json['status'] ?? 'draft',
+      status: json['status'] ?? 'pending',
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'])
           : DateTime.now(),
@@ -104,7 +104,7 @@ class InboxNoteDto {
   static InboxNoteStatus _parseStatus(String status) {
     return InboxNoteStatus.values.firstWhere(
       (s) => s.name == status.toLowerCase(),
-      orElse: () => InboxNoteStatus.draft,
+      orElse: () => InboxNoteStatus.pending,
     );
   }
 }

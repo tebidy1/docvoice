@@ -1,4 +1,4 @@
-enum InboxNoteStatus { draft, processed, ready, copied, archived }
+enum InboxNoteStatus { pending, processed, archived }
 
 class InboxNoteEntity {
   final int id;

@@ -5,11 +5,9 @@ import 'dart:convert';
 import 'generated_output.dart';
 
 enum NoteStatus {
-  draft, // Initial recording or raw text
-  processed, // AI macro applied
-  ready, // Confirmed by user, waiting to sync
-  copied, // Copied to clipboard/injected
-  archived // Synced/Completed
+  pending,
+  processed,
+  archived,
 }
 
 class NoteModel {
@@ -111,24 +109,12 @@ class NoteModel {
       }
     }
 
-    // Parse text_analyses from API (loaded via textAnalyses relation)
-    if (json['text_analyses'] != null && json['text_analyses'] is List) {
-      for (final analysis in (json['text_analyses'] as List)) {
-        if (analysis is Map<String, dynamic>) {
-          final analysisData = analysis['analysis_data'];
-          if (analysisData is Map<String, dynamic>) {
-            final mappings = analysisData['field_mappings'];
-            if (mappings is List) {
-              note.fieldMappings = mappings
-                  .map((m) => FieldMapping.fromJson(
-                      m is Map<String, dynamic> ? m : {}))
-                  .where((m) => m.value != null && m.value!.isNotEmpty)
-                  .toList();
-            }
-            note.analysisFormName = analysis['form_name'] as String?;
-          }
-        }
-      }
+    // Parse field_mappings directly from top-level (flat array from backend)
+    if (json['field_mappings'] != null && json['field_mappings'] is List) {
+      note.fieldMappings = (json['field_mappings'] as List)
+          .map((m) => FieldMapping.fromJson(
+              m is Map<String, dynamic> ? m : {}))
+          .toList();
     }
 
     return note;
@@ -158,22 +144,22 @@ class NoteModel {
 
   /// Parse status from string
   static NoteStatus _parseStatus(dynamic status) {
-    if (status == null) return NoteStatus.draft;
+    if (status == null) return NoteStatus.pending;
 
     final statusStr = status.toString().toLowerCase();
     switch (statusStr) {
+      case 'pending':
       case 'draft':
-        return NoteStatus.draft;
+        return NoteStatus.pending;
       case 'processed':
         return NoteStatus.processed;
       case 'ready':
-        return NoteStatus.ready;
       case 'copied':
-        return NoteStatus.copied;
+        return NoteStatus.processed;
       case 'archived':
         return NoteStatus.archived;
       default:
-        return NoteStatus.draft;
+        return NoteStatus.pending;
     }
   }
 }
@@ -184,12 +170,14 @@ class FieldMapping {
   final String? value;
   final double confidence;
   final String? matchedKey;
+  final String? formType;
 
   FieldMapping({
     required this.formField,
     this.value,
     this.confidence = 0,
     this.matchedKey,
+    this.formType,
   });
 
   factory FieldMapping.fromJson(Map<String, dynamic> json) {
@@ -198,6 +186,7 @@ class FieldMapping {
       value: json['value'] as String?,
       confidence: (json['confidence'] as num?)?.toDouble() ?? 0,
       matchedKey: json['matched_key'] as String?,
+      formType: json['form_type'] as String?,
     );
   }
 }

@@ -48,47 +48,41 @@ class InboxCard extends StatelessWidget {
     }
 
     // Badge label: template name if valid, else "Draft"
-    final String badgeLabel;
-    if (note.status == NoteStatus.ready) {
-      badgeLabel = 'Ready';
-    } else if (note.status == NoteStatus.copied) {
-      badgeLabel = 'Copied';
-    } else if (templateName != null &&
+final String badgeLabel;
+    if (templateName != null &&
         templateName.isNotEmpty &&
         !['Draft Note', 'Unknown Patient', 'Untitled'].contains(templateName)) {
-      // Show template name instead of "Processed"
       badgeLabel = templateName;
+    } else if (note.status == NoteStatus.processed) {
+      badgeLabel = 'Processd';
     } else {
-      badgeLabel = 'Draft';
+      badgeLabel = 'Pending';
     }
 
-    // Primary Blue — matches login screen & light theme
     const Color primaryBlue = Color(0xFF00A5FE);
 
-    // Determine status icon/color
     Color statusColor;
     IconData statusIcon;
     String statusText;
 
     switch (note.status) {
-      case NoteStatus.ready:
+      case NoteStatus.processed:
         statusColor = MobileAppTheme.success;
         statusIcon = Icons.check_circle;
-        statusText = "Ready";
+        statusText = "Processd";
         break;
-      case NoteStatus.copied:
-        statusColor = primaryBlue;
-        statusIcon = Icons.copy_all;
-        statusText = "Copied";
+      case NoteStatus.archived:
+        statusColor = Colors.grey;
+        statusIcon = Icons.archive;
+        statusText = "Archived";
         break;
-      case NoteStatus.processed:
-      case NoteStatus.draft:
+      case NoteStatus.pending:
       default:
-        statusColor = primaryBlue; // Blue instead of yellow/orange
+        statusColor = primaryBlue;
         statusIcon = Icons.edit_note;
-        statusText = "Draft";
+        statusText = "Pending";
         break;
-    }
+}
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12, left: 16, right: 16),
@@ -267,7 +261,7 @@ class InboxCard extends StatelessWidget {
 
     // Mark as Copied
     try {
-      await InboxService().updateStatus(note.id, NoteStatus.copied);
+      await InboxService().updateStatus(note.id, NoteStatus.processed);
     } catch (e) {
       print("Error updating status to copied: $e");
     }

@@ -74,7 +74,7 @@ class InboxService {
         ? note.formattedText
         : note.originalText;
     note.status =
-        note.formattedText.isNotEmpty ? NoteStatus.processed : NoteStatus.draft;
+        note.formattedText.isNotEmpty ? NoteStatus.processed : NoteStatus.pending;
     note.createdAt = DateTime.now();
     note.updatedAt = DateTime.now();
 

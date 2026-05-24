@@ -612,7 +612,7 @@ class _ExtensionEditorScreenState extends State<ExtensionEditorScreen> {
 
     // Update Status
     if (widget.draftNote.id > 0) {
-      await _inboxService.updateStatus(widget.draftNote.id, NoteStatus.copied);
+      await _inboxService.updateStatus(widget.draftNote.id, NoteStatus.processed);
     }
   }
 

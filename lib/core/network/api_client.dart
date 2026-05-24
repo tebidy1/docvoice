@@ -236,10 +236,10 @@ class ApiClient {
 
       // Handle validation errors (422)
       if (statusCode == 422 && data.containsKey('errors')) {
-        final errors = data['errors'] as Map<String, dynamic>;
-        final firstError = errors.values.first;
+        final errors = _castErrors(data['errors']);
+        final firstError = errors?.values.first;
         final errorMessage =
-            firstError is List ? firstError.first : firstError.toString();
+            firstError is List ? firstError.first : firstError?.toString() ?? data['message'] ?? 'Validation error';
         throw ApiException(
           errorMessage,
           statusCode,
@@ -255,7 +255,7 @@ class ApiClient {
           throw ApiException(
             data['message'] ?? 'Request failed',
             statusCode,
-            errors: data['errors'],
+            errors: _castErrors(data['errors']),
           );
         }
       }
@@ -268,7 +268,7 @@ class ApiClient {
           throw ApiException(
             data['message'] ?? 'Request failed',
             statusCode,
-            errors: data['errors'],
+            errors: _castErrors(data['errors']),
           );
         }
       }
@@ -283,18 +283,26 @@ class ApiClient {
         };
       }
 
-      print("API Error ($statusCode): $responseBody"); // Log full body
+      print("API Error ($statusCode): $responseBody");
 
       throw ApiException(
         data['message'] ?? 'Request failed',
         statusCode,
-        errors: data['errors'],
+        errors: _castErrors(data['errors']),
       );
     } catch (e) {
       if (e is ApiException) rethrow;
       print("Response Parsing Error: $e \nBody: $responseBody");
       throw ApiException('Failed to parse response: $e', statusCode);
     }
+  }
+
+  static Map<String, dynamic>? _castErrors(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is Map<String, dynamic>) return raw;
+    if (raw is Map) return Map<String, dynamic>.from(raw);
+    if (raw is List) return {for (int i = 0; i < raw.length; i++) 'error_$i': raw[i]};
+    return null;
   }
 
   dynamic _handleError(dynamic error) {

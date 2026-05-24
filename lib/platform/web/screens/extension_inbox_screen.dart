@@ -65,7 +65,7 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
     }
 
     try {
-      await _inboxService.updateStatus(note.id, NoteStatus.copied);
+      await _inboxService.updateStatus(note.id, NoteStatus.processed);
     } catch (e) {
       debugPrint("Error updating status: $e");
     }
@@ -196,32 +196,25 @@ class ExtensionInboxScreenState extends State<ExtensionInboxScreen> {
     }
 
     final String badgeLabel;
-    if (note.status == NoteStatus.ready) {
-      badgeLabel = 'Ready';
-    } else if (note.status == NoteStatus.copied) {
-      badgeLabel = 'Copied';
+    if (note.status == NoteStatus.processed) {
+      badgeLabel = 'Processed';
     } else if (note.formattedText.isNotEmpty) {
       badgeLabel = (templateName != null && templateName.isNotEmpty)
           ? templateName
           : 'Processed';
     } else {
-      badgeLabel = 'Draft';
+      badgeLabel = 'Pending';
     }
 
     Color statusColor;
     IconData statusIcon;
 
     switch (note.status) {
-      case NoteStatus.ready:
+      case NoteStatus.processed:
         statusColor = Colors.green;
         statusIcon = Icons.check_circle;
         break;
-      case NoteStatus.copied:
-        statusColor = Colors.blue;
-        statusIcon = Icons.copy_all;
-        break;
-      case NoteStatus.processed:
-      case NoteStatus.draft:
+      case NoteStatus.pending:
       default:
         statusColor = Theme.of(context).colorScheme.primary;
         statusIcon = Icons.edit_note;
