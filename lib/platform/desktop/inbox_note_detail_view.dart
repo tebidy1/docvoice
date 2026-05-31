@@ -92,8 +92,10 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
   List<SmartSuggestion> _suggestions = [];
   List<Macro> _quickMacros = [];
 
+  static const int _fieldPreviewTabIndex = -1; // special tab for injection data preview
+
   // Smart Tabs State
-  int _activeTabIndex = 0; // 0 = Transcript (Source), 1+ = Generated Outputs
+  int _activeTabIndex = 0; // 0 = Transcript (Source), 1+ = Generated Outputs, -1 = Field Preview
   List<GeneratedOutput> _generatedOutputs = [];
 
   // ⚡ One-Shot AI: the service instance (swap implementation here for Vertex AI)
@@ -812,6 +814,8 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
       if (index == 0) {
         _finalNoteController.text = widget.note.rawText;
         _isTemplateCardExpanded = true;
+      } else if (index == _fieldPreviewTabIndex) {
+        _isTemplateCardExpanded = false;
       } else {
         _finalNoteController.text = _generatedOutputs[index - 1].content ?? '';
         _isTemplateCardExpanded = false;
@@ -1690,6 +1694,15 @@ Future<void> _advancedInject() async {
                   theme: theme,
                 ),
 
+                // Field Preview Tab
+                if (_fieldMappings.isNotEmpty)
+                  _buildTab(
+                    index: _fieldPreviewTabIndex,
+                    icon: Icons.list_alt,
+                    label: "Injection Data (${_fieldMappings.length})",
+                    theme: theme,
+                  ),
+
                 // Generated Output Tabs
                 for (int i = 0; i < _generatedOutputs.length; i++)
                   _buildTab(
@@ -1704,7 +1717,11 @@ Future<void> _advancedInject() async {
           ),
 
           // --- EDITOR AREA ---
-          Expanded(child: _buildWhitePaperEditor(theme)),
+          Expanded(
+            child: _activeTabIndex == _fieldPreviewTabIndex
+                ? _buildFieldPreview(theme)
+                : _buildWhitePaperEditor(theme),
+          ),
 
           // --- SUGGESTIONS (Only show if on a generated tab) ---
           if (_suggestions.isNotEmpty && _activeTabIndex > 0)
@@ -2085,6 +2102,157 @@ Future<void> _advancedInject() async {
           elevation: 1,
         );
       }).toList(),
+    );
+  }
+
+  Widget _buildFieldPreview(ThemeData theme) {
+    final colorScheme = theme.colorScheme;
+    final nonEmpty = _fieldMappings.where((fm) => fm.value != null && fm.value!.isNotEmpty).toList();
+    final empty = _fieldMappings.where((fm) => fm.value == null || fm.value!.isEmpty).toList();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.list_alt, size: 16, color: colorScheme.primary),
+              const SizedBox(width: 8),
+              Text("Injection Data Preview",
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: colorScheme.onSurface)),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  "${nonEmpty.length}/${_fieldMappings.length} fields with value",
+                  style: TextStyle(fontSize: 11, color: colorScheme.primary),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (_fieldMappings.isEmpty)
+            Expanded(
+              child: Center(
+                child: Text("No field mappings available.\nUse a template to generate injection data.",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: colorScheme.onSurface.withOpacity(0.4), fontSize: 13)),
+              ),
+            )
+          else
+            Expanded(
+              child: ListView(
+                children: [
+                  if (nonEmpty.isNotEmpty) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text("Ready to inject",
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.green[400])),
+                    ),
+                    ...nonEmpty.map((fm) => _buildFieldRow(fm, true, colorScheme)),
+                  ],
+                  if (empty.isNotEmpty) ...[
+                    if (nonEmpty.isNotEmpty) const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text("Empty fields (skipped)",
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: colorScheme.onSurface.withOpacity(0.4))),
+                    ),
+                    ...empty.map((fm) => _buildFieldRow(fm, false, colorScheme)),
+                  ],
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFieldRow(FieldMapping fm, bool hasValue, ColorScheme colorScheme) {
+    final typeLabel = fm.formType != null ? " (${fm.formType})" : "";
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: hasValue
+            ? Colors.green.withOpacity(0.06)
+            : colorScheme.onSurface.withOpacity(0.03),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: hasValue
+              ? Colors.green.withOpacity(0.2)
+              : colorScheme.outline.withOpacity(0.15),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            hasValue ? Icons.check_circle : Icons.radio_button_unchecked,
+            size: 16,
+            color: hasValue ? Colors.green[400] : colorScheme.onSurface.withOpacity(0.25),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "${fm.formField}$typeLabel",
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: colorScheme.onSurface,
+                  ),
+                ),
+                if (hasValue) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    fm.value!,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colorScheme.onSurface.withOpacity(0.7),
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (hasValue && fm.confidence > 0)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: fm.confidence > 0.7
+                    ? Colors.green.withOpacity(0.15)
+                    : Colors.orange.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                "${(fm.confidence * 100).toInt()}%",
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: fm.confidence > 0.7 ? Colors.green[400] : Colors.orange[400],
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 

@@ -35,6 +35,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _obscurePassword = true;
   String? _errorMessage;
   Timer? _pollingTimer;
+  AsyncValue<PairingSession?> _pairingState = const AsyncValue.data(null);
 
   @override
   void initState() {
@@ -43,6 +44,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     Future.microtask(() {
       ref.read(pairingProvider.notifier).initiate();
       ref.listen<AsyncValue<PairingSession?>>(pairingProvider, (prev, next) {
+        if (mounted) setState(() => _pairingState = next);
         next.whenData((session) {
           if (session != null && _pollingTimer == null) {
             _startPollingForQr(session.id);
@@ -148,7 +150,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final pairingState = ref.watch(pairingProvider);
+    final pairingState = _pairingState;
     final bool isDesktop =
         !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
 
