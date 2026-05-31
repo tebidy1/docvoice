@@ -20,6 +20,9 @@ class ApiConfig {
   static const String inboxNotesEndpoint = '/inbox-notes';
   static const String usersEndpoint = '/users';
   static const String authEndpoint = '/auth';
+  static const String oracleTokenEndpoint = '/audio/oracle-token';
+  static const String oracleTranscribeEndpoint = '/audio/transcribe-oracle';
+  static const String oracleTranscriptionStatusEndpoint = '/audio/transcription-status';
 
   // Request timeout in milliseconds
   static const int requestTimeout = 30000;

@@ -455,6 +455,10 @@ class _InboxNoteDetailViewState extends State<InboxNoteDetailView> {
           widget.note.suggestedMacroId = updatedNote.suggestedMacroId;
           widget.note.summary = updatedNote.summary;
 
+          if (updatedNote.fieldMappings.isNotEmpty) {
+            _fieldMappings = updatedNote.fieldMappings;
+          }
+
           if (updatedNote.generatedOutputs.isNotEmpty) {
             _generatedOutputs = List.from(updatedNote.generatedOutputs);
             _activeTabIndex = _generatedOutputs.length;

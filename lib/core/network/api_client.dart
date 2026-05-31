@@ -137,6 +137,15 @@ class ApiClient {
     }
   }
 
+  Future<Map<String, dynamic>> getOracleToken() async {
+    try {
+      await init();
+      return await get(ApiConfig.oracleTokenEndpoint);
+    } catch (e) {
+      throw _handleError(e);
+    }
+  }
+
   Future<Map<String, dynamic>> delete(String endpoint) async {
     try {
       await init();

@@ -35,14 +35,17 @@ class SpeechTranscriptionService {
   }
 
   Future<void> startRecording() async {
-    if (_state != SpeechTranscriptionState.idle && _state != SpeechTranscriptionState.done && _state != SpeechTranscriptionState.error) {
+    if (_state != SpeechTranscriptionState.idle &&
+        _state != SpeechTranscriptionState.done &&
+        _state != SpeechTranscriptionState.error) {
       return;
     }
 
     try {
       final tempDir = await getTemporaryDirectory();
       final extension = (!kIsWeb && Platform.isWindows) ? 'flac' : 'wav';
-      _currentRecordingPath = p.join(tempDir.path, 'transcription_${DateTime.now().millisecondsSinceEpoch}.$extension');
+      _currentRecordingPath = p.join(tempDir.path,
+          'transcription_${DateTime.now().millisecondsSinceEpoch}.$extension');
 
       await _recorder.startRecordingCompressed(_currentRecordingPath!);
       _updateState(SpeechTranscriptionState.recording);
@@ -53,14 +56,15 @@ class SpeechTranscriptionService {
     }
   }
 
-  Future<String> stopAndTranscribe({String language = 'ar'}) async {
+  Future<String> stopAndTranscribe({String language = 'en'}) async {
     if (_state != SpeechTranscriptionState.recording) {
       throw Exception('Not recording');
     }
 
     try {
       final path = await _recorder.stop();
-      if (path == null) throw Exception('Recording failed, no file path returned');
+      if (path == null)
+        throw Exception('Recording failed, no file path returned');
 
       _updateState(SpeechTranscriptionState.uploading);
 
@@ -78,9 +82,10 @@ class SpeechTranscriptionService {
       );
 
       // Handle ApiClient's payload wrapping if present
-      final data = response.containsKey('payload') ? response['payload'] : response;
+      final data =
+          response.containsKey('payload') ? response['payload'] : response;
       final jobId = data['job_id'] as String;
-      
+
       _updateState(SpeechTranscriptionState.processing);
 
       // Start polling
@@ -107,7 +112,8 @@ class SpeechTranscriptionService {
       }
 
       try {
-        final response = await _apiClient.get('/audio/transcription-status/$jobId');
+        final response =
+            await _apiClient.get('/audio/transcription-status/$jobId');
         final status = response['job_status'] as String;
 
         if (status == 'succeeded') {
@@ -126,6 +132,33 @@ class SpeechTranscriptionService {
     });
 
     return completer.future;
+  }
+
+  Future<String> transcribeOracleBatch({
+    required List<int> fileBytes,
+    required String filename,
+    String language = 'en',
+    String modelType = 'WHISPER_LARGE_V3T',
+  }) async {
+    _updateState(SpeechTranscriptionState.uploading);
+
+    final response = await _apiClient.multipartPost(
+      '/audio/transcribe-oracle',
+      fileBytes: fileBytes,
+      filename: filename,
+      fields: {
+        'language': language,
+        'model_type': modelType,
+      },
+    );
+
+    final data =
+        response.containsKey('payload') ? response['payload'] : response;
+    final jobId = data['job_id'] as String;
+
+    _updateState(SpeechTranscriptionState.processing);
+
+    return await _pollForCompletion(jobId);
   }
 
   Future<void> cancel() async {
