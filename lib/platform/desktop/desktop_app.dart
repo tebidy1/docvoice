@@ -81,6 +81,13 @@ class _DesktopAppState extends State<DesktopApp> {
             backgroundColor: Colors.green,
           ),
         );
+        showDialog(
+          context: context,
+          barrierColor: Colors.transparent,
+          builder: (context) => InboxNoteDetailView(
+            note: result.savedNote!,
+          ),
+        );
       }
     }
   }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../../core/utils/permission_fixer.dart';
@@ -6,6 +7,7 @@ import '../../../../presentation/widgets/listening_mode_view.dart';
 import '../inbox/inbox_screen.dart';
 import '../settings/settings_screen.dart';
 import '../../services/mobile_recording_orchestrator.dart';
+import '../editor/editor_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,6 +23,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   late final MobileRecordingOrchestrator _orchestrator;
   final GlobalKey<InboxScreenState> _inboxKey = GlobalKey<InboxScreenState>();
+  StreamSubscription? _resultSubscription;
 
   late List<Widget> _screens;
 
@@ -30,6 +33,19 @@ class _HomeScreenState extends State<HomeScreen> {
     _orchestrator = MobileRecordingOrchestrator();
     _orchestrator.initialize();
     _orchestrator.addListener(_onOrchestratorChanged);
+
+    _resultSubscription = _orchestrator.resultStream.listen((result) {
+      if (result.savedNote != null && mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => EditorScreen(
+              draftNote: result.savedNote,
+            ),
+          ),
+        );
+      }
+    });
 
     _screens = [
       InboxScreen(key: _inboxKey, getAmplitude: _orchestrator.getAmplitude),
@@ -89,6 +105,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _resultSubscription?.cancel();
     _orchestrator.removeListener(_onOrchestratorChanged);
     _orchestrator.dispose();
     super.dispose();
